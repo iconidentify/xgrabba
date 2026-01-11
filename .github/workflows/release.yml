@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build binaries
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-linux-amd64 ./cmd/server
+
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-linux-arm64 ./cmd/server
+
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-darwin-amd64 ./cmd/server
+
+          # macOS ARM64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-darwin-arm64 ./cmd/server
+
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-windows-amd64.exe ./cmd/server
+
+      - name: Package extension
+        run: |
+          cd extension
+          zip -r ../dist/xgrabba-extension.zip .
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/xgrabba-linux-amd64
+            dist/xgrabba-linux-arm64
+            dist/xgrabba-darwin-amd64
+            dist/xgrabba-darwin-arm64
+            dist/xgrabba-windows-amd64.exe
+            dist/xgrabba-extension.zip
+          generate_release_notes: true
+
+  helm-release:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Package Helm chart
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/^version:.*/version: $VERSION/" deployments/helm/xgrabba/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" deployments/helm/xgrabba/Chart.yaml
+          helm package deployments/helm/xgrabba
+
+      - name: Push Helm chart to OCI registry
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          helm push xgrabba-$VERSION.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
