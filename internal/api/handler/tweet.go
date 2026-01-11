@@ -47,16 +47,27 @@ type ArchiveResponse struct {
 
 // TweetResponse represents a tweet in list/get responses.
 type TweetResponse struct {
-	TweetID     string    `json:"tweet_id"`
-	URL         string    `json:"url"`
-	Status      string    `json:"status"`
-	Author      string    `json:"author,omitempty"`
-	Text        string    `json:"text,omitempty"`
-	MediaCount  int       `json:"media_count"`
-	AITitle     string    `json:"ai_title,omitempty"`
-	ArchivePath string    `json:"archive_path,omitempty"`
-	Error       string    `json:"error,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	TweetID           string              `json:"tweet_id"`
+	URL               string              `json:"url"`
+	Status            string              `json:"status"`
+	Author            string              `json:"author,omitempty"`
+	AuthorDisplayName string              `json:"author_display_name,omitempty"`
+	AuthorAvatar      string              `json:"author_avatar,omitempty"`
+	Verified          bool                `json:"verified,omitempty"`
+	Text              string              `json:"text,omitempty"`
+	MediaCount        int                 `json:"media_count"`
+	Media             []MediaPreview      `json:"media,omitempty"`
+	AITitle           string              `json:"ai_title,omitempty"`
+	ArchivePath       string              `json:"archive_path,omitempty"`
+	Error             string              `json:"error,omitempty"`
+	CreatedAt         time.Time           `json:"created_at"`
+}
+
+// MediaPreview represents a media item in list responses for thumbnails.
+type MediaPreview struct {
+	Type         string `json:"type"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	URL          string `json:"url,omitempty"`
 }
 
 // TweetListResponse contains paginated tweet list.
@@ -136,17 +147,43 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, t := range tweets {
+		// Build media previews with API URLs
+		mediaPreviews := make([]MediaPreview, 0, len(t.Media))
+		for _, m := range t.Media {
+			if m.LocalPath == "" {
+				continue // Skip media not yet downloaded
+			}
+			filename := filepath.Base(m.LocalPath)
+			mediaURL := fmt.Sprintf("/api/v1/tweets/%s/media/%s", t.ID, filename)
+
+			mp := MediaPreview{
+				Type: string(m.Type),
+				URL:  mediaURL,
+			}
+			// Use preview URL for videos, main URL for images
+			if m.Type == domain.MediaTypeVideo || m.Type == domain.MediaTypeGIF {
+				mp.ThumbnailURL = m.PreviewURL // Original Twitter thumbnail
+			} else {
+				mp.ThumbnailURL = mediaURL // For images, use our served URL
+			}
+			mediaPreviews = append(mediaPreviews, mp)
+		}
+
 		tr := TweetResponse{
-			TweetID:     string(t.ID),
-			URL:         t.URL,
-			Status:      string(t.Status),
-			Author:      t.Author.Username,
-			Text:        truncateText(t.Text, 200),
-			MediaCount:  len(t.Media),
-			AITitle:     t.AITitle,
-			ArchivePath: t.ArchivePath,
-			Error:       t.Error,
-			CreatedAt:   t.CreatedAt,
+			TweetID:           string(t.ID),
+			URL:               t.URL,
+			Status:            string(t.Status),
+			Author:            t.Author.Username,
+			AuthorDisplayName: t.Author.DisplayName,
+			AuthorAvatar:      t.Author.AvatarURL,
+			Verified:          t.Author.Verified,
+			Text:              truncateText(t.Text, 200),
+			MediaCount:        len(t.Media),
+			Media:             mediaPreviews,
+			AITitle:           t.AITitle,
+			ArchivePath:       t.ArchivePath,
+			Error:             t.Error,
+			CreatedAt:         t.CreatedAt,
 		}
 		response.Tweets = append(response.Tweets, tr)
 	}

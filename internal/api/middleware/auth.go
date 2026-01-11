@@ -18,6 +18,10 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 					key = auth[7:]
 				}
 			}
+			if key == "" {
+				// Also check query parameter (for media URLs in UI)
+				key = r.URL.Query().Get("key")
+			}
 
 			if key == "" {
 				w.Header().Set("Content-Type", "application/json")

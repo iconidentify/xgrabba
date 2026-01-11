@@ -256,16 +256,7 @@
             font-size: 13px;
         }
 
-        .ai-title {
-            background: linear-gradient(135deg, var(--accent-primary), #9333ea);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        /* AI title badge removed per user request */
 
         .tweet-text {
             font-size: 15px;
@@ -727,6 +718,41 @@
             transform: scale(1.02);
         }
 
+        .media-download-btn {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s, background 0.2s;
+            text-decoration: none;
+        }
+
+        .media-item:hover .media-download-btn {
+            opacity: 1;
+        }
+
+        .media-download-btn:hover {
+            background: var(--accent-primary);
+        }
+
+        .media-download-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .media-download-btn.video-download {
+            bottom: auto;
+            top: 12px;
+        }
+
         .media-item.video {
             background: #000;
         }
@@ -836,13 +862,7 @@
             margin-left: 16px;
         }
 
-        .metadata-value.ai-generated {
-            background: linear-gradient(135deg, var(--accent-primary), #9333ea);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 600;
-        }
+        /* ai-generated styling removed */
 
         .metadata-value a {
             color: var(--accent-primary);
@@ -1375,10 +1395,7 @@
                                         </svg>
                                     ` : ''}
                                 </div>
-                                <div class="tweet-meta-row">
-                                    <span class="tweet-author-username">@${escapeHtml(tweet.author || 'unknown')}</span>
-                                    ${tweet.ai_title ? `<span class="ai-title">AI</span>` : ''}
-                                </div>
+                                <span class="tweet-author-username">@${escapeHtml(tweet.author || 'unknown')}</span>
                             </div>
                             <div class="tweet-date">${formatDate(tweet.created_at)}</div>
                         </div>
@@ -1437,15 +1454,19 @@
             return `
                 <div class="tweet-media-preview ${gridClass}">
                     ${displayMedia.map((media, idx) => {
-                        const isVideo = media.type === 'video' || media.type === 'animated_gif';
+                        const isVideo = media.type === 'video' || media.type === 'gif';
                         const showMore = idx === 3 && mediaCount > 4;
-                        const thumbUrl = media.thumbnail_url || media.url || '';
+                        // Use thumbnail_url for videos, url for images - add API key
+                        const thumbUrl = (media.thumbnail_url || media.url || '') + (API_KEY ? (media.thumbnail_url || media.url || '').includes('?') ? '&' : '?' + 'key=' + encodeURIComponent(API_KEY) : '');
+                        // For our served images, add API key; for external twitter thumbnails, use as-is
+                        const isOurUrl = (media.thumbnail_url || media.url || '').startsWith('/api/');
+                        const finalThumbUrl = isOurUrl ? addApiKey(media.thumbnail_url || media.url || '') : (media.thumbnail_url || media.url || '');
 
                         return `
                             <div class="media-thumb">
-                                ${isVideo
-                                    ? `<img src="${thumbUrl}" alt="Video thumbnail" onerror="this.style.display='none'">`
-                                    : `<img src="${thumbUrl}" alt="Tweet media" onerror="this.style.display='none'">`
+                                ${finalThumbUrl
+                                    ? `<img src="${finalThumbUrl}" alt="${isVideo ? 'Video thumbnail' : 'Tweet media'}" onerror="this.style.display='none'">`
+                                    : `<div style="background: var(--border-color); width: 100%; height: 100%;"></div>`
                                 }
                                 ${isVideo ? `
                                     <div class="video-indicator">
@@ -1458,6 +1479,13 @@
                     }).join('')}
                 </div>
             `;
+        }
+
+        // Helper to add API key to URLs
+        function addApiKey(url) {
+            if (!url || !API_KEY) return url;
+            const separator = url.includes('?') ? '&' : '?';
+            return url + separator + 'key=' + encodeURIComponent(API_KEY);
         }
 
         // Open tweet detail modal
@@ -1560,8 +1588,8 @@
                             </h4>
                             ${tweet.ai_title ? `
                                 <div class="metadata-row">
-                                    <span class="metadata-label">AI Title</span>
-                                    <span class="metadata-value ai-generated">${escapeHtml(tweet.ai_title)}</span>
+                                    <span class="metadata-label">Title</span>
+                                    <span class="metadata-value">${escapeHtml(tweet.ai_title)}</span>
                                 </div>
                             ` : ''}
                             <div class="metadata-row">
@@ -1627,6 +1655,13 @@
             const images = tweet.media.filter(m => m.type === 'image' || m.content_type?.startsWith('image/'));
             const videos = tweet.media.filter(m => m.type === 'video' || m.content_type?.startsWith('video/'));
 
+            // Build a descriptive base filename from author and tweet content
+            const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
+            const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
+            const dateStr = tweet.posted_at ? new Date(tweet.posted_at).toISOString().split('T')[0] : 'archived';
+            const titleSlug = (tweet.ai_title || tweet.text || '').slice(0, 40).replace(/[^a-zA-Z0-9]+/g, '_').replace(/_+$/, '') || 'media';
+            const baseFilename = `${authorUsername}_${dateStr}_${titleSlug}`;
+
             let html = '<div class="tweet-detail-media">';
 
             // Images
@@ -1644,11 +1679,17 @@
 
                 html += `<div class="media-grid ${gridClass}">`;
                 images.forEach((img, idx) => {
-                    // Use the url field from the API response (e.g., /api/v1/tweets/{id}/media/{filename})
-                    const imgUrl = img.url || '';
+                    const imgUrl = addApiKey(img.url || '');
+                    const ext = (img.filename || img.url || '').split('.').pop() || 'jpg';
+                    const downloadName = images.length > 1 ? `${baseFilename}_${idx + 1}.${ext}` : `${baseFilename}.${ext}`;
                     html += `
                         <div class="media-item" onclick="openLightbox(${idx}, 'images')">
                             <img src="${imgUrl}" alt="Tweet image ${idx + 1}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                            <a class="media-download-btn" href="${imgUrl}" download="${escapeHtml(downloadName)}" onclick="event.stopPropagation()" title="Download image">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
+                                </svg>
+                            </a>
                         </div>
                     `;
                 });
@@ -1667,8 +1708,8 @@
                 `;
 
                 videos.forEach((video, idx) => {
-                    // Use the url field from the API response
-                    const videoUrl = video.url || '';
+                    const videoUrl = addApiKey(video.url || '');
+                    const downloadName = videos.length > 1 ? `${baseFilename}_video${idx + 1}.mp4` : `${baseFilename}.mp4`;
 
                     html += `
                         <div class="media-item video" data-video-idx="${idx}" style="margin-top: 8px;">
@@ -1683,6 +1724,11 @@
                                     <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                 </div>
                             </div>
+                            <a class="media-download-btn video-download" href="${videoUrl}" download="${escapeHtml(downloadName)}" onclick="event.stopPropagation()" title="Download video">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
+                                </svg>
+                            </a>
                         </div>
                     `;
                 });
@@ -1733,8 +1779,8 @@
             if (!currentTweetDetail || !currentTweetDetail.media) return;
 
             const images = currentTweetDetail.media.filter(m => m.type === 'image' || m.content_type?.startsWith('image/'));
-            // Use the url field directly from the API response
-            lightboxImages = images.map(img => img.url || '');
+            // Use the url field with API key
+            lightboxImages = images.map(img => addApiKey(img.url || ''));
             lightboxIndex = index;
 
             const lightbox = document.getElementById('lightbox');
@@ -1922,7 +1968,15 @@
         }, 1000);
 
         // Initialize
-        fetchTweets();
+        fetchTweets().then(() => {
+            // Check if we should auto-open a specific tweet (from extension popup link)
+            const tweetParam = params.get('tweet');
+            if (tweetParam) {
+                // Clean URL and open detail
+                window.history.replaceState({}, '', window.location.pathname + (API_KEY && !params.get('key') ? '' : ''));
+                openTweetDetail(tweetParam);
+            }
+        });
     </script>
 </body>
 </html>

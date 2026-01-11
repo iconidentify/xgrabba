@@ -177,11 +177,19 @@ class PopupApp {
       });
     });
 
-    // Bind item clicks to open tweet
+    // Bind item clicks to open archive detail view (not x.com)
     this.elements.historyList.querySelectorAll('.history-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const url = item.dataset.tweetUrl;
-        if (url) {
+      item.addEventListener('click', async () => {
+        const tweetId = item.dataset.tweetId;
+        if (tweetId) {
+          // Open archive view with the specific tweet
+          const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+          const backendUrl = normalizeUrl(response.backendUrl || 'http://localhost:9847');
+          const apiKey = response.apiKey || '';
+          let url = `${backendUrl}/ui?tweet=${encodeURIComponent(tweetId)}`;
+          if (apiKey) {
+            url += `&key=${encodeURIComponent(apiKey)}`;
+          }
           chrome.tabs.create({ url });
         }
       });
@@ -196,7 +204,7 @@ class PopupApp {
       : '';
 
     return `
-      <div class="history-item" data-tweet-url="${item.tweetUrl}">
+      <div class="history-item" data-tweet-id="${item.tweetId}" data-tweet-url="${item.tweetUrl}">
         <div class="history-thumb">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
