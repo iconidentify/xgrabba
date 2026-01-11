@@ -42,6 +42,9 @@ var (
 
 	// ErrRateLimited is returned when rate limited by external services.
 	ErrRateLimited = errors.New("rate limited")
+
+	// ErrMediaNotFound is returned when a media file cannot be found.
+	ErrMediaNotFound = errors.New("media file not found")
 )
 
 // VideoError wraps an error with video context.

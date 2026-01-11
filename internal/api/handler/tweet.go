@@ -3,9 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -208,6 +212,213 @@ func (h *TweetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// MediaFileResponse represents a media file in the list response.
+type MediaFileResponse struct {
+	Filename    string `json:"filename"`
+	Type        string `json:"type"`
+	Size        int64  `json:"size"`
+	URL         string `json:"url"`
+	ContentType string `json:"content_type"`
+}
+
+// MediaListResponse contains the list of media files.
+type MediaListResponse struct {
+	TweetID string              `json:"tweet_id"`
+	Files   []MediaFileResponse `json:"files"`
+}
+
+// FullTweetResponse contains complete tweet details with media URLs.
+type FullTweetResponse struct {
+	TweetID     string              `json:"tweet_id"`
+	URL         string              `json:"url"`
+	Author      domain.Author       `json:"author"`
+	Text        string              `json:"text"`
+	PostedAt    time.Time           `json:"posted_at"`
+	ArchivedAt  time.Time           `json:"archived_at"`
+	Media       []MediaFileResponse `json:"media"`
+	Metrics     domain.TweetMetrics `json:"metrics"`
+	ReplyTo     string              `json:"reply_to,omitempty"`
+	QuotedTweet string              `json:"quoted_tweet,omitempty"`
+	AITitle     string              `json:"ai_title"`
+	AISummary   string              `json:"ai_summary,omitempty"`
+}
+
+// ListMedia handles GET /api/v1/tweets/{tweetID}/media
+func (h *TweetHandler) ListMedia(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	files, err := h.tweetSvc.ListMediaFiles(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("list media failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to list media")
+		return
+	}
+
+	response := MediaListResponse{
+		TweetID: tweetID,
+		Files:   make([]MediaFileResponse, 0, len(files)),
+	}
+
+	for _, f := range files {
+		response.Files = append(response.Files, MediaFileResponse{
+			Filename:    f.Filename,
+			Type:        f.Type,
+			Size:        f.Size,
+			URL:         fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, f.Filename),
+			ContentType: f.ContentType,
+		})
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// ServeMedia handles GET /api/v1/tweets/{tweetID}/media/{filename}
+func (h *TweetHandler) ServeMedia(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	filename := chi.URLParam(r, "filename")
+
+	if tweetID == "" || filename == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID or filename")
+		return
+	}
+
+	// Security: validate filename to prevent path traversal
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
+		h.writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	filePath, err := h.tweetSvc.GetMediaFilePath(r.Context(), domain.TweetID(tweetID), filename)
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		if errors.Is(err, domain.ErrMediaNotFound) {
+			h.writeError(w, http.StatusNotFound, "media file not found")
+			return
+		}
+		h.logger.Error("get media file failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get media")
+		return
+	}
+
+	// Open file
+	file, err := os.Open(filePath)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "media file not found")
+		return
+	}
+	defer file.Close()
+
+	// Get file info for size and modtime
+	stat, err := file.Stat()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to stat file")
+		return
+	}
+
+	// Determine content type
+	contentType := getContentTypeFromFilename(filename)
+	w.Header().Set("Content-Type", contentType)
+
+	// http.ServeContent handles Range requests automatically
+	http.ServeContent(w, r, filename, stat.ModTime(), file)
+}
+
+// GetFull handles GET /api/v1/tweets/{tweetID}/full
+func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	stored, err := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("get full tweet failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get tweet")
+		return
+	}
+
+	// Build media responses with API URLs
+	mediaResponses := make([]MediaFileResponse, 0, len(stored.Media))
+	for _, m := range stored.Media {
+		filename := filepath.Base(m.LocalPath)
+		if filename == "" || filename == "." {
+			continue
+		}
+		mediaResponses = append(mediaResponses, MediaFileResponse{
+			Filename:    filename,
+			Type:        string(m.Type),
+			URL:         fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
+			ContentType: getContentTypeFromMediaType(m.Type),
+		})
+	}
+
+	response := FullTweetResponse{
+		TweetID:     stored.TweetID,
+		URL:         stored.URL,
+		Author:      stored.Author,
+		Text:        stored.Text,
+		PostedAt:    stored.PostedAt,
+		ArchivedAt:  stored.ArchivedAt,
+		Media:       mediaResponses,
+		Metrics:     stored.Metrics,
+		ReplyTo:     stored.ReplyTo,
+		QuotedTweet: stored.QuotedTweet,
+		AITitle:     stored.AITitle,
+		AISummary:   stored.AISummary,
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+func getContentTypeFromFilename(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+func getContentTypeFromMediaType(mediaType domain.MediaType) string {
+	switch mediaType {
+	case domain.MediaTypeImage:
+		return "image/jpeg"
+	case domain.MediaTypeVideo, domain.MediaTypeGIF:
+		return "video/mp4"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 func (h *TweetHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {

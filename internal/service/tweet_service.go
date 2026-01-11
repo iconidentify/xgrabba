@@ -448,3 +448,142 @@ func truncateText(s string, maxLen int) string {
 func jsonMarshalIndent(v interface{}) ([]byte, error) {
 	return json.MarshalIndent(v, "", "  ")
 }
+
+// MediaFile represents a media file in the archive.
+type MediaFile struct {
+	Filename    string `json:"filename"`
+	Type        string `json:"type"`
+	Size        int64  `json:"size"`
+	ContentType string `json:"content_type"`
+}
+
+// GetFullTweet returns complete tweet details from the stored JSON.
+func (s *TweetService) GetFullTweet(ctx context.Context, tweetID domain.TweetID) (*domain.StoredTweet, error) {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return nil, domain.ErrVideoNotFound
+	}
+
+	// Read the tweet.json file for complete data
+	jsonPath := filepath.Join(tweet.ArchivePath, "tweet.json")
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		// If file doesn't exist yet (still processing), return what we have
+		if os.IsNotExist(err) {
+			stored := tweet.ToStoredTweet()
+			return &stored, nil
+		}
+		return nil, fmt.Errorf("read tweet.json: %w", err)
+	}
+
+	var stored domain.StoredTweet
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, fmt.Errorf("unmarshal tweet.json: %w", err)
+	}
+
+	return &stored, nil
+}
+
+// ListMediaFiles returns list of media files for a tweet.
+func (s *TweetService) ListMediaFiles(ctx context.Context, tweetID domain.TweetID) ([]MediaFile, error) {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return nil, domain.ErrVideoNotFound
+	}
+
+	mediaDir := filepath.Join(tweet.ArchivePath, "media")
+	entries, err := os.ReadDir(mediaDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []MediaFile{}, nil
+		}
+		return nil, fmt.Errorf("read media directory: %w", err)
+	}
+
+	files := make([]MediaFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		filename := entry.Name()
+		files = append(files, MediaFile{
+			Filename:    filename,
+			Type:        getMediaType(filename),
+			Size:        info.Size(),
+			ContentType: getContentType(filename),
+		})
+	}
+
+	return files, nil
+}
+
+// GetMediaFilePath returns the full filesystem path to a media file.
+func (s *TweetService) GetMediaFilePath(ctx context.Context, tweetID domain.TweetID, filename string) (string, error) {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return "", domain.ErrVideoNotFound
+	}
+
+	// Security: validate filename to prevent path traversal
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
+		return "", domain.ErrMediaNotFound
+	}
+
+	filePath := filepath.Join(tweet.ArchivePath, "media", filename)
+
+	// Verify file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", domain.ErrMediaNotFound
+	}
+
+	return filePath, nil
+}
+
+// GetArchivePath returns the archive path for a tweet.
+func (s *TweetService) GetArchivePath(ctx context.Context, tweetID domain.TweetID) (string, error) {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return "", domain.ErrVideoNotFound
+	}
+	return tweet.ArchivePath, nil
+}
+
+func getMediaType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return "image"
+	case ".mp4", ".webm", ".mov":
+		return "video"
+	default:
+		return "unknown"
+	}
+}
+
+func getContentType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	default:
+		return "application/octet-stream"
+	}
+}
