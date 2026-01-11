@@ -64,17 +64,29 @@ async function handleMessage(message, sender) {
 }
 
 async function openUI(payload = {}) {
-  const { backendUrl, apiKey } = await getConfig();
-  const path = payload.quick ? '/quick' : '/ui';
-  let url = `${backendUrl}${path}`;
+  try {
+    const { backendUrl, apiKey } = await getConfig();
+    const path = payload.quick ? '/quick' : '/ui';
+    let url = `${backendUrl}${path}`;
 
-  // Add API key to URL for seamless auth
-  if (apiKey) {
-    url += `?key=${encodeURIComponent(apiKey)}`;
+    // Add API key to URL for seamless auth
+    if (apiKey) {
+      url += `?key=${encodeURIComponent(apiKey)}`;
+    }
+
+    await chrome.tabs.create({ url });
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to open UI:', error);
+    return { success: false, error: error.message };
   }
+}
 
-  chrome.tabs.create({ url });
-  return { success: true };
+// Extract username from tweet URL
+function extractUsername(tweetUrl) {
+  if (!tweetUrl) return 'unknown';
+  const match = tweetUrl.match(/(?:twitter\.com|x\.com)\/([^\/]+)\/status/i);
+  return match ? match[1] : 'unknown';
 }
 
 async function archiveVideo(payload) {
@@ -106,17 +118,25 @@ async function archiveVideo(payload) {
       throw new Error(data.error || 'Archive request failed');
     }
 
-    // Save to history
+    const tweetId = data.tweet_id || payload.tweetId;
+    const authorUsername = extractUsername(payload.tweetUrl);
+
+    // Save to history with author info
     await addToHistory({
-      tweetId: data.tweet_id || payload.tweetId,
+      tweetId: tweetId,
       tweetUrl: payload.tweetUrl,
+      authorUsername: authorUsername,
+      tweetTextPreview: 'Archiving...',
       status: 'pending',
       archivedAt: new Date().toISOString()
     });
 
+    // Poll for status update in background
+    pollForStatus(tweetId, backendUrl, apiKey);
+
     return {
       success: true,
-      tweetId: data.tweet_id,
+      tweetId: tweetId,
       message: data.message
     };
 
@@ -127,6 +147,8 @@ async function archiveVideo(payload) {
     await addToHistory({
       tweetId: payload.tweetId,
       tweetUrl: payload.tweetUrl,
+      authorUsername: extractUsername(payload.tweetUrl),
+      tweetTextPreview: error.message,
       status: 'failed',
       error: error.message,
       archivedAt: new Date().toISOString(),
@@ -137,6 +159,60 @@ async function archiveVideo(payload) {
       success: false,
       error: error.message
     };
+  }
+}
+
+// Poll backend for status updates
+async function pollForStatus(tweetId, backendUrl, apiKey) {
+  const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds max
+  let attempts = 0;
+
+  const poll = async () => {
+    attempts++;
+    try {
+      const response = await fetch(`${backendUrl}/api/v1/tweets/${tweetId}`, {
+        headers: { 'X-API-Key': apiKey }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Update history entry
+        await updateHistoryEntry(tweetId, {
+          status: data.status === 'completed' ? 'success' : data.status,
+          authorUsername: data.author || extractUsername(data.url),
+          tweetTextPreview: data.text ? data.text.substring(0, 100) : 'Archived',
+          aiTitle: data.ai_title
+        });
+
+        // Stop polling if completed or failed
+        if (data.status === 'completed' || data.status === 'failed') {
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Poll error:', error);
+    }
+
+    // Continue polling if not done and under max attempts
+    if (attempts < maxAttempts) {
+      setTimeout(poll, 2000);
+    }
+  };
+
+  // Start polling after 1 second
+  setTimeout(poll, 1000);
+}
+
+// Update a specific history entry
+async function updateHistoryEntry(tweetId, updates) {
+  const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+  const history = result[STORAGE_KEYS.HISTORY] || [];
+
+  const index = history.findIndex(h => h.tweetId === tweetId);
+  if (index !== -1) {
+    history[index] = { ...history[index], ...updates };
+    await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY]: history });
   }
 }
 

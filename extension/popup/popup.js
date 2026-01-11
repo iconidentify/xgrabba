@@ -272,9 +272,17 @@ class PopupApp {
   }
 
   async openBackendUI(quick = false) {
-    await chrome.runtime.sendMessage({
-      type: 'OPEN_UI',
-      payload: { quick }
-    });
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'OPEN_UI',
+        payload: { quick }
+      });
+      // Close popup after opening UI
+      if (response && response.success) {
+        window.close();
+      }
+    } catch (error) {
+      console.error('Failed to open UI:', error);
+    }
   }
 }
