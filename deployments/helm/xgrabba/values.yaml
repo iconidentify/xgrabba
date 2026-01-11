@@ -1,0 +1,115 @@
+# Default values for xgrabba
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/chrisk/xgrabba
+  pullPolicy: IfNotPresent
+  tag: ""  # Defaults to chart appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: xgrabba.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  server:
+    host: "0.0.0.0"
+    port: 8080
+    readTimeout: "30s"
+    writeTimeout: "5m"
+  storage:
+    basePath: "/data/videos"
+    tempPath: "/data/temp"
+    maxFileSize: 5368709120  # 5GB
+  worker:
+    count: 2
+    pollInterval: "5s"
+    maxRetries: 3
+  grok:
+    baseUrl: "https://api.x.ai/v1"
+    timeout: "30s"
+    model: "grok-beta"
+  download:
+    timeout: "10m"
+    retryDelay: "5s"
+    maxRetryDelay: "60s"
+
+# Secrets - provide via --set or external secret management
+secrets:
+  # API key for authenticating extension requests
+  apiKey: ""
+  # Grok API key for AI naming
+  grokApiKey: ""
+
+# Persistence for video storage
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 100Gi
+  existingClaim: ""
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
