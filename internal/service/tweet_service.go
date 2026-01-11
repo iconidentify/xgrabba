@@ -155,26 +155,8 @@ func (s *TweetService) BackfillAIMetadata(ctx context.Context) {
 
 		s.logger.Info("backfilling AI metadata", "tweet_id", tweet.ID, "progress", fmt.Sprintf("%d/%d", i+1, len(needsBackfill)))
 
-		// Run AI analysis
-		analysis, err := s.grokClient.AnalyzeContent(ctx, grok.ContentAnalysisRequest{
-			TweetText:      tweet.Text,
-			AuthorUsername: tweet.Author.Username,
-			HasVideo:       tweet.HasVideo(),
-			HasImages:      tweet.HasImages(),
-			ImageCount:     countImages(tweet),
-			VideoDuration:  getTotalVideoDuration(tweet),
-		})
-
-		if err != nil {
-			s.logger.Warn("backfill failed for tweet", "tweet_id", tweet.ID, "error", err)
-			continue
-		}
-
-		// Update tweet with AI metadata
-		tweet.AISummary = analysis.Summary
-		tweet.AITags = analysis.Tags
-		tweet.AIContentType = analysis.ContentType
-		tweet.AITopics = analysis.Topics
+		// Run vision analysis (will fall back to text if no media)
+		s.runVisionAnalysis(ctx, tweet)
 
 		// Save updated metadata to disk
 		if err := s.saveTweetMetadata(tweet); err != nil {
@@ -182,10 +164,10 @@ func (s *TweetService) BackfillAIMetadata(ctx context.Context) {
 			continue
 		}
 
-		s.logger.Info("backfilled tweet", "tweet_id", tweet.ID, "tags_count", len(analysis.Tags))
+		s.logger.Info("backfilled tweet", "tweet_id", tweet.ID, "tags_count", len(tweet.AITags))
 
 		// Small delay to avoid rate limiting
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second) // Slightly longer for vision API
 	}
 
 	s.logger.Info("AI metadata backfill complete", "processed", len(needsBackfill))
@@ -370,8 +352,76 @@ func (s *TweetService) generateAIMetadata(ctx context.Context, tweet *domain.Twe
 		title = grok.FallbackFilename(tweet.Author.Username, tweet.PostedAt, tweet.Text)
 	}
 
-	// Perform content analysis for searchable metadata
-	// Especially important for media-heavy tweets with little text
+	// Perform vision-based content analysis if we have media
+	// This extracts text from images, identifies objects, people, etc.
+	s.runVisionAnalysis(ctx, tweet)
+
+	return title, ""
+}
+
+// runVisionAnalysis performs AI analysis on the tweet's media content.
+// If media files are available locally, it uses vision analysis for rich metadata extraction.
+func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Tweet) {
+	// Collect local image paths and video thumbnails
+	var imagePaths []string
+	var videoThumbPath string
+
+	for _, m := range tweet.Media {
+		if m.LocalPath == "" {
+			continue
+		}
+		switch m.Type {
+		case domain.MediaTypeImage:
+			imagePaths = append(imagePaths, m.LocalPath)
+		case domain.MediaTypeVideo, domain.MediaTypeGIF:
+			// For videos, use the thumbnail if available
+			if m.PreviewURL != "" && filepath.IsAbs(m.PreviewURL) {
+				videoThumbPath = m.PreviewURL
+			}
+		}
+	}
+
+	// If we have images or video thumbnail, use vision analysis
+	if len(imagePaths) > 0 || videoThumbPath != "" {
+		s.logger.Info("running vision analysis",
+			"tweet_id", tweet.ID,
+			"images", len(imagePaths),
+			"has_video_thumb", videoThumbPath != "",
+		)
+
+		analysis, err := s.grokClient.AnalyzeContentWithVision(ctx, grok.VisionAnalysisRequest{
+			TweetText:      tweet.Text,
+			AuthorUsername: tweet.Author.Username,
+			ImagePaths:     imagePaths,
+			VideoThumbPath: videoThumbPath,
+			HasVideo:       tweet.HasVideo(),
+			VideoDuration:  getTotalVideoDuration(tweet),
+		})
+
+		if err != nil {
+			s.logger.Warn("vision analysis failed, falling back to text analysis", "error", err)
+			// Fall back to text-only analysis
+			s.runTextAnalysis(ctx, tweet)
+			return
+		}
+
+		tweet.AISummary = analysis.Summary
+		tweet.AITags = analysis.Tags
+		tweet.AIContentType = analysis.ContentType
+		tweet.AITopics = analysis.Topics
+		s.logger.Info("vision analysis complete",
+			"tags_count", len(analysis.Tags),
+			"content_type", analysis.ContentType,
+		)
+		return
+	}
+
+	// No media available, use text-only analysis
+	s.runTextAnalysis(ctx, tweet)
+}
+
+// runTextAnalysis performs text-only AI analysis (no vision).
+func (s *TweetService) runTextAnalysis(ctx context.Context, tweet *domain.Tweet) {
 	analysis, err := s.grokClient.AnalyzeContent(ctx, grok.ContentAnalysisRequest{
 		TweetText:      tweet.Text,
 		AuthorUsername: tweet.Author.Username,
@@ -383,18 +433,63 @@ func (s *TweetService) generateAIMetadata(ctx context.Context, tweet *domain.Twe
 
 	if err != nil {
 		s.logger.Warn("AI content analysis failed", "error", err)
-	} else {
-		tweet.AISummary = analysis.Summary
-		tweet.AITags = analysis.Tags
-		tweet.AIContentType = analysis.ContentType
-		tweet.AITopics = analysis.Topics
-		s.logger.Info("AI content analysis complete",
-			"tags_count", len(analysis.Tags),
-			"content_type", analysis.ContentType,
-		)
+		return
 	}
 
-	return title, ""
+	tweet.AISummary = analysis.Summary
+	tweet.AITags = analysis.Tags
+	tweet.AIContentType = analysis.ContentType
+	tweet.AITopics = analysis.Topics
+	s.logger.Info("text analysis complete",
+		"tags_count", len(analysis.Tags),
+		"content_type", analysis.ContentType,
+	)
+}
+
+// RegenerateAIMetadata re-runs AI analysis on a tweet and updates its metadata.
+// This is useful when the AI algorithm is improved or to get better results.
+func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.TweetID) error {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return domain.ErrVideoNotFound
+	}
+
+	s.logger.Info("regenerating AI metadata", "tweet_id", tweetID)
+
+	// Clear existing AI metadata
+	tweet.AISummary = ""
+	tweet.AITags = nil
+	tweet.AIContentType = ""
+	tweet.AITopics = nil
+
+	// Re-run vision analysis
+	s.runVisionAnalysis(ctx, tweet)
+
+	// Also regenerate the title
+	prompt := buildTweetPrompt(tweet)
+	title, err := s.grokClient.GenerateFilename(ctx, grok.FilenameRequest{
+		TweetText:      prompt,
+		AuthorUsername: tweet.Author.Username,
+		AuthorName:     tweet.Author.DisplayName,
+		PostedAt:       tweet.PostedAt.Format("2006-01-02"),
+		Duration:       getTotalVideoDuration(tweet),
+	})
+	if err == nil {
+		tweet.AITitle = title
+	}
+
+	// Save updated metadata to disk
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		return fmt.Errorf("save metadata: %w", err)
+	}
+
+	s.logger.Info("AI metadata regenerated",
+		"tweet_id", tweetID,
+		"tags_count", len(tweet.AITags),
+		"summary_len", len(tweet.AISummary),
+	)
+
+	return nil
 }
 
 func buildTweetPrompt(tweet *domain.Tweet) string {

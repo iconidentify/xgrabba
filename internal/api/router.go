@@ -55,6 +55,7 @@ func NewRouter(
 		r.Get("/tweets/{tweetID}/media/{filename}", tweetHandler.ServeMedia)
 		r.Get("/tweets/{tweetID}/avatar", tweetHandler.ServeAvatar)
 		r.Delete("/tweets/{tweetID}", tweetHandler.Delete)
+		r.Post("/tweets/{tweetID}/regenerate-ai", tweetHandler.RegenerateAI)
 
 		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)

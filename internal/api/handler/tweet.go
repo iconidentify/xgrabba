@@ -292,6 +292,44 @@ func (h *TweetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RegenerateAI handles POST /api/v1/tweets/{tweetID}/regenerate-ai
+// This re-runs AI analysis on a tweet using the latest algorithm (including vision).
+func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	err := h.tweetSvc.RegenerateAIMetadata(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("regenerate AI failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to regenerate AI metadata")
+		return
+	}
+
+	// Return the updated tweet details
+	stored, err := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "regeneration successful but failed to fetch updated data")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"message":      "AI metadata regenerated successfully",
+		"ai_title":     stored.AITitle,
+		"ai_summary":   stored.AISummary,
+		"ai_tags":      stored.AITags,
+		"ai_topics":    stored.AITopics,
+		"ai_content_type": stored.AIContentType,
+	})
+}
+
 // MediaFileResponse represents a media file in the list response.
 type MediaFileResponse struct {
 	Filename    string `json:"filename"`
