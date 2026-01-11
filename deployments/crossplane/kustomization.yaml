@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - release.yaml
+
+# Optional: Add common labels
+commonLabels:
+  app.kubernetes.io/name: xgrabba
+  app.kubernetes.io/managed-by: crossplane

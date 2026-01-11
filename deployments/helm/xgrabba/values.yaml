@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/chrisk/xgrabba
+  repository: ghcr.io/iconidentify/xgrabba
   pullPolicy: IfNotPresent
   tag: ""  # Defaults to chart appVersion
 
@@ -78,7 +78,7 @@ config:
   grok:
     baseUrl: "https://api.x.ai/v1"
     timeout: "30s"
-    model: "grok-beta"
+    model: "grok-3"
   download:
     timeout: "10m"
     retryDelay: "5s"

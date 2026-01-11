@@ -65,24 +65,15 @@ async function archiveVideo(payload) {
       };
     }
 
-    const response = await fetch(`${backendUrl}/api/v1/videos`, {
+    // New simplified API - just send the tweet URL, backend handles everything
+    const response = await fetch(`${backendUrl}/api/v1/tweets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey
       },
       body: JSON.stringify({
-        tweet_url: payload.tweetUrl,
-        tweet_id: payload.tweetId,
-        media_urls: payload.mediaUrls,
-        metadata: {
-          author_username: payload.authorUsername,
-          author_name: payload.authorName,
-          tweet_text: payload.tweetText,
-          posted_at: payload.postedAt,
-          duration_seconds: payload.duration || 0,
-          resolution: payload.resolution || ''
-        }
+        tweet_url: payload.tweetUrl
       })
     });
 
@@ -94,18 +85,15 @@ async function archiveVideo(payload) {
 
     // Save to history
     await addToHistory({
-      tweetId: payload.tweetId,
+      tweetId: data.tweet_id || payload.tweetId,
       tweetUrl: payload.tweetUrl,
-      authorUsername: payload.authorUsername,
-      tweetTextPreview: payload.tweetText?.substring(0, 100) || '',
-      videoId: data.video_id,
       status: 'pending',
       archivedAt: new Date().toISOString()
     });
 
     return {
       success: true,
-      videoId: data.video_id,
+      tweetId: data.tweet_id,
       message: data.message
     };
 
@@ -116,8 +104,6 @@ async function archiveVideo(payload) {
     await addToHistory({
       tweetId: payload.tweetId,
       tweetUrl: payload.tweetUrl,
-      authorUsername: payload.authorUsername,
-      tweetTextPreview: payload.tweetText?.substring(0, 100) || '',
       status: 'failed',
       error: error.message,
       archivedAt: new Date().toISOString(),

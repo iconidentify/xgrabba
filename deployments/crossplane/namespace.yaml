@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xgrabba
+  labels:
+    app.kubernetes.io/name: xgrabba
+    app.kubernetes.io/managed-by: crossplane

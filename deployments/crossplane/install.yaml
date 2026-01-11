@@ -1,0 +1,78 @@
+# XGrabba - Complete Crossplane Installation
+# Apply with: kubectl apply -f https://raw.githubusercontent.com/iconidentify/xgrabba/main/deployments/crossplane/install.yaml
+#
+# Prerequisites:
+# 1. Crossplane installed
+# 2. provider-helm installed with ProviderConfig named "helm-provider"
+# 3. Create secrets first (see below)
+#
+# Before applying, create the secrets:
+#   kubectl create namespace xgrabba
+#   kubectl create secret generic xgrabba-secrets \
+#     --namespace xgrabba \
+#     --from-literal=api-key="$(openssl rand -hex 32)" \
+#     --from-literal=grok-api-key="YOUR_GROK_API_KEY"
+#
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xgrabba
+  labels:
+    app.kubernetes.io/name: xgrabba
+    app.kubernetes.io/managed-by: crossplane
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: xgrabba
+spec:
+  forProvider:
+    chart:
+      name: xgrabba
+      repository: oci://ghcr.io/iconidentify/charts
+      # Omit version for auto-updates, or pin: version: "0.1.0"
+    namespace: xgrabba
+    wait: true
+    waitTimeout: 300
+    values:
+      replicaCount: 1
+      image:
+        repository: ghcr.io/iconidentify/xgrabba
+        pullPolicy: IfNotPresent
+      config:
+        server:
+          host: "0.0.0.0"
+          port: 9847
+        storage:
+          basePath: "/data/videos"
+          tempPath: "/data/temp"
+        worker:
+          count: 2
+        grok:
+          model: "grok-3"
+      persistence:
+        enabled: true
+        size: 100Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    set:
+      - name: secrets.apiKey
+        valueFrom:
+          secretKeyRef:
+            name: xgrabba-secrets
+            key: api-key
+            namespace: xgrabba
+      - name: secrets.grokApiKey
+        valueFrom:
+          secretKeyRef:
+            name: xgrabba-secrets
+            key: grok-api-key
+            namespace: xgrabba
+  providerConfigRef:
+    name: helm-provider

@@ -1,0 +1,85 @@
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: xgrabba
+  annotations:
+    # Auto-update to latest version when new releases are published
+    crossplane.io/external-name: xgrabba
+spec:
+  forProvider:
+    chart:
+      name: xgrabba
+      repository: oci://ghcr.io/iconidentify/charts
+      # Version can be pinned or use "*" for latest
+      # version: "0.1.0"
+    namespace: xgrabba
+    # Wait for resources to be ready
+    wait: true
+    waitTimeout: 300
+    # Values override
+    values:
+      replicaCount: 1
+
+      image:
+        repository: ghcr.io/iconidentify/xgrabba
+        pullPolicy: IfNotPresent
+        # tag: "latest"  # Uncomment to use latest, otherwise uses chart appVersion
+
+      config:
+        server:
+          host: "0.0.0.0"
+          port: 9847
+        storage:
+          basePath: "/data/videos"
+          tempPath: "/data/temp"
+        worker:
+          count: 2
+        grok:
+          model: "grok-3"
+
+      persistence:
+        enabled: true
+        storageClass: ""  # Use default storage class
+        size: 100Gi
+
+      ingress:
+        enabled: false
+        # Uncomment and configure for ingress
+        # className: "nginx"
+        # annotations:
+        #   cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        # hosts:
+        #   - host: xgrabba.example.com
+        #     paths:
+        #       - path: /
+        #         pathType: Prefix
+        # tls:
+        #   - secretName: xgrabba-tls
+        #     hosts:
+        #       - xgrabba.example.com
+
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    # Set secrets from Kubernetes secrets
+    set:
+      - name: secrets.apiKey
+        valueFrom:
+          secretKeyRef:
+            name: xgrabba-secrets
+            key: api-key
+            namespace: xgrabba
+      - name: secrets.grokApiKey
+        valueFrom:
+          secretKeyRef:
+            name: xgrabba-secrets
+            key: grok-api-key
+            namespace: xgrabba
+
+  providerConfigRef:
+    name: helm-provider

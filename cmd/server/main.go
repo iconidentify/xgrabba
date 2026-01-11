@@ -82,12 +82,21 @@ func main() {
 		logger,
 	)
 
+	// Initialize tweet service (new architecture - backend handles everything)
+	tweetSvc := service.NewTweetService(
+		grokClient,
+		dl,
+		cfg.Storage,
+		logger,
+	)
+
 	// Initialize handlers
 	videoHandler := handler.NewVideoHandler(videoSvc, logger)
+	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
 	healthHandler := handler.NewHealthHandler(jobRepo)
 
 	// Setup router
-	router := api.NewRouter(videoHandler, healthHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

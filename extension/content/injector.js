@@ -28,7 +28,7 @@ class TweetInjector {
     // Listen for messages from background/popup
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === 'TRIGGER_ARCHIVE') {
-        this.archiveVisibleVideo();
+        this.archiveVisibleTweet();
       }
     });
   }
@@ -51,16 +51,18 @@ class TweetInjector {
     const tweets = document.querySelectorAll('article[data-testid="tweet"]');
 
     tweets.forEach(tweet => {
-      // Check if tweet has video
-      if (this.hasVideo(tweet) && !this.isProcessed(tweet)) {
+      // Archive any tweet - backend will handle fetching all content
+      if (!this.isProcessed(tweet)) {
         this.injectArchiveButton(tweet);
       }
     });
   }
 
-  hasVideo(tweetElement) {
+  hasMedia(tweetElement) {
+    // Check if tweet has any media (images, videos, gifs)
     return tweetElement.querySelector('video') !== null ||
-           tweetElement.querySelector('[data-testid="videoPlayer"]') !== null;
+           tweetElement.querySelector('[data-testid="videoPlayer"]') !== null ||
+           tweetElement.querySelector('[data-testid="tweetPhoto"]') !== null;
   }
 
   isProcessed(tweetElement) {
@@ -92,8 +94,8 @@ class TweetInjector {
     // Create the button
     const button = document.createElement('button');
     button.className = 'xgrabba-archive-btn';
-    button.setAttribute('aria-label', 'Archive video');
-    button.setAttribute('title', 'Archive video');
+    button.setAttribute('aria-label', 'Archive tweet');
+    button.setAttribute('title', 'Archive tweet');
     button.innerHTML = this.getIdleIcon();
 
     // Add click handler
@@ -115,12 +117,12 @@ class TweetInjector {
       return; // Already in progress
     }
 
-    // Extract tweet data
+    // Extract just the tweet URL - backend handles everything else
     const extractor = window.XGrabbaExtractor;
-    const data = extractor.extractFromTweet(tweetElement);
+    const tweetUrl = extractor.getTweetUrl(tweetElement);
 
-    if (!data || data.mediaUrls.length === 0) {
-      this.showToast('Could not extract video data. Try scrolling to load the video first.', 'error');
+    if (!tweetUrl) {
+      this.showToast('Could not get tweet URL', 'error');
       return;
     }
 
@@ -128,17 +130,20 @@ class TweetInjector {
     this.setState(tweetId, button, 'saving');
 
     try {
-      // Send to background script
+      // Send to background script - just the URL, backend does the rest
       const response = await chrome.runtime.sendMessage({
         type: 'ARCHIVE_VIDEO',
-        payload: data
+        payload: {
+          tweetUrl: tweetUrl,
+          tweetId: tweetId
+        }
       });
 
       if (response.success) {
         this.setState(tweetId, button, 'success');
-        this.showToast('Video archived successfully', 'success');
+        this.showToast('Tweet archived successfully', 'success');
 
-        // Reset to idle after delay
+        // Reset to archived state after delay
         setTimeout(() => {
           this.setState(tweetId, button, 'archived');
         }, 3000);
@@ -162,15 +167,15 @@ class TweetInjector {
     switch (state) {
       case 'idle':
         button.innerHTML = this.getIdleIcon();
-        button.setAttribute('title', 'Archive video');
+        button.setAttribute('title', 'Archive tweet');
         break;
       case 'saving':
         button.innerHTML = this.getSavingIcon();
-        button.setAttribute('title', 'Archiving...');
+        button.setAttribute('title', 'Archiving tweet...');
         break;
       case 'success':
         button.innerHTML = this.getSuccessIcon();
-        button.setAttribute('title', 'Archived successfully');
+        button.setAttribute('title', 'Tweet archived successfully');
         break;
       case 'failed':
         button.innerHTML = this.getFailedIcon();
@@ -203,12 +208,12 @@ class TweetInjector {
     }, 3000);
   }
 
-  archiveVisibleVideo() {
-    // Find the most visible tweet with video
+  archiveVisibleTweet() {
+    // Find the most visible tweet
     const tweets = document.querySelectorAll('article[data-testid="tweet"]');
 
     for (const tweet of tweets) {
-      if (this.hasVideo(tweet) && this.isInViewport(tweet)) {
+      if (this.isInViewport(tweet)) {
         const tweetId = this.getTweetId(tweet);
         const button = document.querySelector(`.xgrabba-btn-container[data-tweet-id="${tweetId}"] button`);
         if (button) {

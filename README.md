@@ -1,34 +1,45 @@
 # XGrabba
 
-X.com Video Archive Tool - Archive videos from X.com with AI-powered intelligent naming.
+X.com Tweet Archive Tool - Archive complete tweets including all media (images, videos, GIFs) with AI-powered intelligent naming.
 
 ## Features
 
-- **One-click archiving**: Archive any video from X.com with a single click
+- **Full tweet archiving**: Archive any tweet from X.com - text, images, videos, and GIFs
+- **One-click from browser**: Simple Chrome/Edge extension with archive button on every tweet
 - **AI-powered naming**: Uses Grok AI to generate descriptive, intelligent filenames
-- **Full metadata**: Stores tweet text, author info, timestamps alongside videos
-- **SMB access**: Browse archived videos easily via network share
-- **Kubernetes-ready**: Deploy anywhere with Helm charts
+- **Complete metadata**: Stores tweet text, author info, metrics, timestamps in JSON and Markdown
+- **Backend-driven**: Just send tweet URL - server handles all fetching and processing
+- **Kubernetes-ready**: Deploy anywhere with Helm charts and Crossplane support
+- **Auto-updates**: Crossplane automatically updates to new releases
 
 ## Architecture
 
 ```
-Browser Extension  -->  Go Backend Server  -->  Filesystem/SMB
+Browser Extension  -->  Go Backend Server  -->  Filesystem Storage
      |                        |
      |                        v
-     |                   Grok AI (naming)
-     v
- X.com (video URLs)
+     |               Twitter Syndication API
+     |                        |
+     |                        v
+     v                   Grok AI (naming)
+ Tweet URL only
 ```
+
+The extension only sends the tweet URL. The backend:
+1. Fetches tweet data from Twitter's syndication API
+2. Generates an AI-powered filename using Grok
+3. Downloads all media (images, videos, GIFs)
+4. Saves metadata as JSON and human-readable Markdown
 
 ## Quick Start
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.22+ (for local development)
 - Docker (for containerized deployment)
 - Kubernetes + Helm (for cluster deployment)
 - Chrome or Edge browser
+- Grok API key from [x.ai](https://x.ai)
 
 ### Local Development
 
@@ -40,19 +51,22 @@ Browser Extension  -->  Go Backend Server  -->  Filesystem/SMB
 
 2. **Configure environment**
    ```bash
-   export API_KEY=your-secret-api-key
-   export GROK_API_KEY=your-grok-api-key
-   export STORAGE_PATH=/path/to/video/storage
+   cp .env.example .env
+   # Edit .env with your values:
+   # - API_KEY: secure key for extension auth
+   # - GROK_API_KEY: your Grok API key
+   # - STORAGE_PATH: where to store archived tweets
    ```
 
 3. **Run the server**
    ```bash
    make run
+   # Or manually:
+   export $(cat .env | xargs) && go run ./cmd/server
    ```
 
 4. **Load the extension**
-   - Open Chrome/Edge
-   - Navigate to `chrome://extensions`
+   - Open Chrome/Edge and navigate to `chrome://extensions`
    - Enable "Developer mode"
    - Click "Load unpacked"
    - Select the `extension/` directory
@@ -63,34 +77,154 @@ Browser Extension  -->  Go Backend Server  -->  Filesystem/SMB
    - Enter your backend URL (default: `http://localhost:9847`)
    - Enter your API key
 
-### Docker Deployment
+---
+
+## Kubernetes Deployment
+
+### Using Helm (Direct)
 
 ```bash
-# Build the image
-docker build -t xgrabba:latest .
+# Install directly from OCI registry
+helm install xgrabba oci://ghcr.io/iconidentify/charts/xgrabba \
+  --namespace xgrabba \
+  --create-namespace \
+  --set secrets.apiKey="your-secure-api-key" \
+  --set secrets.grokApiKey="your-grok-api-key"
+```
+
+### Using Crossplane (Recommended)
+
+Crossplane with provider-helm enables GitOps-style management with automatic updates.
+
+#### Prerequisites
+
+1. **Crossplane installed** in your cluster
+2. **provider-helm** installed and configured:
+   ```bash
+   kubectl apply -f - <<EOF
+   apiVersion: pkg.crossplane.io/v1
+   kind: Provider
+   metadata:
+     name: provider-helm
+   spec:
+     package: xpkg.upbound.io/crossplane-contrib/provider-helm:v0.19.0
+   EOF
+   ```
+
+3. **ProviderConfig** for Helm:
+   ```bash
+   kubectl apply -f - <<EOF
+   apiVersion: helm.crossplane.io/v1beta1
+   kind: ProviderConfig
+   metadata:
+     name: helm-provider
+   spec:
+     credentials:
+       source: InjectedIdentity
+   EOF
+   ```
+
+#### Deploy XGrabba
+
+1. **Create the secrets** (do this first)
+   ```bash
+   kubectl create namespace xgrabba
+
+   kubectl create secret generic xgrabba-secrets \
+     --namespace xgrabba \
+     --from-literal=api-key="$(openssl rand -hex 32)" \
+     --from-literal=grok-api-key="YOUR_GROK_API_KEY"
+   ```
+
+2. **Install with one command** (no repo clone needed)
+   ```bash
+   kubectl apply -f https://raw.githubusercontent.com/iconidentify/xgrabba/main/deployments/crossplane/install.yaml
+   ```
+
+3. **Check deployment status**
+   ```bash
+   kubectl get release xgrabba
+   kubectl get pods -n xgrabba
+   ```
+
+#### Auto-Updates
+
+By default, Crossplane will automatically update when new chart versions are published. To pin to a specific version, download and edit the manifest:
+
+```bash
+# Download the manifest
+curl -o xgrabba-release.yaml https://raw.githubusercontent.com/iconidentify/xgrabba/main/deployments/crossplane/install.yaml
+
+# Edit to pin version
+# Add under spec.forProvider.chart:
+#   version: "0.1.0"
+
+kubectl apply -f xgrabba-release.yaml
+```
+
+#### Customization
+
+Download the manifest and edit to customize:
+
+```yaml
+spec:
+  forProvider:
+    values:
+      # Scale up workers
+      config:
+        worker:
+          count: 4
+
+      # Configure ingress
+      ingress:
+        enabled: true
+        className: "nginx"
+        annotations:
+          cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        hosts:
+          - host: xgrabba.example.com
+            paths:
+              - path: /
+                pathType: Prefix
+        tls:
+          - secretName: xgrabba-tls
+            hosts:
+              - xgrabba.example.com
+
+      # Increase storage
+      persistence:
+        size: 500Gi
+        storageClass: "fast-storage"
+
+      # More resources
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+```
+
+---
+
+## Docker Deployment
+
+```bash
+# Pull from GHCR
+docker pull ghcr.io/iconidentify/xgrabba:latest
 
 # Run the container
 docker run -d \
-  -p 8080:8080 \
-  -e API_KEY=your-api-key \
+  --name xgrabba \
+  -p 9847:9847 \
+  -e API_KEY=your-secure-api-key \
   -e GROK_API_KEY=your-grok-api-key \
   -v /path/to/videos:/data/videos \
-  xgrabba:latest
+  ghcr.io/iconidentify/xgrabba:latest
 ```
 
-### Kubernetes Deployment
-
-```bash
-# Add secrets
-kubectl create secret generic xgrabba-secrets \
-  --from-literal=API_KEY=your-api-key \
-  --from-literal=GROK_API_KEY=your-grok-api-key
-
-# Install with Helm
-helm install xgrabba deployments/helm/xgrabba \
-  --set secrets.apiKey=your-api-key \
-  --set secrets.grokApiKey=your-grok-api-key
-```
+---
 
 ## Configuration
 
@@ -101,149 +235,141 @@ helm install xgrabba deployments/helm/xgrabba \
 | `API_KEY` | API key for extension authentication | *required* |
 | `GROK_API_KEY` | Grok AI API key for filename generation | *required* |
 | `SERVER_HOST` | Server bind address | `0.0.0.0` |
-| `SERVER_PORT` | Server port | `8080` |
-| `STORAGE_PATH` | Video storage directory | `/data/videos` |
+| `SERVER_PORT` | Server port | `9847` |
+| `STORAGE_PATH` | Tweet storage directory | `/data/videos` |
 | `STORAGE_TEMP_PATH` | Temporary file directory | `/data/temp` |
 | `WORKER_COUNT` | Number of background workers | `2` |
-| `GROK_MODEL` | Grok model to use | `grok-beta` |
+| `GROK_MODEL` | Grok model to use | `grok-3` |
 
-### YAML Configuration
-
-Create a `config.yaml` file:
-
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
-  api_key: "your-api-key"
-
-storage:
-  base_path: "/data/videos"
-  temp_path: "/data/temp"
-
-worker:
-  count: 2
-  poll_interval: "5s"
-  max_retries: 3
-
-grok:
-  api_key: "your-grok-api-key"
-  model: "grok-beta"
-```
-
-Run with config file:
-```bash
-./xgrabba --config config.yaml
-```
+---
 
 ## API Reference
 
-### Submit Video
+### Archive Tweet (New - Recommended)
 
 ```http
-POST /api/v1/videos
+POST /api/v1/tweets
 Content-Type: application/json
 X-API-Key: your-api-key
 
 {
-  "tweet_url": "https://x.com/user/status/123456789",
-  "media_urls": ["https://video.twimg.com/..."],
-  "metadata": {
-    "author_username": "username",
-    "author_name": "Display Name",
-    "tweet_text": "Tweet content...",
-    "posted_at": "2024-01-15T10:30:00Z",
-    "duration_seconds": 45
-  }
+  "tweet_url": "https://x.com/user/status/123456789"
 }
 ```
 
 Response:
 ```json
 {
-  "video_id": "vid_abc123",
+  "tweet_id": "123456789",
   "status": "pending",
-  "message": "Video queued for processing"
+  "message": "Tweet queued for archiving"
 }
 ```
 
-### Get Video Status
+### Get Tweet Status
 
 ```http
-GET /api/v1/videos/{videoID}/status
+GET /api/v1/tweets/{tweetID}
 X-API-Key: your-api-key
 ```
 
 Response:
 ```json
 {
-  "video_id": "vid_abc123",
+  "tweet_id": "123456789",
   "status": "completed",
-  "filename": "username_2024-01-15_description.mp4",
-  "file_path": "/data/videos/2024/01/username_2024-01-15_description.mp4"
+  "author": "username",
+  "text": "Tweet content...",
+  "media_count": 2,
+  "ai_title": "username_2024-01-15_rocket_launch",
+  "archive_path": "/data/videos/2024/01/username_2024-01-15_123456789"
 }
 ```
 
-### List Videos
+### List Archived Tweets
 
 ```http
-GET /api/v1/videos?status=completed&limit=50
+GET /api/v1/tweets?limit=50&offset=0
 X-API-Key: your-api-key
 ```
 
-### Health Check
+### Health Checks
 
 ```http
-GET /health
-GET /ready
+GET /health   # Liveness probe
+GET /ready    # Readiness probe
 ```
+
+---
 
 ## Storage Structure
 
-Videos are organized by year and month:
+Tweets are organized by year and month:
 
 ```
 /data/videos/
 ├── 2024/
 │   ├── 01/
-│   │   ├── username_2024-01-15_rocket-launch.mp4
-│   │   └── username_2024-01-15_rocket-launch.json
+│   │   └── username_2024-01-15_123456789/
+│   │       ├── tweet.json       # Full metadata
+│   │       ├── README.md        # Human-readable summary
+│   │       └── media/
+│   │           ├── photo_0.jpg
+│   │           ├── photo_1.jpg
+│   │           └── video_0.mp4
 │   └── 02/
 │       └── ...
 └── 2025/
     └── ...
 ```
 
-Each video has a corresponding `.json` metadata file:
+### Metadata JSON
 
 ```json
 {
-  "video_id": "vid_abc123",
-  "tweet_url": "https://x.com/elonmusk/status/123456789",
   "tweet_id": "123456789",
-  "author_username": "elonmusk",
-  "author_name": "Elon Musk",
-  "tweet_text": "Check out this amazing launch!",
+  "url": "https://x.com/username/status/123456789",
+  "author": {
+    "id": "987654321",
+    "username": "username",
+    "display_name": "Display Name",
+    "verified": true
+  },
+  "text": "Check out this amazing content!",
   "posted_at": "2024-01-15T10:30:00Z",
   "archived_at": "2024-01-15T12:45:00Z",
-  "duration_seconds": 45,
-  "resolution": "1280x720",
-  "original_urls": ["https://video.twimg.com/..."],
-  "generated_filename": "elonmusk_2024-01-15_rocket-launch.mp4",
-  "grok_analysis": "SpaceX Starship test flight"
+  "media": [
+    {
+      "id": "photo_0",
+      "type": "image",
+      "url": "https://pbs.twimg.com/...",
+      "local_path": "media/photo_0.jpg",
+      "downloaded": true
+    }
+  ],
+  "metrics": {
+    "likes": 1500,
+    "retweets": 300,
+    "replies": 50
+  },
+  "ai_title": "username_2024-01-15_rocket_launch"
 }
 ```
 
+---
+
 ## Extension Usage
 
-1. **Browse X.com** - Navigate to any tweet with a video
+1. **Browse X.com** - Navigate to any tweet
 2. **Click archive button** - Look for the download icon in the tweet action bar
-3. **Wait for confirmation** - The button will show a checkmark when complete
+3. **Wait for confirmation** - The button shows a checkmark when complete
 4. **View history** - Click the extension icon to see recent archives
 
 ### Keyboard Shortcut
 
-Press `Alt+S` (or `Option+S` on Mac) to archive the video in the currently visible tweet.
+Press `Alt+S` (or `Option+S` on Mac) to archive the currently visible tweet.
+
+---
 
 ## Development
 
@@ -260,45 +386,55 @@ make docker-build   # Build Docker image
 
 ```
 xgrabba/
-├── cmd/server/         # Application entry point
+├── cmd/server/              # Application entry point
 ├── internal/
-│   ├── api/           # HTTP handlers and middleware
-│   ├── config/        # Configuration management
-│   ├── domain/        # Domain entities
-│   ├── downloader/    # Video download logic
-│   ├── repository/    # Data persistence
-│   ├── service/       # Business logic
-│   └── worker/        # Background job processing
-├── pkg/grok/          # Grok AI client
-├── extension/         # Chrome/Edge extension
-└── deployments/helm/  # Kubernetes Helm charts
+│   ├── api/                 # HTTP handlers and middleware
+│   ├── config/              # Configuration management
+│   ├── domain/              # Domain entities
+│   ├── downloader/          # Media download logic
+│   ├── repository/          # Data persistence
+│   ├── service/             # Business logic
+│   └── worker/              # Background job processing
+├── pkg/
+│   ├── grok/                # Grok AI client
+│   └── twitter/             # Twitter API client
+├── extension/               # Chrome/Edge extension
+└── deployments/
+    ├── helm/xgrabba/        # Helm chart
+    └── crossplane/          # Crossplane manifests
 ```
 
-## SMB Share Setup
+---
 
-To browse archived videos over the network:
+## CI/CD
 
-### Using Samba (Linux/macOS)
+### GitHub Actions
+
+- **CI** (`ci.yml`): Runs on every push/PR
+  - Go build and test
+  - Linting with golangci-lint
+  - Docker build test
+  - Helm chart linting
+
+- **Release** (`release.yml`): Runs on version tags (`v*`)
+  - Builds multi-platform binaries
+  - Pushes Docker image to GHCR
+  - Packages and pushes Helm chart to GHCR OCI registry
+  - Creates GitHub release with assets
+
+### Creating a Release
 
 ```bash
-# Install Samba
-sudo apt install samba  # Debian/Ubuntu
-brew install samba      # macOS
-
-# Add share configuration to /etc/samba/smb.conf
-[xgrabba]
-   path = /data/videos
-   browseable = yes
-   read only = yes
-   guest ok = yes
-
-# Restart Samba
-sudo systemctl restart smbd
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-### Docker with Samba Sidecar
+This triggers:
+1. Docker image: `ghcr.io/iconidentify/xgrabba:v0.1.0`
+2. Helm chart: `oci://ghcr.io/iconidentify/charts/xgrabba:0.1.0`
+3. GitHub Release with binaries and extension zip
 
-Use a Samba container alongside XGrabba sharing the same volume.
+---
 
 ## License
 

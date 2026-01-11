@@ -1,17 +1,18 @@
 apiVersion: v2
 name: xgrabba
-description: X.com Video Archive Tool - Archive videos from X.com with AI-powered naming
+description: X.com Tweet Archive Tool - Archive tweets with all media using AI-powered naming
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
 keywords:
+  - tweet
   - video
   - archive
   - x.com
   - twitter
   - media
-home: https://github.com/chrisk/xgrabba
+home: https://github.com/iconidentify/xgrabba
 sources:
-  - https://github.com/chrisk/xgrabba
+  - https://github.com/iconidentify/xgrabba
 maintainers:
-  - name: chrisk
+  - name: iconidentify

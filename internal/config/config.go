@@ -46,7 +46,7 @@ type GrokConfig struct {
 	APIKey  string        `yaml:"api_key" envconfig:"GROK_API_KEY"`
 	BaseURL string        `yaml:"base_url" envconfig:"GROK_BASE_URL" default:"https://api.x.ai/v1"`
 	Timeout time.Duration `yaml:"timeout" envconfig:"GROK_TIMEOUT" default:"30s"`
-	Model   string        `yaml:"model" envconfig:"GROK_MODEL" default:"grok-beta"`
+	Model   string        `yaml:"model" envconfig:"GROK_MODEL" default:"grok-3"`
 }
 
 // DownloadConfig holds video download configuration.

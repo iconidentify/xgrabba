@@ -13,6 +13,7 @@ import (
 // NewRouter creates the HTTP router with all routes configured.
 func NewRouter(
 	videoHandler *handler.VideoHandler,
+	tweetHandler *handler.TweetHandler,
 	healthHandler *handler.HealthHandler,
 	apiKey string,
 ) *chi.Mux {
@@ -36,7 +37,13 @@ func NewRouter(
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.APIKeyAuth(apiKey))
 
-		// Video operations
+		// Tweet operations (new - full tweet archival)
+		r.Post("/tweets", tweetHandler.Archive)
+		r.Get("/tweets", tweetHandler.List)
+		r.Get("/tweets/{tweetID}", tweetHandler.Get)
+		r.Get("/tweets/{tweetID}/status", tweetHandler.GetStatus)
+
+		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)
 		r.Get("/videos", videoHandler.List)
 		r.Get("/videos/{videoID}", videoHandler.Get)
