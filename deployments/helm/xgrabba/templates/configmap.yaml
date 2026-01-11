@@ -18,6 +18,10 @@ data:
   GROK_BASE_URL: {{ .Values.config.grok.baseUrl | quote }}
   GROK_TIMEOUT: {{ .Values.config.grok.timeout | quote }}
   GROK_MODEL: {{ .Values.config.grok.model | quote }}
+  WHISPER_ENABLED: {{ .Values.config.whisper.enabled | quote }}
+  WHISPER_BASE_URL: {{ .Values.config.whisper.baseUrl | quote }}
+  WHISPER_TIMEOUT: {{ .Values.config.whisper.timeout | quote }}
+  WHISPER_MODEL: {{ .Values.config.whisper.model | quote }}
   DOWNLOAD_TIMEOUT: {{ .Values.config.download.timeout | quote }}
   DOWNLOAD_RETRY_DELAY: {{ .Values.config.download.retryDelay | quote }}
   DOWNLOAD_MAX_RETRY_DELAY: {{ .Values.config.download.maxRetryDelay | quote }}

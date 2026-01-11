@@ -79,6 +79,11 @@ config:
     baseUrl: "https://api.x.ai/v1"
     timeout: "30s"
     model: "grok-3"
+  whisper:
+    enabled: true
+    baseUrl: "https://api.openai.com/v1"
+    timeout: "5m"
+    model: "whisper-1"
   download:
     timeout: "10m"
     retryDelay: "5s"
@@ -90,6 +95,8 @@ secrets:
   apiKey: ""
   # Grok API key for AI naming
   grokApiKey: ""
+  # OpenAI API key for Whisper transcription (optional)
+  openaiApiKey: ""
 
 # Persistence for video storage
 # IMPORTANT: To avoid data loss during upgrades:
