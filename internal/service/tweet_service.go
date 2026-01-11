@@ -38,7 +38,7 @@ func NewTweetService(
 	storageCfg config.StorageConfig,
 	logger *slog.Logger,
 ) *TweetService {
-	return &TweetService{
+	svc := &TweetService{
 		twitterClient: twitter.NewClient(),
 		grokClient:    grokClient,
 		downloader:    dl,
@@ -46,6 +46,63 @@ func NewTweetService(
 		logger:        logger,
 		tweets:        make(map[domain.TweetID]*domain.Tweet),
 	}
+
+	// Scan existing archives on startup
+	if err := svc.ScanArchives(); err != nil {
+		logger.Warn("failed to scan existing archives", "error", err)
+	}
+
+	return svc
+}
+
+// ScanArchives walks the storage directory and loads existing tweet metadata.
+func (s *TweetService) ScanArchives() error {
+	s.logger.Info("scanning existing archives", "path", s.cfg.BasePath)
+
+	count := 0
+	err := filepath.Walk(s.cfg.BasePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors, continue walking
+		}
+
+		// Look for tweet.json files
+		if info.IsDir() || info.Name() != "tweet.json" {
+			return nil
+		}
+
+		// Load the tweet metadata
+		tweet, err := s.loadTweetFromFile(path)
+		if err != nil {
+			s.logger.Warn("failed to load tweet metadata", "path", path, "error", err)
+			return nil
+		}
+
+		s.tweets[tweet.ID] = tweet
+		count++
+		return nil
+	})
+
+	s.logger.Info("finished scanning archives", "count", count)
+	return err
+}
+
+// loadTweetFromFile reads a tweet.json file and returns the Tweet struct.
+func (s *TweetService) loadTweetFromFile(path string) (*domain.Tweet, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+
+	var tweet domain.Tweet
+	if err := json.Unmarshal(data, &tweet); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+
+	// Set archive path from file location
+	tweet.ArchivePath = filepath.Dir(path)
+	tweet.Status = domain.StatusCompleted
+
+	return &tweet, nil
 }
 
 // ArchiveRequest represents a tweet archive request.
