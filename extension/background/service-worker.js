@@ -1,6 +1,6 @@
 // XGrabba Background Service Worker
 
-const DEFAULT_BACKEND_URL = 'http://localhost:8080';
+const DEFAULT_BACKEND_URL = 'http://localhost:9847';
 const STORAGE_KEYS = {
   BACKEND_URL: 'backendUrl',
   API_KEY: 'apiKey',

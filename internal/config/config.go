@@ -21,7 +21,7 @@ type Config struct {
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
 	Host         string        `yaml:"host" envconfig:"SERVER_HOST" default:"0.0.0.0"`
-	Port         int           `yaml:"port" envconfig:"SERVER_PORT" default:"8080"`
+	Port         int           `yaml:"port" envconfig:"SERVER_PORT" default:"9847"`
 	APIKey       string        `yaml:"api_key" envconfig:"API_KEY"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" envconfig:"SERVER_READ_TIMEOUT" default:"30s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" envconfig:"SERVER_WRITE_TIMEOUT" default:"5m"`

@@ -44,12 +44,12 @@ USER xgrabba
 
 # Default environment variables
 ENV SERVER_HOST=0.0.0.0 \
-    SERVER_PORT=8080 \
+    SERVER_PORT=9847 \
     STORAGE_PATH=/data/videos \
     STORAGE_TEMP_PATH=/data/temp \
     WORKER_COUNT=2
 
-EXPOSE 8080
+EXPOSE 9847
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget -qO- http://localhost:8080/health || exit 1

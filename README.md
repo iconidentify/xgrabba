@@ -60,7 +60,7 @@ Browser Extension  -->  Go Backend Server  -->  Filesystem/SMB
 5. **Configure the extension**
    - Click the XGrabba icon in your browser toolbar
    - Go to Settings
-   - Enter your backend URL (default: `http://localhost:8080`)
+   - Enter your backend URL (default: `http://localhost:9847`)
    - Enter your API key
 
 ### Docker Deployment
