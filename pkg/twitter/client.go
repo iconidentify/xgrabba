@@ -37,14 +37,13 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		return nil, fmt.Errorf("could not extract tweet ID from URL: %s", tweetURL)
 	}
 
-	// Try syndication API first (works for public tweets)
+	// Try syndication API (works for public tweets)
 	tweet, err := c.fetchFromSyndication(ctx, tweetID)
 	if err == nil {
 		tweet.URL = tweetURL
 		return tweet, nil
 	}
 
-	// TODO: Add fallback to GraphQL API with cookies for private tweets
 	return nil, fmt.Errorf("failed to fetch tweet: %w", err)
 }
 

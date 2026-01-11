@@ -147,7 +147,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, t := range tweets {
-		// Build media previews with API URLs
+		// Build media previews with API URLs - all media served from our server
 		mediaPreviews := make([]MediaPreview, 0, len(t.Media))
 		for _, m := range t.Media {
 			if m.LocalPath == "" {
@@ -160,9 +160,16 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 				Type: string(m.Type),
 				URL:  mediaURL,
 			}
-			// Use preview URL for videos, main URL for images
+			// For videos, use locally downloaded thumbnail; for images, use the image itself
 			if m.Type == domain.MediaTypeVideo || m.Type == domain.MediaTypeGIF {
-				mp.ThumbnailURL = m.PreviewURL // Original Twitter thumbnail
+				// PreviewURL now contains local path after download
+				if m.PreviewURL != "" && filepath.IsAbs(m.PreviewURL) {
+					thumbFilename := filepath.Base(m.PreviewURL)
+					mp.ThumbnailURL = fmt.Sprintf("/api/v1/tweets/%s/media/%s", t.ID, thumbFilename)
+				} else {
+					// Fallback: no thumbnail, use empty (UI will show placeholder)
+					mp.ThumbnailURL = ""
+				}
 			} else {
 				mp.ThumbnailURL = mediaURL // For images, use our served URL
 			}

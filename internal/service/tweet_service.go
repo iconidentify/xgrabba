@@ -285,7 +285,7 @@ func (s *TweetService) downloadMedia(ctx context.Context, tweet *domain.Tweet, m
 
 	localPath := filepath.Join(archivePath, "media", filename)
 
-	// Download
+	// Download main media file
 	content, _, err := s.downloader.Download(ctx, media.URL)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
@@ -305,6 +305,39 @@ func (s *TweetService) downloadMedia(ctx context.Context, tweet *domain.Tweet, m
 
 	media.LocalPath = localPath
 	media.Downloaded = true
+
+	// For videos, also download the thumbnail/preview image
+	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && media.PreviewURL != "" {
+		thumbPath := filepath.Join(archivePath, "media", fmt.Sprintf("%s_thumb.jpg", media.ID))
+		if err := s.downloadThumbnail(ctx, media.PreviewURL, thumbPath); err != nil {
+			s.logger.Warn("failed to download video thumbnail", "media_id", media.ID, "error", err)
+			// Continue anyway - thumbnail is optional
+		} else {
+			// Update PreviewURL to point to local path for later reference
+			media.PreviewURL = thumbPath
+		}
+	}
+
+	return nil
+}
+
+// downloadThumbnail downloads a thumbnail image to the specified path.
+func (s *TweetService) downloadThumbnail(ctx context.Context, url, destPath string) error {
+	content, _, err := s.downloader.Download(ctx, url)
+	if err != nil {
+		return fmt.Errorf("download thumbnail: %w", err)
+	}
+	defer content.Close()
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create thumbnail file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, content); err != nil {
+		return fmt.Errorf("write thumbnail: %w", err)
+	}
 
 	return nil
 }
