@@ -90,6 +90,10 @@ type syndicationResponse struct {
 		ProfileImageURL string `json:"profile_image_url_https"`
 		Verified        bool   `json:"verified"`
 		IsBlueVerified  bool   `json:"is_blue_verified"`
+		FollowersCount  int    `json:"followers_count"`
+		FriendsCount    int    `json:"friends_count"`
+		StatusesCount   int    `json:"statuses_count"`
+		Description     string `json:"description"`
 	} `json:"user"`
 	Entities struct {
 		Media []struct {
@@ -174,11 +178,15 @@ func (c *Client) parseSyndicationResponse(tweetID string, resp *syndicationRespo
 		Text:     resp.Text,
 		PostedAt: postedAt,
 		Author: domain.Author{
-			ID:          resp.User.ID,
-			Username:    resp.User.ScreenName,
-			DisplayName: resp.User.Name,
-			AvatarURL:   resp.User.ProfileImageURL,
-			Verified:    resp.User.Verified || resp.User.IsBlueVerified,
+			ID:             resp.User.ID,
+			Username:       resp.User.ScreenName,
+			DisplayName:    resp.User.Name,
+			AvatarURL:      resp.User.ProfileImageURL,
+			Verified:       resp.User.Verified || resp.User.IsBlueVerified,
+			FollowerCount:  resp.User.FollowersCount,
+			FollowingCount: resp.User.FriendsCount,
+			TweetCount:     resp.User.StatusesCount,
+			Description:    resp.User.Description,
 		},
 		Metrics: domain.TweetMetrics{
 			Likes:    resp.FavoriteCount,

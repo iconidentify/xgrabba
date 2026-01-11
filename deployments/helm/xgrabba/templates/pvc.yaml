@@ -6,6 +6,7 @@ metadata:
   labels:
     {{- include "xgrabba.labels" . | nindent 4 }}
   annotations:
+    # Prevent PVC deletion on helm uninstall to protect archived data
     helm.sh/resource-policy: keep
 spec:
   accessModes:

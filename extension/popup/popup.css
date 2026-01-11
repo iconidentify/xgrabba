@@ -154,6 +154,29 @@ body {
   justify-content: center;
   flex-shrink: 0;
   color: #71767b;
+  overflow: hidden;
+  position: relative;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-img.avatar {
+  border-radius: 50%;
+}
+
+.thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71767b;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .history-info {

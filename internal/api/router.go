@@ -53,6 +53,7 @@ func NewRouter(
 		r.Get("/tweets/{tweetID}/full", tweetHandler.GetFull)
 		r.Get("/tweets/{tweetID}/media", tweetHandler.ListMedia)
 		r.Get("/tweets/{tweetID}/media/{filename}", tweetHandler.ServeMedia)
+		r.Get("/tweets/{tweetID}/avatar", tweetHandler.ServeAvatar)
 		r.Delete("/tweets/{tweetID}", tweetHandler.Delete)
 
 		// Video operations (legacy - kept for backwards compatibility)

@@ -217,6 +217,39 @@ async function updateHistoryEntry(tweetId, updates) {
 }
 
 async function getHistory() {
+  // Fetch from API to get authoritative list with thumbnails
+  try {
+    const { backendUrl, apiKey } = await getConfig();
+    if (!apiKey) {
+      // Fall back to local storage if no API key
+      const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+      return { history: result[STORAGE_KEYS.HISTORY] || [] };
+    }
+
+    const response = await fetch(`${backendUrl}/api/v1/tweets?limit=20`, {
+      headers: { 'X-API-Key': apiKey }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      // Transform API response to history format
+      const history = (data.tweets || []).map(tweet => ({
+        tweetId: tweet.tweet_id,
+        tweetUrl: tweet.url,
+        authorUsername: tweet.author,
+        authorAvatar: tweet.author_avatar,
+        tweetTextPreview: tweet.text || tweet.ai_title || 'Archived',
+        thumbnailUrl: tweet.media && tweet.media.length > 0 ? tweet.media[0].thumbnail_url : null,
+        status: tweet.status === 'completed' ? 'success' : tweet.status,
+        archivedAt: tweet.created_at
+      }));
+      return { history, fromApi: true };
+    }
+  } catch (error) {
+    console.error('Failed to fetch history from API:', error);
+  }
+
+  // Fall back to local storage
   const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
   return { history: result[STORAGE_KEYS.HISTORY] || [] };
 }

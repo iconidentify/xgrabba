@@ -44,13 +44,18 @@ type Tweet struct {
 	ArchivedAt  *time.Time
 }
 
-// Author represents the tweet author.
+// Author represents the tweet author with metadata captured at archival time.
 type Author struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	AvatarURL   string `json:"avatar_url,omitempty"`
-	Verified    bool   `json:"verified,omitempty"`
+	ID             string `json:"id"`
+	Username       string `json:"username"`
+	DisplayName    string `json:"display_name"`
+	AvatarURL      string `json:"avatar_url,omitempty"`
+	LocalAvatarURL string `json:"local_avatar_url,omitempty"` // Local copy of avatar
+	Verified       bool   `json:"verified,omitempty"`
+	FollowerCount  int    `json:"follower_count,omitempty"`
+	FollowingCount int    `json:"following_count,omitempty"`
+	TweetCount     int    `json:"tweet_count,omitempty"`
+	Description    string `json:"description,omitempty"`
 }
 
 // Media represents an image or video in a tweet.

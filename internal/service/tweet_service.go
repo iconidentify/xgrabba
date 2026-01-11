@@ -179,6 +179,16 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 		}
 	}
 
+	// Step 4b: Download author avatar
+	if tweet.Author.AvatarURL != "" {
+		avatarPath := filepath.Join(archivePath, "avatar.jpg")
+		if err := s.downloadThumbnail(ctx, tweet.Author.AvatarURL, avatarPath); err != nil {
+			logger.Warn("failed to download author avatar", "error", err)
+		} else {
+			tweet.Author.LocalAvatarURL = avatarPath
+		}
+	}
+
 	// Step 5: Save tweet metadata
 	logger.Info("saving tweet metadata")
 	if err := s.saveTweetMetadata(tweet); err != nil {
@@ -591,6 +601,26 @@ func (s *TweetService) GetArchivePath(ctx context.Context, tweetID domain.TweetI
 		return "", domain.ErrVideoNotFound
 	}
 	return tweet.ArchivePath, nil
+}
+
+// GetAvatarPath returns the path to the locally stored avatar for a tweet's author.
+func (s *TweetService) GetAvatarPath(ctx context.Context, tweetID domain.TweetID) (string, error) {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return "", domain.ErrVideoNotFound
+	}
+
+	if tweet.Author.LocalAvatarURL != "" {
+		return tweet.Author.LocalAvatarURL, nil
+	}
+
+	// Fallback: try avatar.jpg in archive path
+	avatarPath := filepath.Join(tweet.ArchivePath, "avatar.jpg")
+	if _, err := os.Stat(avatarPath); err == nil {
+		return avatarPath, nil
+	}
+
+	return "", domain.ErrMediaNotFound
 }
 
 func getMediaType(filename string) string {

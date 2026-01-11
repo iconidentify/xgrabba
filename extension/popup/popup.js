@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 class PopupApp {
   constructor() {
+    this.backendUrl = 'http://localhost:9847'; // Will be updated from settings
+    this.apiKey = '';
     this.elements = {
       settingsBtn: document.getElementById('settings-btn'),
       backBtn: document.getElementById('back-btn'),
@@ -82,16 +84,21 @@ class PopupApp {
   async loadSettings() {
     const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
 
-    this.elements.backendUrl.value = response.backendUrl || 'http://localhost:9847';
-    this.elements.apiKey.value = response.apiKey || '';
+    this.backendUrl = normalizeUrl(response.backendUrl || 'http://localhost:9847');
+    this.apiKey = response.apiKey || '';
+    this.elements.backendUrl.value = this.backendUrl;
+    this.elements.apiKey.value = this.apiKey;
     this.elements.showToasts.checked = response.settings?.showToasts !== false;
     this.elements.markArchived.checked = response.settings?.markArchivedTweets !== false;
   }
 
   async saveSettings() {
+    this.backendUrl = normalizeUrl(this.elements.backendUrl.value.trim());
+    this.apiKey = this.elements.apiKey.value.trim();
+
     const settings = {
-      backendUrl: normalizeUrl(this.elements.backendUrl.value.trim()),
-      apiKey: this.elements.apiKey.value.trim(),
+      backendUrl: this.backendUrl,
+      apiKey: this.apiKey,
       settings: {
         showToasts: this.elements.showToasts.checked,
         markArchivedTweets: this.elements.markArchived.checked
@@ -111,6 +118,8 @@ class PopupApp {
 
     // Re-check backend with new settings
     await this.checkBackend();
+    // Reload history with new settings
+    await this.loadHistory();
   }
 
   async testConnection() {
@@ -203,14 +212,31 @@ class PopupApp {
       ? `<button class="retry-btn" data-tweet-id="${item.tweetId}">Retry</button>`
       : '';
 
-    return `
-      <div class="history-item" data-tweet-id="${item.tweetId}" data-tweet-url="${item.tweetUrl}">
-        <div class="history-thumb">
+    // Build thumbnail - use media thumbnail or avatar, with API key
+    let thumbContent;
+    if (item.thumbnailUrl) {
+      const thumbUrl = this.addApiKeyToUrl(item.thumbnailUrl);
+      thumbContent = `<img src="${thumbUrl}" alt="" class="thumb-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="thumb-fallback" style="display:none;">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
             <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/>
           </svg>
-        </div>
+        </div>`;
+    } else if (item.authorAvatar) {
+      const avatarUrl = this.addApiKeyToUrl(item.authorAvatar);
+      thumbContent = `<img src="${avatarUrl}" alt="" class="thumb-img avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="thumb-fallback" style="display:none;">@</div>`;
+    } else {
+      thumbContent = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+        <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>`;
+    }
+
+    return `
+      <div class="history-item" data-tweet-id="${item.tweetId}" data-tweet-url="${item.tweetUrl}">
+        <div class="history-thumb">${thumbContent}</div>
         <div class="history-info">
           <div class="history-author">@${item.authorUsername}</div>
           <div class="history-text">${this.escapeHtml(item.tweetTextPreview || 'No text')}</div>
@@ -222,6 +248,20 @@ class PopupApp {
         </div>
       </div>
     `;
+  }
+
+  addApiKeyToUrl(url) {
+    if (!url) return url;
+    // Only transform our API URLs (relative paths)
+    if (!url.startsWith('/api/')) return url;
+    // Build full URL with backend host
+    let fullUrl = this.backendUrl + url;
+    // Add API key if configured
+    if (this.apiKey) {
+      const separator = fullUrl.includes('?') ? '&' : '?';
+      fullUrl += separator + 'key=' + encodeURIComponent(this.apiKey);
+    }
+    return fullUrl;
   }
 
   getStatusIcon(status) {

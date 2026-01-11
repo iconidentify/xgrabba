@@ -92,11 +92,20 @@ secrets:
   grokApiKey: ""
 
 # Persistence for video storage
+# IMPORTANT: To avoid data loss during upgrades:
+#   1. Always use 'helm upgrade' instead of 'helm uninstall && helm install'
+#   2. The PVC has 'helm.sh/resource-policy: keep' to protect against accidental deletion
+#   3. For maximum safety, create a PVC manually and set 'existingClaim' below
+#   4. Consider backing up the /data/videos directory regularly
 persistence:
   enabled: true
+  # Storage class (empty = use cluster default)
   storageClass: ""
   accessMode: ReadWriteOnce
   size: 100Gi
+  # Use an existing PVC instead of creating one (recommended for production)
+  # If set, the chart will not create a PVC and will use this existing one
+  # Example: kubectl create pvc xgrabba-data --size=100Gi
   existingClaim: ""
 
 # Liveness and readiness probes

@@ -47,20 +47,24 @@ type ArchiveResponse struct {
 
 // TweetResponse represents a tweet in list/get responses.
 type TweetResponse struct {
-	TweetID           string              `json:"tweet_id"`
-	URL               string              `json:"url"`
-	Status            string              `json:"status"`
-	Author            string              `json:"author,omitempty"`
-	AuthorDisplayName string              `json:"author_display_name,omitempty"`
-	AuthorAvatar      string              `json:"author_avatar,omitempty"`
-	Verified          bool                `json:"verified,omitempty"`
-	Text              string              `json:"text,omitempty"`
-	MediaCount        int                 `json:"media_count"`
-	Media             []MediaPreview      `json:"media,omitempty"`
-	AITitle           string              `json:"ai_title,omitempty"`
-	ArchivePath       string              `json:"archive_path,omitempty"`
-	Error             string              `json:"error,omitempty"`
-	CreatedAt         time.Time           `json:"created_at"`
+	TweetID           string         `json:"tweet_id"`
+	URL               string         `json:"url"`
+	Status            string         `json:"status"`
+	Author            string         `json:"author,omitempty"`
+	AuthorDisplayName string         `json:"author_display_name,omitempty"`
+	AuthorAvatar      string         `json:"author_avatar,omitempty"`
+	Verified          bool           `json:"verified,omitempty"`
+	FollowerCount     int            `json:"follower_count,omitempty"`
+	FollowingCount    int            `json:"following_count,omitempty"`
+	TweetCount        int            `json:"tweet_count,omitempty"`
+	AuthorBio         string         `json:"author_bio,omitempty"`
+	Text              string         `json:"text,omitempty"`
+	MediaCount        int            `json:"media_count"`
+	Media             []MediaPreview `json:"media,omitempty"`
+	AITitle           string         `json:"ai_title,omitempty"`
+	ArchivePath       string         `json:"archive_path,omitempty"`
+	Error             string         `json:"error,omitempty"`
+	CreatedAt         time.Time      `json:"created_at"`
 }
 
 // MediaPreview represents a media item in list responses for thumbnails.
@@ -176,14 +180,24 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			mediaPreviews = append(mediaPreviews, mp)
 		}
 
+		// Use local avatar URL if available, otherwise construct API URL
+		avatarURL := t.Author.AvatarURL
+		if t.Author.LocalAvatarURL != "" {
+			avatarURL = fmt.Sprintf("/api/v1/tweets/%s/avatar", t.ID)
+		}
+
 		tr := TweetResponse{
 			TweetID:           string(t.ID),
 			URL:               t.URL,
 			Status:            string(t.Status),
 			Author:            t.Author.Username,
 			AuthorDisplayName: t.Author.DisplayName,
-			AuthorAvatar:      t.Author.AvatarURL,
+			AuthorAvatar:      avatarURL,
 			Verified:          t.Author.Verified,
+			FollowerCount:     t.Author.FollowerCount,
+			FollowingCount:    t.Author.FollowingCount,
+			TweetCount:        t.Author.TweetCount,
+			AuthorBio:         t.Author.Description,
 			Text:              truncateText(t.Text, 200),
 			MediaCount:        len(t.Media),
 			Media:             mediaPreviews,
@@ -378,6 +392,41 @@ func (h *TweetHandler) ServeMedia(w http.ResponseWriter, r *http.Request) {
 
 	// http.ServeContent handles Range requests automatically
 	http.ServeContent(w, r, filename, stat.ModTime(), file)
+}
+
+// ServeAvatar handles GET /api/v1/tweets/{tweetID}/avatar
+func (h *TweetHandler) ServeAvatar(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	filePath, err := h.tweetSvc.GetAvatarPath(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.writeError(w, http.StatusNotFound, "avatar not found")
+		return
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "avatar not found")
+		return
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to stat file")
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeContent(w, r, "avatar.jpg", stat.ModTime(), file)
 }
 
 // GetFull handles GET /api/v1/tweets/{tweetID}/full
