@@ -47,62 +47,148 @@ func NewTweetService(
 		tweets:        make(map[domain.TweetID]*domain.Tweet),
 	}
 
-	// Scan existing archives on startup
-	if err := svc.ScanArchives(); err != nil {
-		logger.Warn("failed to scan existing archives", "error", err)
+	// Load existing tweets from disk on startup
+	if err := svc.LoadFromDisk(); err != nil {
+		logger.Warn("failed to load existing tweets from disk", "error", err)
 	}
 
 	return svc
 }
 
-// ScanArchives walks the storage directory and loads existing tweet metadata.
-func (s *TweetService) ScanArchives() error {
-	s.logger.Info("scanning existing archives", "path", s.cfg.BasePath)
+// LoadFromDisk scans the storage directory and loads existing archived tweets.
+func (s *TweetService) LoadFromDisk() error {
+	s.logger.Info("scanning storage for existing archives", "path", s.cfg.BasePath)
 
 	count := 0
 	err := filepath.Walk(s.cfg.BasePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors, continue walking
 		}
-
-		// Look for tweet.json files
 		if info.IsDir() || info.Name() != "tweet.json" {
 			return nil
 		}
 
-		// Load the tweet metadata
-		tweet, err := s.loadTweetFromFile(path)
+		// Read the tweet.json file
+		data, err := os.ReadFile(path)
 		if err != nil {
-			s.logger.Warn("failed to load tweet metadata", "path", path, "error", err)
+			s.logger.Warn("failed to read tweet.json", "path", path, "error", err)
 			return nil
 		}
 
+		var stored domain.StoredTweet
+		if err := json.Unmarshal(data, &stored); err != nil {
+			s.logger.Warn("failed to parse tweet.json", "path", path, "error", err)
+			return nil
+		}
+
+		// Convert StoredTweet back to Tweet
+		tweet := s.storedTweetToTweet(&stored, filepath.Dir(path))
 		s.tweets[tweet.ID] = tweet
 		count++
+
 		return nil
 	})
 
-	s.logger.Info("finished scanning archives", "count", count)
+	s.logger.Info("loaded existing tweets", "count", count)
 	return err
 }
 
-// loadTweetFromFile reads a tweet.json file and returns the Tweet struct.
-func (s *TweetService) loadTweetFromFile(path string) (*domain.Tweet, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
+// storedTweetToTweet converts a StoredTweet from disk back to a Tweet.
+func (s *TweetService) storedTweetToTweet(stored *domain.StoredTweet, archivePath string) *domain.Tweet {
+	tweet := &domain.Tweet{
+		ID:            domain.TweetID(stored.TweetID),
+		URL:           stored.URL,
+		Author:        stored.Author,
+		Text:          stored.Text,
+		PostedAt:      stored.PostedAt,
+		Media:         stored.Media,
+		Metrics:       stored.Metrics,
+		Status:        domain.ArchiveStatusCompleted,
+		ArchivePath:   archivePath,
+		AITitle:       stored.AITitle,
+		AISummary:     stored.AISummary,
+		AITags:        stored.AITags,
+		AIContentType: stored.AIContentType,
+		AITopics:      stored.AITopics,
+		CreatedAt:     stored.ArchivedAt,
+		ArchivedAt:    &stored.ArchivedAt,
 	}
 
-	var tweet domain.Tweet
-	if err := json.Unmarshal(data, &tweet); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
+	if stored.ReplyTo != "" {
+		replyTo := domain.TweetID(stored.ReplyTo)
+		tweet.ReplyTo = &replyTo
+	}
+	if stored.QuotedTweet != "" {
+		quoted := domain.TweetID(stored.QuotedTweet)
+		tweet.QuotedTweet = &quoted
 	}
 
-	// Set archive path from file location
-	tweet.ArchivePath = filepath.Dir(path)
-	tweet.Status = domain.StatusCompleted
+	return tweet
+}
 
-	return &tweet, nil
+// BackfillAIMetadata processes existing tweets that are missing AI analysis.
+// This runs in the background and doesn't block startup.
+func (s *TweetService) BackfillAIMetadata(ctx context.Context) {
+	var needsBackfill []*domain.Tweet
+
+	for _, tweet := range s.tweets {
+		// Check if tweet is missing AI metadata
+		if len(tweet.AITags) == 0 && tweet.AISummary == "" {
+			needsBackfill = append(needsBackfill, tweet)
+		}
+	}
+
+	if len(needsBackfill) == 0 {
+		s.logger.Info("no tweets need AI metadata backfill")
+		return
+	}
+
+	s.logger.Info("starting AI metadata backfill", "count", len(needsBackfill))
+
+	for i, tweet := range needsBackfill {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("backfill cancelled", "processed", i)
+			return
+		default:
+		}
+
+		s.logger.Info("backfilling AI metadata", "tweet_id", tweet.ID, "progress", fmt.Sprintf("%d/%d", i+1, len(needsBackfill)))
+
+		// Run AI analysis
+		analysis, err := s.grokClient.AnalyzeContent(ctx, grok.ContentAnalysisRequest{
+			TweetText:      tweet.Text,
+			AuthorUsername: tweet.Author.Username,
+			HasVideo:       tweet.HasVideo(),
+			HasImages:      tweet.HasImages(),
+			ImageCount:     countImages(tweet),
+			VideoDuration:  getTotalVideoDuration(tweet),
+		})
+
+		if err != nil {
+			s.logger.Warn("backfill failed for tweet", "tweet_id", tweet.ID, "error", err)
+			continue
+		}
+
+		// Update tweet with AI metadata
+		tweet.AISummary = analysis.Summary
+		tweet.AITags = analysis.Tags
+		tweet.AIContentType = analysis.ContentType
+		tweet.AITopics = analysis.Topics
+
+		// Save updated metadata to disk
+		if err := s.saveTweetMetadata(tweet); err != nil {
+			s.logger.Warn("failed to save backfilled metadata", "tweet_id", tweet.ID, "error", err)
+			continue
+		}
+
+		s.logger.Info("backfilled tweet", "tweet_id", tweet.ID, "tags_count", len(analysis.Tags))
+
+		// Small delay to avoid rate limiting
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	s.logger.Info("AI metadata backfill complete", "processed", len(needsBackfill))
 }
 
 // ArchiveRequest represents a tweet archive request.
@@ -282,6 +368,30 @@ func (s *TweetService) generateAIMetadata(ctx context.Context, tweet *domain.Twe
 		s.logger.Warn("AI title generation failed, using fallback", "error", err)
 		// Fallback: use author + first few words
 		title = grok.FallbackFilename(tweet.Author.Username, tweet.PostedAt, tweet.Text)
+	}
+
+	// Perform content analysis for searchable metadata
+	// Especially important for media-heavy tweets with little text
+	analysis, err := s.grokClient.AnalyzeContent(ctx, grok.ContentAnalysisRequest{
+		TweetText:      tweet.Text,
+		AuthorUsername: tweet.Author.Username,
+		HasVideo:       tweet.HasVideo(),
+		HasImages:      tweet.HasImages(),
+		ImageCount:     countImages(tweet),
+		VideoDuration:  getTotalVideoDuration(tweet),
+	})
+
+	if err != nil {
+		s.logger.Warn("AI content analysis failed", "error", err)
+	} else {
+		tweet.AISummary = analysis.Summary
+		tweet.AITags = analysis.Tags
+		tweet.AIContentType = analysis.ContentType
+		tweet.AITopics = analysis.Topics
+		s.logger.Info("AI content analysis complete",
+			"tags_count", len(analysis.Tags),
+			"content_type", analysis.ContentType,
+		)
 	}
 
 	return title, ""

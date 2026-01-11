@@ -90,6 +90,10 @@ func main() {
 		logger,
 	)
 
+	// Start AI metadata backfill in background for legacy tweets
+	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
+	go tweetSvc.BackfillAIMetadata(backfillCtx)
+
 	// Initialize handlers
 	videoHandler := handler.NewVideoHandler(videoSvc, logger)
 	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
@@ -136,6 +140,9 @@ func main() {
 	<-quit
 
 	logger.Info("shutting down")
+
+	// Cancel background tasks
+	cancelBackfill()
 
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

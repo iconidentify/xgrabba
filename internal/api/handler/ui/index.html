@@ -261,6 +261,37 @@
             font-size: 12px;
         }
 
+        .tweet-author-followers {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-left: 6px;
+            opacity: 0.7;
+        }
+
+        .tweet-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 6px 0;
+        }
+
+        .tweet-tag {
+            background: var(--bg-primary);
+            color: var(--accent-primary);
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .tweet-tag-more {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
         .tweet-meta-row {
             display: flex;
             align-items: center;
@@ -745,6 +776,73 @@
             margin-bottom: 12px;
             white-space: pre-wrap;
             word-wrap: break-word;
+        }
+
+        /* AI Analysis Section */
+        .ai-analysis {
+            background: var(--bg-primary);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        .ai-summary {
+            font-size: 13px;
+            line-height: 1.4;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .ai-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .ai-tag {
+            background: var(--bg-primary);
+            color: var(--accent-primary);
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .ai-tag:hover {
+            background: var(--bg-elevated);
+        }
+
+        /* Media Stats */
+        .media-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+        }
+
+        .media-stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .media-stat-type {
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .media-stat-detail {
+            padding: 2px 6px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
         }
 
         .tweet-detail-date {
@@ -1472,6 +1570,24 @@
             return num.toString();
         }
 
+        function formatDuration(seconds) {
+            if (!seconds) return '';
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            if (mins > 0) {
+                return mins + ':' + secs.toString().padStart(2, '0');
+            }
+            return '0:' + secs.toString().padStart(2, '0');
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return '';
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return bytes + ' B';
+        }
+
         // Render tweet list
         function renderTweets(tweetsToRender, searchQuery = '') {
             if (tweetsToRender.length === 0) {
@@ -1497,7 +1613,7 @@
                         <div class="tweet-header">
                             <div class="tweet-avatar">
                                 ${tweet.author_avatar
-                                    ? `<img src="${tweet.author_avatar}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(tweet.author)}'">`
+                                    ? `<img src="${addApiKey(tweet.author_avatar)}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(tweet.author)}'">`
                                     : getInitials(tweet.author)
                                 }
                             </div>
@@ -1511,10 +1627,17 @@
                                     ` : ''}
                                 </div>
                                 <span class="tweet-author-username">@${escapeHtml(tweet.author || 'unknown')}</span>
+                                ${tweet.follower_count ? `<span class="tweet-author-followers">${formatNumber(tweet.follower_count)} followers</span>` : ''}
                             </div>
                             <div class="tweet-date">${formatDate(tweet.created_at)}</div>
                         </div>
                         <div class="tweet-text">${highlightText(tweet.text || '', searchQuery)}</div>
+                        ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
+                            <div class="tweet-tags">
+                                ${tweet.ai_tags.slice(0, 5).map(tag => `<span class="tweet-tag">${escapeHtml(tag)}</span>`).join('')}
+                                ${tweet.ai_tags.length > 5 ? `<span class="tweet-tag-more">+${tweet.ai_tags.length - 5}</span>` : ''}
+                            </div>
+                        ` : ''}
                         ${mediaPreview}
                         <div class="tweet-footer">
                             <div class="tweet-metrics">
@@ -1647,12 +1770,13 @@
 
                 // Build author tooltip if we have metadata
                 const hasAuthorMeta = followerCount || followingCount || tweetCount || authorBio;
+                const tooltipAvatarUrl = authorAvatar ? addApiKey(authorAvatar) : '';
                 const authorTooltip = hasAuthorMeta ? `
                     <div class="author-tooltip">
                         <div class="author-tooltip-header">
                             <div class="author-tooltip-avatar">
-                                ${authorAvatar
-                                    ? `<img src="${authorAvatar}" alt="${escapeHtml(displayName)}">`
+                                ${tooltipAvatarUrl
+                                    ? `<img src="${tooltipAvatarUrl}" alt="${escapeHtml(displayName)}">`
                                     : `<span style="display:flex;align-items:center;justify-content:center;height:100%;font-size:16px;font-weight:600;color:var(--text-muted);">${getInitials(authorUsername)}</span>`
                                 }
                             </div>
@@ -1688,11 +1812,14 @@
                     </div>
                 ` : '';
 
+                // Build avatar URL with API key
+                const avatarWithKey = authorAvatar ? addApiKey(authorAvatar) : '';
+
                 content.innerHTML = `
                     <div class="tweet-detail-header">
                         <div class="tweet-detail-avatar">
-                            ${authorAvatar
-                                ? `<img src="${authorAvatar}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(authorUsername)}'">`
+                            ${avatarWithKey
+                                ? `<img src="${avatarWithKey}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(authorUsername)}'">`
                                 : getInitials(authorUsername)
                             }
                         </div>
@@ -1712,6 +1839,31 @@
 
                     <div class="tweet-detail-body">
                         <div class="tweet-detail-text">${escapeHtml(tweet.text || '')}</div>
+
+                        ${tweet.ai_summary ? `
+                            <div class="ai-analysis">
+                                <div class="ai-summary">${escapeHtml(tweet.ai_summary)}</div>
+                            </div>
+                        ` : ''}
+
+                        ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
+                            <div class="ai-tags">
+                                ${tweet.ai_tags.map(tag => `<span class="ai-tag">${escapeHtml(tag)}</span>`).join('')}
+                            </div>
+                        ` : ''}
+
+                        ${tweet.media && tweet.media.length > 0 && tweet.media.some(m => m.size || m.width || m.duration_seconds) ? `
+                            <div class="media-stats">
+                                ${tweet.media.filter(m => m.size || m.width || m.duration_seconds).map(m => `
+                                    <div class="media-stat-item">
+                                        <span class="media-stat-type">${m.type === 'video' ? 'Video' : m.type === 'image' ? 'Image' : m.type}</span>
+                                        ${m.width && m.height ? `<span class="media-stat-detail">${m.width}x${m.height}</span>` : ''}
+                                        ${m.duration_seconds ? `<span class="media-stat-detail">${formatDuration(m.duration_seconds)}</span>` : ''}
+                                        ${m.size ? `<span class="media-stat-detail">${formatFileSize(m.size)}</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
 
                         <div class="tweet-detail-date">
                             ${formatFullDate(tweet.posted_at || tweet.created_at)}
@@ -2040,12 +2192,25 @@
             }
 
             const lowerQuery = query.toLowerCase();
-            const filtered = tweets.filter(t =>
-                (t.author && t.author.toLowerCase().includes(lowerQuery)) ||
-                (t.author_display_name && t.author_display_name.toLowerCase().includes(lowerQuery)) ||
-                (t.text && t.text.toLowerCase().includes(lowerQuery)) ||
-                (t.ai_title && t.ai_title.toLowerCase().includes(lowerQuery))
-            );
+            const filtered = tweets.filter(t => {
+                // Search through basic fields
+                if (t.author && t.author.toLowerCase().includes(lowerQuery)) return true;
+                if (t.author_display_name && t.author_display_name.toLowerCase().includes(lowerQuery)) return true;
+                if (t.text && t.text.toLowerCase().includes(lowerQuery)) return true;
+                if (t.ai_title && t.ai_title.toLowerCase().includes(lowerQuery)) return true;
+
+                // Search through AI metadata
+                if (t.ai_summary && t.ai_summary.toLowerCase().includes(lowerQuery)) return true;
+                if (t.ai_content_type && t.ai_content_type.toLowerCase().includes(lowerQuery)) return true;
+
+                // Search through AI tags array
+                if (t.ai_tags && t.ai_tags.some(tag => tag.toLowerCase().includes(lowerQuery))) return true;
+
+                // Search through AI topics array
+                if (t.ai_topics && t.ai_topics.some(topic => topic.toLowerCase().includes(lowerQuery))) return true;
+
+                return false;
+            });
 
             searchResultCount.textContent = filtered.length;
             searchQuerySpan.textContent = query;

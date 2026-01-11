@@ -26,22 +26,25 @@ const (
 
 // Tweet represents an archived tweet from X.com.
 type Tweet struct {
-	ID          TweetID
-	URL         string
-	Author      Author
-	Text        string
-	PostedAt    time.Time
-	Media       []Media
-	Metrics     TweetMetrics
-	ReplyTo     *TweetID // If this is a reply
-	QuotedTweet *TweetID // If this quotes another tweet
-	Status      ArchiveStatus
-	Error       string
-	ArchivePath string // Base path where tweet is stored
-	AITitle     string // AI-generated descriptive title
-	AISummary   string // AI-generated summary
-	CreatedAt   time.Time
-	ArchivedAt  *time.Time
+	ID            TweetID
+	URL           string
+	Author        Author
+	Text          string
+	PostedAt      time.Time
+	Media         []Media
+	Metrics       TweetMetrics
+	ReplyTo       *TweetID // If this is a reply
+	QuotedTweet   *TweetID // If this quotes another tweet
+	Status        ArchiveStatus
+	Error         string
+	ArchivePath   string // Base path where tweet is stored
+	AITitle       string // AI-generated descriptive title
+	AISummary     string // AI-generated summary
+	AITags        []string // AI-generated searchable tags
+	AIContentType string   // AI-detected content type (documentary, news, etc.)
+	AITopics      []string // AI-detected main topics
+	CreatedAt     time.Time
+	ArchivedAt    *time.Time
 }
 
 // Author represents the tweet author with metadata captured at archival time.
@@ -94,18 +97,21 @@ type TweetMetrics struct {
 
 // StoredTweet is the JSON structure written to disk.
 type StoredTweet struct {
-	TweetID     string       `json:"tweet_id"`
-	URL         string       `json:"url"`
-	Author      Author       `json:"author"`
-	Text        string       `json:"text"`
-	PostedAt    time.Time    `json:"posted_at"`
-	ArchivedAt  time.Time    `json:"archived_at"`
-	Media       []Media      `json:"media"`
-	Metrics     TweetMetrics `json:"metrics"`
-	ReplyTo     string       `json:"reply_to,omitempty"`
-	QuotedTweet string       `json:"quoted_tweet,omitempty"`
-	AITitle     string       `json:"ai_title"`
-	AISummary   string       `json:"ai_summary,omitempty"`
+	TweetID       string       `json:"tweet_id"`
+	URL           string       `json:"url"`
+	Author        Author       `json:"author"`
+	Text          string       `json:"text"`
+	PostedAt      time.Time    `json:"posted_at"`
+	ArchivedAt    time.Time    `json:"archived_at"`
+	Media         []Media      `json:"media"`
+	Metrics       TweetMetrics `json:"metrics"`
+	ReplyTo       string       `json:"reply_to,omitempty"`
+	QuotedTweet   string       `json:"quoted_tweet,omitempty"`
+	AITitle       string       `json:"ai_title"`
+	AISummary     string       `json:"ai_summary,omitempty"`
+	AITags        []string     `json:"ai_tags,omitempty"`
+	AIContentType string       `json:"ai_content_type,omitempty"`
+	AITopics      []string     `json:"ai_topics,omitempty"`
 }
 
 // ToStoredTweet converts a Tweet to StoredTweet for JSON serialization.
@@ -116,16 +122,19 @@ func (t *Tweet) ToStoredTweet() StoredTweet {
 	}
 
 	st := StoredTweet{
-		TweetID:    t.ID.String(),
-		URL:        t.URL,
-		Author:     t.Author,
-		Text:       t.Text,
-		PostedAt:   t.PostedAt,
-		ArchivedAt: archivedAt,
-		Media:      t.Media,
-		Metrics:    t.Metrics,
-		AITitle:    t.AITitle,
-		AISummary:  t.AISummary,
+		TweetID:       t.ID.String(),
+		URL:           t.URL,
+		Author:        t.Author,
+		Text:          t.Text,
+		PostedAt:      t.PostedAt,
+		ArchivedAt:    archivedAt,
+		Media:         t.Media,
+		Metrics:       t.Metrics,
+		AITitle:       t.AITitle,
+		AISummary:     t.AISummary,
+		AITags:        t.AITags,
+		AIContentType: t.AIContentType,
+		AITopics:      t.AITopics,
 	}
 
 	if t.ReplyTo != nil {

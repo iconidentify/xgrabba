@@ -62,6 +62,10 @@ type TweetResponse struct {
 	MediaCount        int            `json:"media_count"`
 	Media             []MediaPreview `json:"media,omitempty"`
 	AITitle           string         `json:"ai_title,omitempty"`
+	AISummary         string         `json:"ai_summary,omitempty"`
+	AITags            []string       `json:"ai_tags,omitempty"`
+	AIContentType     string         `json:"ai_content_type,omitempty"`
+	AITopics          []string       `json:"ai_topics,omitempty"`
 	ArchivePath       string         `json:"archive_path,omitempty"`
 	Error             string         `json:"error,omitempty"`
 	CreatedAt         time.Time      `json:"created_at"`
@@ -202,6 +206,10 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			MediaCount:        len(t.Media),
 			Media:             mediaPreviews,
 			AITitle:           t.AITitle,
+			AISummary:         t.AISummary,
+			AITags:            t.AITags,
+			AIContentType:     t.AIContentType,
+			AITopics:          t.AITopics,
 			ArchivePath:       t.ArchivePath,
 			Error:             t.Error,
 			CreatedAt:         t.CreatedAt,
@@ -279,6 +287,9 @@ type MediaFileResponse struct {
 	Size        int64  `json:"size"`
 	URL         string `json:"url"`
 	ContentType string `json:"content_type"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
+	Duration    int    `json:"duration_seconds,omitempty"`
 }
 
 // MediaListResponse contains the list of media files.
@@ -289,18 +300,21 @@ type MediaListResponse struct {
 
 // FullTweetResponse contains complete tweet details with media URLs.
 type FullTweetResponse struct {
-	TweetID     string              `json:"tweet_id"`
-	URL         string              `json:"url"`
-	Author      domain.Author       `json:"author"`
-	Text        string              `json:"text"`
-	PostedAt    time.Time           `json:"posted_at"`
-	ArchivedAt  time.Time           `json:"archived_at"`
-	Media       []MediaFileResponse `json:"media"`
-	Metrics     domain.TweetMetrics `json:"metrics"`
-	ReplyTo     string              `json:"reply_to,omitempty"`
-	QuotedTweet string              `json:"quoted_tweet,omitempty"`
-	AITitle     string              `json:"ai_title"`
-	AISummary   string              `json:"ai_summary,omitempty"`
+	TweetID       string              `json:"tweet_id"`
+	URL           string              `json:"url"`
+	Author        domain.Author       `json:"author"`
+	Text          string              `json:"text"`
+	PostedAt      time.Time           `json:"posted_at"`
+	ArchivedAt    time.Time           `json:"archived_at"`
+	Media         []MediaFileResponse `json:"media"`
+	Metrics       domain.TweetMetrics `json:"metrics"`
+	ReplyTo       string              `json:"reply_to,omitempty"`
+	QuotedTweet   string              `json:"quoted_tweet,omitempty"`
+	AITitle       string              `json:"ai_title"`
+	AISummary     string              `json:"ai_summary,omitempty"`
+	AITags        []string            `json:"ai_tags,omitempty"`
+	AIContentType string              `json:"ai_content_type,omitempty"`
+	AITopics      []string            `json:"ai_topics,omitempty"`
 }
 
 // ListMedia handles GET /api/v1/tweets/{tweetID}/media
@@ -448,34 +462,54 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build media responses with API URLs
+	// Build media responses with API URLs and file sizes
 	mediaResponses := make([]MediaFileResponse, 0, len(stored.Media))
 	for _, m := range stored.Media {
 		filename := filepath.Base(m.LocalPath)
 		if filename == "" || filename == "." {
 			continue
 		}
+
+		// Get file size
+		var size int64
+		if info, err := os.Stat(m.LocalPath); err == nil {
+			size = info.Size()
+		}
+
 		mediaResponses = append(mediaResponses, MediaFileResponse{
 			Filename:    filename,
 			Type:        string(m.Type),
 			URL:         fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
 			ContentType: getContentTypeFromMediaType(m.Type),
+			Size:        size,
+			Width:       m.Width,
+			Height:      m.Height,
+			Duration:    m.Duration,
 		})
 	}
 
+	// Use local avatar URL if available
+	author := stored.Author
+	if stored.Author.LocalAvatarURL != "" {
+		author.AvatarURL = fmt.Sprintf("/api/v1/tweets/%s/avatar", tweetID)
+	}
+
 	response := FullTweetResponse{
-		TweetID:     stored.TweetID,
-		URL:         stored.URL,
-		Author:      stored.Author,
-		Text:        stored.Text,
-		PostedAt:    stored.PostedAt,
-		ArchivedAt:  stored.ArchivedAt,
-		Media:       mediaResponses,
-		Metrics:     stored.Metrics,
-		ReplyTo:     stored.ReplyTo,
-		QuotedTweet: stored.QuotedTweet,
-		AITitle:     stored.AITitle,
-		AISummary:   stored.AISummary,
+		TweetID:       stored.TweetID,
+		URL:           stored.URL,
+		Author:        author,
+		Text:          stored.Text,
+		PostedAt:      stored.PostedAt,
+		ArchivedAt:    stored.ArchivedAt,
+		Media:         mediaResponses,
+		Metrics:       stored.Metrics,
+		ReplyTo:       stored.ReplyTo,
+		QuotedTweet:   stored.QuotedTweet,
+		AITitle:       stored.AITitle,
+		AISummary:     stored.AISummary,
+		AITags:        stored.AITags,
+		AIContentType: stored.AIContentType,
+		AITopics:      stored.AITopics,
 	}
 
 	h.writeJSON(w, http.StatusOK, response)

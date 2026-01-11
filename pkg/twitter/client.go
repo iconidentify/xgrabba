@@ -224,6 +224,8 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 		bitrate    int
 		previewURL string
 		duration   int
+		width      int
+		height     int
 		mediaType  domain.MediaType
 	}
 	var videoCandidates []videoCandidate
@@ -307,6 +309,8 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 						bitrate:    v.Bitrate,
 						previewURL: em.MediaURLHTTPS,
 						duration:   em.VideoInfo.DurationMillis / 1000,
+						width:      em.Sizes.Large.W,
+						height:     em.Sizes.Large.H,
 						mediaType:  mediaType,
 					})
 				}
@@ -343,6 +347,8 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 			URL:        best.url,
 			PreviewURL: best.previewURL,
 			Duration:   best.duration,
+			Width:      best.width,
+			Height:     best.height,
 			Bitrate:    best.bitrate,
 		})
 	}
