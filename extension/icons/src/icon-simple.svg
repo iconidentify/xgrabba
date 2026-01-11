@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="#1D9BF0"/>
+
+  <!-- Download arrow pointing into box -->
+  <g fill="white">
+    <!-- Arrow shaft -->
+    <rect x="54" y="20" width="20" height="44" rx="4"/>
+
+    <!-- Arrow head -->
+    <path d="M64 90 L40 58 L52 58 L52 58 L76 58 L88 58 L64 90Z"/>
+
+    <!-- Box/tray -->
+    <path d="M24 78 L24 100 C24 104.4 27.6 108 32 108 L96 108 C100.4 108 104 104.4 104 100 L104 78 L88 78 L88 92 L40 92 L40 78 Z"/>
+  </g>
+</svg>

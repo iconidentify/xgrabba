@@ -28,10 +28,12 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Environment files
+# Environment files (keep .env.example)
 .env
 .env.local
-*.env
+.env.production
+.env.development
+!.env.example
 
 # Config with secrets
 config.yaml
