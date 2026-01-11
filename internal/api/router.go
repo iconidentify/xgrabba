@@ -21,6 +21,7 @@ func NewRouter(
 	r := chi.NewRouter()
 
 	// Global middleware
+	r.Use(middleware.CleanPath) // Normalize paths (e.g., //ready -> /ready)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(mw.Logger)

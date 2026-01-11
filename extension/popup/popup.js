@@ -1,5 +1,11 @@
 // XGrabba Popup Script
 
+// Normalize URL by removing trailing slashes to prevent double-slash issues
+function normalizeUrl(url) {
+  if (!url) return url;
+  return url.replace(/\/+$/, '');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const app = new PopupApp();
   app.init();
@@ -84,7 +90,7 @@ class PopupApp {
 
   async saveSettings() {
     const settings = {
-      backendUrl: this.elements.backendUrl.value.trim(),
+      backendUrl: normalizeUrl(this.elements.backendUrl.value.trim()),
       apiKey: this.elements.apiKey.value.trim(),
       settings: {
         showToasts: this.elements.showToasts.checked,
@@ -111,8 +117,8 @@ class PopupApp {
     this.elements.connectionStatus.textContent = 'Testing...';
     this.elements.connectionStatus.className = 'connection-status';
 
-    // Temporarily save URL for testing
-    const url = this.elements.backendUrl.value.trim();
+    // Normalize URL to prevent double-slash issues
+    const url = normalizeUrl(this.elements.backendUrl.value.trim());
 
     try {
       const response = await fetch(`${url}/ready`, {

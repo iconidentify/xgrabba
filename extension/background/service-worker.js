@@ -8,6 +8,12 @@ const STORAGE_KEYS = {
   SETTINGS: 'settings'
 };
 
+// Normalize URL by removing trailing slashes to prevent double-slash issues
+function normalizeUrl(url) {
+  if (!url) return url;
+  return url.replace(/\/+$/, '');
+}
+
 // Initialize default settings on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get([STORAGE_KEYS.BACKEND_URL, STORAGE_KEYS.API_KEY], (result) => {
@@ -182,7 +188,7 @@ async function getConfig() {
     STORAGE_KEYS.API_KEY
   ]);
   return {
-    backendUrl: result[STORAGE_KEYS.BACKEND_URL] || DEFAULT_BACKEND_URL,
+    backendUrl: normalizeUrl(result[STORAGE_KEYS.BACKEND_URL] || DEFAULT_BACKEND_URL),
     apiKey: result[STORAGE_KEYS.API_KEY] || ''
   };
 }
@@ -194,7 +200,7 @@ async function getSettings() {
     STORAGE_KEYS.SETTINGS
   ]);
   return {
-    backendUrl: result[STORAGE_KEYS.BACKEND_URL] || DEFAULT_BACKEND_URL,
+    backendUrl: normalizeUrl(result[STORAGE_KEYS.BACKEND_URL] || DEFAULT_BACKEND_URL),
     apiKey: result[STORAGE_KEYS.API_KEY] || '',
     settings: result[STORAGE_KEYS.SETTINGS] || {
       showToasts: true,
@@ -205,7 +211,7 @@ async function getSettings() {
 
 async function saveSettings(settings) {
   await chrome.storage.sync.set({
-    [STORAGE_KEYS.BACKEND_URL]: settings.backendUrl,
+    [STORAGE_KEYS.BACKEND_URL]: normalizeUrl(settings.backendUrl),
     [STORAGE_KEYS.API_KEY]: settings.apiKey,
     [STORAGE_KEYS.SETTINGS]: settings.settings || {}
   });
