@@ -161,10 +161,6 @@ func (p *Pool) handleJobFailure(logger *slog.Logger, job *domain.Job, err error)
 			"attempts", job.Attempts,
 		)
 
-		// Update video status to failed
-		if _, updateErr := p.videoSvc.GetStatus(p.ctx, job.VideoID); updateErr != nil {
-			// Ignore - just logging context
-		}
 	}
 
 	if updateErr := p.jobRepo.Update(p.ctx, job); updateErr != nil {
