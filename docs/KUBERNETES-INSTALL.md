@@ -61,18 +61,37 @@ kubectl create clusterrolebinding provider-helm-admin \
 
 ## Installation
 
-### Step 1: Create Namespace and Secrets
+### Step 1: Create GHCR Credentials for Helm Charts
+
+The Helm chart is stored in GitHub Container Registry (GHCR) which requires authentication.
+
+```bash
+# Create credentials for Crossplane to pull Helm charts from GHCR
+# Replace USERNAME with your GitHub username and GITHUB_TOKEN with a PAT with read:packages scope
+kubectl create secret generic ghcr-helm-credentials \
+  --namespace crossplane-system \
+  --from-file=credentials=<(echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "USERNAME:GITHUB_TOKEN" | base64)'"}}}')
+```
+
+### Step 2: Create Namespace and Secrets
 
 ```bash
 # Create namespace
 kubectl create namespace xgrabba
+
+# Create image pull secret for Docker images
+kubectl create secret docker-registry ghcr-secret \
+  --namespace xgrabba \
+  --docker-server=ghcr.io \
+  --docker-username=USERNAME \
+  --docker-password=GITHUB_TOKEN
 
 # Generate a secure API key
 API_KEY=$(openssl rand -hex 32)
 echo "Generated API Key: $API_KEY"
 echo "Save this key - you'll need it for the browser extension!"
 
-# Create secrets
+# Create app secrets
 kubectl create secret generic xgrabba-secrets \
   --namespace xgrabba \
   --from-literal=api-key="$API_KEY" \
@@ -81,13 +100,13 @@ kubectl create secret generic xgrabba-secrets \
 
 Replace `YOUR_GROK_API_KEY` with your Grok API key from [x.ai](https://x.ai).
 
-### Step 2: Deploy XGrabba
+### Step 3: Deploy XGrabba
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/iconidentify/xgrabba/main/deployments/crossplane/install.yaml
 ```
 
-### Step 3: Verify Deployment
+### Step 4: Verify Deployment
 
 ```bash
 # Check Crossplane release status
@@ -100,7 +119,7 @@ kubectl get pods -n xgrabba
 kubectl get svc -n xgrabba
 ```
 
-### Step 4: Access the Service
+### Step 5: Access the Service
 
 **Option A: Port Forward (for testing)**
 ```bash
@@ -149,6 +168,7 @@ Samba allows browsing archived tweets from Mac Finder or Windows Explorer.
 ### Step 1: Add Samba Password to Secrets
 
 ```bash
+# Delete and recreate the secret with samba password included
 kubectl delete secret xgrabba-secrets -n xgrabba
 
 kubectl create secret generic xgrabba-secrets \
@@ -157,6 +177,8 @@ kubectl create secret generic xgrabba-secrets \
   --from-literal=grok-api-key="YOUR_GROK_API_KEY" \
   --from-literal=samba-password="YOUR_SAMBA_PASSWORD"
 ```
+
+Replace the API keys with your actual values.
 
 ### Step 2: Deploy with Samba Enabled
 
@@ -292,6 +314,52 @@ This provides a streamlined interface for quickly pasting and archiving tweet UR
 
 ---
 
+## Auto-Updates
+
+By default, Crossplane automatically updates XGrabba when new chart versions are published. The reconciliation interval is approximately 1 hour.
+
+### How It Works
+
+1. When you push a new version tag (e.g., `v0.2.0`) to the xgrabba repository
+2. GitHub Actions builds and publishes:
+   - Docker image: `ghcr.io/iconidentify/xgrabba:v0.2.0`
+   - Helm chart: `oci://ghcr.io/iconidentify/charts/xgrabba:0.2.0`
+3. Crossplane detects the new chart version during its next reconciliation
+4. The Release is automatically upgraded
+
+### Force Immediate Update
+
+To trigger an immediate reconciliation:
+
+```bash
+kubectl annotate release xgrabba crossplane.io/refresh=$(date +%s) --overwrite
+```
+
+### Pin to Specific Version
+
+To disable auto-updates and pin to a specific version, download the install.yaml and add a version field:
+
+```yaml
+spec:
+  forProvider:
+    chart:
+      name: xgrabba
+      repository: oci://ghcr.io/iconidentify/charts
+      version: "0.2.0"  # Add this line to pin
+```
+
+### Check Current Version
+
+```bash
+# Check deployed chart version
+kubectl get release xgrabba -o jsonpath='{.spec.forProvider.chart.version}'
+
+# Check running image version
+kubectl get pod -n xgrabba -o jsonpath='{.items[0].spec.containers[0].image}'
+```
+
+---
+
 ## Troubleshooting
 
 ### Check Logs
@@ -308,12 +376,24 @@ kubectl describe release xgrabba
 
 ### Common Issues
 
-**Pod not starting:**
-- Check secrets exist: `kubectl get secret xgrabba-secrets -n xgrabba`
-- Check PVC bound: `kubectl get pvc -n xgrabba`
+**Release stuck in "not ready" state:**
+- Check GHCR credentials: `kubectl get secret ghcr-helm-credentials -n crossplane-system`
+- Describe release for errors: `kubectl describe release xgrabba`
+- Check provider-helm logs: `kubectl logs -n crossplane-system -l pkg.crossplane.io/provider=provider-helm`
+
+**Pod not starting / ImagePullBackOff:**
+- Check image pull secret exists: `kubectl get secret ghcr-secret -n xgrabba`
+- Verify the secret has correct credentials: `kubectl get secret ghcr-secret -n xgrabba -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d`
+- Check pod events: `kubectl describe pod -n xgrabba -l app.kubernetes.io/name=xgrabba`
+
+**Pod CrashLoopBackOff:**
+- Check app secrets exist: `kubectl get secret xgrabba-secrets -n xgrabba`
+- Check PVC is bound: `kubectl get pvc -n xgrabba`
+- Check pod logs: `kubectl logs -n xgrabba -l app.kubernetes.io/name=xgrabba`
 
 **API returns 401:**
 - Verify API key matches between extension and secret
+- Retrieve API key: `kubectl get secret xgrabba-secrets -n xgrabba -o jsonpath='{.data.api-key}' | base64 -d`
 
 **Samba not accessible:**
 - Check samba service has external IP: `kubectl get svc xgrabba-samba -n xgrabba`

@@ -124,12 +124,27 @@ Crossplane with provider-helm enables GitOps-style management with automatic upd
    EOF
    ```
 
+4. **GHCR credentials** for pulling Helm charts:
+   ```bash
+   kubectl create secret generic ghcr-helm-credentials \
+     --namespace crossplane-system \
+     --from-file=credentials=<(echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "USERNAME:GITHUB_TOKEN" | base64)'"}}}')
+   ```
+
 #### Deploy XGrabba
 
-1. **Create the secrets** (do this first)
+1. **Create namespace and secrets** (do this first)
    ```bash
    kubectl create namespace xgrabba
 
+   # Image pull secret
+   kubectl create secret docker-registry ghcr-secret \
+     --namespace xgrabba \
+     --docker-server=ghcr.io \
+     --docker-username=USERNAME \
+     --docker-password=GITHUB_TOKEN
+
+   # App secrets
    kubectl create secret generic xgrabba-secrets \
      --namespace xgrabba \
      --from-literal=api-key="$(openssl rand -hex 32)" \
@@ -146,6 +161,8 @@ Crossplane with provider-helm enables GitOps-style management with automatic upd
    kubectl get release xgrabba
    kubectl get pods -n xgrabba
    ```
+
+See [docs/KUBERNETES-INSTALL.md](docs/KUBERNETES-INSTALL.md) for full installation guide including Samba setup and troubleshooting.
 
 #### Auto-Updates
 

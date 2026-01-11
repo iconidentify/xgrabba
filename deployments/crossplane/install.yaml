@@ -4,15 +4,32 @@
 # Prerequisites:
 # 1. Crossplane installed
 # 2. provider-helm installed with ProviderConfig named "helm-provider"
-# 3. Create secrets first (see below)
+# 3. GHCR credentials for pulling charts (see below)
+# 4. Create secrets first (see below)
 #
-# Before applying, create the secrets:
+# Step 1: Create GHCR credentials for Helm chart pulls:
+#   kubectl create secret generic ghcr-helm-credentials \
+#     --namespace crossplane-system \
+#     --from-file=credentials=<(echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "USERNAME:GITHUB_TOKEN" | base64)'"}}}')
+#
+# Step 2: Create the namespace and secrets:
 #   kubectl create namespace xgrabba
+#
+#   # Create image pull secret (for Docker images)
+#   kubectl create secret docker-registry ghcr-secret \
+#     --namespace xgrabba \
+#     --docker-server=ghcr.io \
+#     --docker-username=USERNAME \
+#     --docker-password=GITHUB_TOKEN
+#
+#   # Create app secrets
 #   kubectl create secret generic xgrabba-secrets \
 #     --namespace xgrabba \
 #     --from-literal=api-key="$(openssl rand -hex 32)" \
 #     --from-literal=grok-api-key="YOUR_GROK_API_KEY" \
 #     --from-literal=samba-password="YOUR_SAMBA_PASSWORD"
+#
+# Step 3: Apply this file
 #
 # To enable Samba file sharing (for Mac/Windows), download this file and uncomment
 # the samba section in the values, then add the samba-password secret reference.
@@ -36,14 +53,19 @@ spec:
       name: xgrabba
       repository: oci://ghcr.io/iconidentify/charts
       # Omit version for auto-updates, or pin: version: "0.1.0"
+      pullSecretRef:
+        name: ghcr-helm-credentials
+        namespace: crossplane-system
     namespace: xgrabba
     wait: true
-    waitTimeout: 300
+    waitTimeout: 5m0s
     values:
       replicaCount: 1
       image:
         repository: ghcr.io/iconidentify/xgrabba
         pullPolicy: IfNotPresent
+      imagePullSecrets:
+        - name: ghcr-secret
       config:
         server:
           host: "0.0.0.0"
