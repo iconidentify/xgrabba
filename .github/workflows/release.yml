@@ -104,8 +104,9 @@ jobs:
       - name: Package Helm chart
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
+          # appVersion includes 'v' prefix to match Docker image tag
           sed -i "s/^version:.*/version: $VERSION/" deployments/helm/xgrabba/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" deployments/helm/xgrabba/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"v$VERSION\"/" deployments/helm/xgrabba/Chart.yaml
           helm package deployments/helm/xgrabba
 
       - name: Push Helm chart to OCI registry
