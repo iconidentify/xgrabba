@@ -1,0 +1,57 @@
+# Build stage
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build arguments for version info
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o xgrabba \
+    ./cmd/server
+
+# Runtime stage
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+# Create non-root user
+RUN addgroup -g 1000 xgrabba && \
+    adduser -u 1000 -G xgrabba -h /app -D xgrabba
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/xgrabba .
+
+# Create data directories
+RUN mkdir -p /data/videos /data/temp && \
+    chown -R xgrabba:xgrabba /data
+
+USER xgrabba
+
+# Default environment variables
+ENV SERVER_HOST=0.0.0.0 \
+    SERVER_PORT=8080 \
+    STORAGE_PATH=/data/videos \
+    STORAGE_TEMP_PATH=/data/temp \
+    WORKER_COUNT=2
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/app/xgrabba"]
