@@ -53,6 +53,31 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+        {{- if .Values.samba.enabled }}
+        - name: samba
+          image: "{{ .Values.samba.image.repository }}:{{ .Values.samba.image.tag }}"
+          imagePullPolicy: {{ .Values.samba.image.pullPolicy }}
+          ports:
+            - name: smb
+              containerPort: 445
+              protocol: TCP
+          env:
+            - name: USERID
+              value: "1000"
+            - name: GROUPID
+              value: "1000"
+          args:
+            - "-u"
+            - "{{ .Values.samba.username }};{{ .Values.samba.password }}"
+            - "-s"
+            - "{{ .Values.samba.shareName }};/data/videos;yes;no;no;{{ .Values.samba.username }}"
+            - "-p"
+          resources:
+            {{- toYaml .Values.samba.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+        {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}

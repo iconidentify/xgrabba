@@ -412,6 +412,32 @@ func (s *TweetService) List(ctx context.Context, limit, offset int) ([]*domain.T
 	return result, total, nil
 }
 
+// Delete removes a tweet archive including all files.
+func (s *TweetService) Delete(ctx context.Context, tweetID domain.TweetID) error {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return domain.ErrVideoNotFound
+	}
+
+	// Delete the archive directory if it exists
+	if tweet.ArchivePath != "" {
+		if err := os.RemoveAll(tweet.ArchivePath); err != nil {
+			s.logger.Warn("failed to delete archive directory",
+				"tweet_id", tweetID,
+				"path", tweet.ArchivePath,
+				"error", err,
+			)
+			// Continue anyway to remove from memory
+		}
+	}
+
+	// Remove from in-memory storage
+	delete(s.tweets, tweetID)
+
+	s.logger.Info("tweet deleted", "tweet_id", tweetID)
+	return nil
+}
+
 func truncateText(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s

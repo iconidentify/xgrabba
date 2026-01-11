@@ -188,6 +188,28 @@ func (h *TweetHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	h.Get(w, r)
 }
 
+// Delete handles DELETE /api/v1/tweets/{tweetID}
+func (h *TweetHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	err := h.tweetSvc.Delete(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("delete failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to delete tweet")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *TweetHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

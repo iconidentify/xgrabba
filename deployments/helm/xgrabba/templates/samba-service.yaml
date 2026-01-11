@@ -1,0 +1,21 @@
+{{- if .Values.samba.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xgrabba.fullname" . }}-samba
+  labels:
+    {{- include "xgrabba.labels" . | nindent 4 }}
+    app.kubernetes.io/component: samba
+spec:
+  type: {{ .Values.samba.service.type }}
+  {{- if and (eq .Values.samba.service.type "LoadBalancer") .Values.samba.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.samba.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - port: {{ .Values.samba.service.port }}
+      targetPort: smb
+      protocol: TCP
+      name: smb
+  selector:
+    {{- include "xgrabba.selectorLabels" . | nindent 4 }}
+{{- end }}

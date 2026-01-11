@@ -94,9 +94,10 @@ func main() {
 	videoHandler := handler.NewVideoHandler(videoSvc, logger)
 	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
 	healthHandler := handler.NewHealthHandler(jobRepo)
+	uiHandler := handler.NewUIHandler()
 
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

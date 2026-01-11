@@ -371,6 +371,74 @@ Press `Alt+S` (or `Option+S` on Mac) to archive the currently visible tweet.
 
 ---
 
+## Web UI
+
+XGrabba includes a built-in web interface for browsing your archived tweets.
+
+### Accessing the Web UI
+
+1. **From Browser**: Navigate to your XGrabba server URL (e.g., `http://localhost:9847`)
+2. **From Extension**: Click "View All Archives" in the extension popup
+3. **First Visit**: Enter your API key when prompted (stored in browser localStorage)
+
+### Features
+
+- Browse all archived tweets with search functionality
+- View tweet details, media, and metadata
+- Delete archived tweets (removes all files)
+- Dark theme matching X.com's design
+
+---
+
+## Samba File Sharing
+
+Enable Samba to browse your archived tweets directly from Mac Finder or Windows Explorer.
+
+### Kubernetes Deployment with Samba
+
+1. **Create secrets** (including Samba password):
+   ```bash
+   kubectl create secret generic xgrabba-secrets \
+     --namespace xgrabba \
+     --from-literal=api-key="$(openssl rand -hex 32)" \
+     --from-literal=grok-api-key="YOUR_GROK_API_KEY" \
+     --from-literal=samba-password="YOUR_SAMBA_PASSWORD"
+   ```
+
+2. **Enable Samba in Helm values**:
+   ```yaml
+   samba:
+     enabled: true
+     username: xgrabba
+     shareName: archives
+     service:
+       type: LoadBalancer
+   ```
+
+3. **Connect from Mac**:
+   - Open Finder
+   - Press `Cmd+K` or Go > Connect to Server
+   - Enter: `smb://YOUR_LOADBALANCER_IP/archives`
+   - Login with username `xgrabba` and your Samba password
+
+4. **Connect from Windows**:
+   - Open File Explorer
+   - In address bar: `\\YOUR_LOADBALANCER_IP\archives`
+   - Login with username `xgrabba` and your Samba password
+
+### Samba Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `samba.enabled` | Enable Samba sidecar | `false` |
+| `samba.username` | Samba username | `xgrabba` |
+| `samba.password` | Samba password | *required* |
+| `samba.shareName` | Share name | `archives` |
+| `samba.service.type` | Service type | `LoadBalancer` |
+| `samba.service.port` | SMB port | `445` |
+
+---
+
 ## Development
 
 ### Build

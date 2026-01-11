@@ -49,9 +49,26 @@ async function handleMessage(message, sender) {
     case 'RETRY_ARCHIVE':
       return await retryArchive(message.payload);
 
+    case 'OPEN_UI':
+      return await openUI(message.payload);
+
     default:
       return { error: 'Unknown message type' };
   }
+}
+
+async function openUI(payload = {}) {
+  const { backendUrl, apiKey } = await getConfig();
+  const path = payload.quick ? '/quick' : '/ui';
+  let url = `${backendUrl}${path}`;
+
+  // Add API key to URL for seamless auth
+  if (apiKey) {
+    url += `?key=${encodeURIComponent(apiKey)}`;
+  }
+
+  chrome.tabs.create({ url });
+  return { success: true };
 }
 
 async function archiveVideo(payload) {

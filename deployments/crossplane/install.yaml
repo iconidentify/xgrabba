@@ -11,7 +11,11 @@
 #   kubectl create secret generic xgrabba-secrets \
 #     --namespace xgrabba \
 #     --from-literal=api-key="$(openssl rand -hex 32)" \
-#     --from-literal=grok-api-key="YOUR_GROK_API_KEY"
+#     --from-literal=grok-api-key="YOUR_GROK_API_KEY" \
+#     --from-literal=samba-password="YOUR_SAMBA_PASSWORD"
+#
+# To enable Samba file sharing (for Mac/Windows), download this file and uncomment
+# the samba section in the values, then add the samba-password secret reference.
 #
 ---
 apiVersion: v1
@@ -61,6 +65,13 @@ spec:
         limits:
           cpu: 500m
           memory: 512Mi
+      # Uncomment to enable Samba file sharing (browse archives from Mac/Windows)
+      # samba:
+      #   enabled: true
+      #   username: xgrabba
+      #   shareName: archives
+      #   service:
+      #     type: LoadBalancer
     set:
       - name: secrets.apiKey
         valueFrom:
@@ -74,5 +85,12 @@ spec:
             name: xgrabba-secrets
             key: grok-api-key
             namespace: xgrabba
+      # Uncomment for Samba file sharing:
+      # - name: samba.password
+      #   valueFrom:
+      #     secretKeyRef:
+      #       name: xgrabba-secrets
+      #       key: samba-password
+      #       namespace: xgrabba
   providerConfigRef:
     name: helm-provider

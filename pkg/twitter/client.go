@@ -211,6 +211,16 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 	var media []domain.Media
 	seen := make(map[string]bool)
 
+	// Collect all video variants from all sources to find the absolute best quality
+	type videoCandidate struct {
+		url        string
+		bitrate    int
+		previewURL string
+		duration   int
+		mediaType  domain.MediaType
+	}
+	var videoCandidates []videoCandidate
+
 	// Parse from photos array (new format)
 	for i, photo := range resp.Photos {
 		if seen[photo.URL] {
@@ -228,67 +238,39 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 		})
 	}
 
-	// Parse from video object (new format)
+	// Collect from video object (new format)
 	if resp.Video.Poster != "" {
-		// Find best quality video variant
-		var bestURL string
-		var bestBitrate int
 		for _, v := range resp.Video.Variants {
 			if v.Type == "video/mp4" || strings.Contains(v.Src, ".mp4") {
-				// Extract bitrate from URL if possible
 				bitrate := extractBitrateFromURL(v.Src)
-				if bitrate > bestBitrate || bestURL == "" {
-					bestBitrate = bitrate
-					bestURL = v.Src
-				}
+				videoCandidates = append(videoCandidates, videoCandidate{
+					url:        v.Src,
+					bitrate:    bitrate,
+					previewURL: resp.Video.Poster,
+					duration:   resp.Video.DurationMs / 1000,
+					mediaType:  domain.MediaTypeVideo,
+				})
 			}
-		}
-		if bestURL != "" {
-			media = append(media, domain.Media{
-				ID:         "video_0",
-				Type:       domain.MediaTypeVideo,
-				URL:        bestURL,
-				PreviewURL: resp.Video.Poster,
-				Duration:   resp.Video.DurationMs / 1000,
-				Bitrate:    bestBitrate,
-			})
 		}
 	}
 
-	// Parse from mediaDetails (another format)
-	for i, md := range resp.MediaDetails {
+	// Collect from mediaDetails (another format) - has explicit bitrates
+	for _, md := range resp.MediaDetails {
 		if md.Type == "video" || md.Type == "animated_gif" {
-			if seen[md.MediaURLHTTPS] {
-				continue
+			mediaType := domain.MediaTypeVideo
+			if md.Type == "animated_gif" {
+				mediaType = domain.MediaTypeGIF
 			}
-
-			// Get best video variant
-			var bestURL string
-			var bestBitrate int
 			for _, v := range md.VideoInfo.Variants {
 				if v.ContentType == "video/mp4" {
-					if v.Bitrate > bestBitrate {
-						bestBitrate = v.Bitrate
-						bestURL = v.URL
-					}
+					videoCandidates = append(videoCandidates, videoCandidate{
+						url:        v.URL,
+						bitrate:    v.Bitrate,
+						previewURL: md.MediaURLHTTPS,
+						duration:   md.VideoInfo.DurationMillis / 1000,
+						mediaType:  mediaType,
+					})
 				}
-			}
-
-			if bestURL != "" {
-				mediaType := domain.MediaTypeVideo
-				if md.Type == "animated_gif" {
-					mediaType = domain.MediaTypeGIF
-				}
-
-				media = append(media, domain.Media{
-					ID:         fmt.Sprintf("video_%d", i),
-					Type:       mediaType,
-					URL:        bestURL,
-					PreviewURL: md.MediaURLHTTPS,
-					Duration:   md.VideoInfo.DurationMillis / 1000,
-					Bitrate:    bestBitrate,
-				})
-				seen[bestURL] = true
 			}
 		} else if md.Type == "photo" {
 			if seen[md.MediaURLHTTPS] {
@@ -297,51 +279,30 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 			seen[md.MediaURLHTTPS] = true
 
 			media = append(media, domain.Media{
-				ID:   fmt.Sprintf("photo_%d", i),
+				ID:   fmt.Sprintf("photo_%d", len(media)),
 				Type: domain.MediaTypeImage,
 				URL:  md.MediaURLHTTPS,
 			})
 		}
 	}
 
-	// Parse from extended_entities (legacy format)
+	// Collect from extended_entities (legacy format) - also has explicit bitrates
 	for _, em := range resp.ExtendedEntities.Media {
 		if em.Type == "video" || em.Type == "animated_gif" {
-			// Sort variants by bitrate
-			variants := em.VideoInfo.Variants
-			sort.Slice(variants, func(i, j int) bool {
-				return variants[i].Bitrate > variants[j].Bitrate
-			})
-
-			// Get best MP4 variant
-			var bestURL string
-			var bestBitrate int
-			for _, v := range variants {
-				if v.ContentType == "video/mp4" {
-					bestURL = v.URL
-					bestBitrate = v.Bitrate
-					break
-				}
+			mediaType := domain.MediaTypeVideo
+			if em.Type == "animated_gif" {
+				mediaType = domain.MediaTypeGIF
 			}
-
-			if bestURL != "" && !seen[bestURL] {
-				mediaType := domain.MediaTypeVideo
-				if em.Type == "animated_gif" {
-					mediaType = domain.MediaTypeGIF
+			for _, v := range em.VideoInfo.Variants {
+				if v.ContentType == "video/mp4" {
+					videoCandidates = append(videoCandidates, videoCandidate{
+						url:        v.URL,
+						bitrate:    v.Bitrate,
+						previewURL: em.MediaURLHTTPS,
+						duration:   em.VideoInfo.DurationMillis / 1000,
+						mediaType:  mediaType,
+					})
 				}
-
-				media = append(media, domain.Media{
-					ID:         em.ID,
-					Type:       mediaType,
-					URL:        bestURL,
-					PreviewURL: em.MediaURLHTTPS,
-					Width:      em.Sizes.Large.W,
-					Height:     em.Sizes.Large.H,
-					Duration:   em.VideoInfo.DurationMillis / 1000,
-					Bitrate:    bestBitrate,
-					AltText:    em.ExtAltText,
-				})
-				seen[bestURL] = true
 			}
 		} else if em.Type == "photo" {
 			if seen[em.MediaURLHTTPS] {
@@ -358,6 +319,25 @@ func (c *Client) parseMedia(resp *syndicationResponse) []domain.Media {
 				AltText: em.ExtAltText,
 			})
 		}
+	}
+
+	// Now select the BEST quality video from all candidates
+	if len(videoCandidates) > 0 {
+		// Sort by bitrate descending to get highest quality first
+		sort.Slice(videoCandidates, func(i, j int) bool {
+			return videoCandidates[i].bitrate > videoCandidates[j].bitrate
+		})
+
+		// Take the best one
+		best := videoCandidates[0]
+		media = append(media, domain.Media{
+			ID:         "video_0",
+			Type:       best.mediaType,
+			URL:        best.url,
+			PreviewURL: best.previewURL,
+			Duration:   best.duration,
+			Bitrate:    best.bitrate,
+		})
 	}
 
 	return media

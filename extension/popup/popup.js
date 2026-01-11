@@ -23,7 +23,8 @@ class PopupApp {
       markArchived: document.getElementById('mark-archived'),
       saveSettings: document.getElementById('save-settings'),
       clearHistory: document.getElementById('clear-history'),
-      viewAllLink: document.getElementById('view-all-link')
+      viewAllLink: document.getElementById('view-all-link'),
+      quickArchiveLink: document.getElementById('quick-archive-link')
     };
   }
 
@@ -62,14 +63,20 @@ class PopupApp {
     // View all link
     this.elements.viewAllLink.addEventListener('click', (e) => {
       e.preventDefault();
-      this.openBackendUI();
+      this.openBackendUI(false);
+    });
+
+    // Quick archive link
+    this.elements.quickArchiveLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openBackendUI(true);
     });
   }
 
   async loadSettings() {
     const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
 
-    this.elements.backendUrl.value = response.backendUrl || 'http://localhost:8080';
+    this.elements.backendUrl.value = response.backendUrl || 'http://localhost:9847';
     this.elements.apiKey.value = response.apiKey || '';
     this.elements.showToasts.checked = response.settings?.showToasts !== false;
     this.elements.markArchived.checked = response.settings?.markArchivedTweets !== false;
@@ -258,8 +265,10 @@ class PopupApp {
     }
   }
 
-  openBackendUI() {
-    const url = this.elements.backendUrl.value.trim();
-    chrome.tabs.create({ url });
+  async openBackendUI(quick = false) {
+    await chrome.runtime.sendMessage({
+      type: 'OPEN_UI',
+      payload: { quick }
+    });
   }
 }

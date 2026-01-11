@@ -15,6 +15,7 @@ func NewRouter(
 	videoHandler *handler.VideoHandler,
 	tweetHandler *handler.TweetHandler,
 	healthHandler *handler.HealthHandler,
+	uiHandler *handler.UIHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -33,6 +34,12 @@ func NewRouter(
 	r.Get("/health", healthHandler.Live)
 	r.Get("/ready", healthHandler.Ready)
 
+	// Web UI (no auth - authentication handled via API key in UI)
+	r.Get("/", uiHandler.Smart)       // Auto-detect mobile vs desktop
+	r.Get("/ui", uiHandler.Index)     // Full archive browser
+	r.Get("/quick", uiHandler.Quick)  // Mobile-optimized quick archive
+	r.Get("/q", uiHandler.Quick)      // Short alias for mobile
+
 	// API v1 (authenticated)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.APIKeyAuth(apiKey))
@@ -42,6 +49,7 @@ func NewRouter(
 		r.Get("/tweets", tweetHandler.List)
 		r.Get("/tweets/{tweetID}", tweetHandler.Get)
 		r.Get("/tweets/{tweetID}/status", tweetHandler.GetStatus)
+		r.Delete("/tweets/{tweetID}", tweetHandler.Delete)
 
 		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)
