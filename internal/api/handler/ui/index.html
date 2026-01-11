@@ -12,16 +12,19 @@
         }
 
         :root {
-            --bg-primary: #15202b;
-            --bg-secondary: #192734;
-            --bg-hover: #22303c;
-            --bg-elevated: #1e2d3d;
-            --border-color: #38444d;
-            --text-primary: #ffffff;
-            --text-secondary: #8899a6;
-            --text-muted: #6e767d;
+            /* Refined neutral color palette - sophisticated and minimal */
+            --bg-primary: #0f1419;
+            --bg-secondary: #16181c;
+            --bg-hover: #1d1f23;
+            --bg-elevated: #202327;
+            --border-color: #2f3336;
+            --border-subtle: #252829;
+            --text-primary: #e7e9ea;
+            --text-secondary: #71767b;
+            --text-muted: #536471;
             --accent-primary: #1d9bf0;
             --accent-hover: #1a8cd8;
+            --accent-subtle: rgba(29, 155, 240, 0.1);
             --danger: #f4212e;
             --danger-muted: #67070f;
             --success: #00ba7c;
@@ -35,14 +38,15 @@
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
-            line-height: 1.5;
+            line-height: 1.4;
+            font-size: 13px;
         }
 
-        /* Header */
+        /* Header - Compact */
         .header {
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            padding: 16px 24px;
+            background: rgba(15, 20, 25, 0.85);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 10px 20px;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -50,62 +54,65 @@
             align-items: center;
             justify-content: space-between;
             backdrop-filter: blur(12px);
-            background: rgba(25, 39, 52, 0.85);
         }
 
         .header h1 {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
         }
 
         .header h1 svg {
-            width: 28px;
-            height: 28px;
-            color: var(--accent-primary);
+            width: 18px;
+            height: 18px;
+            color: var(--text-secondary);
         }
 
         .stats {
             display: flex;
-            gap: 24px;
-            font-size: 14px;
-            color: var(--text-secondary);
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
 
         .stats span {
-            color: var(--text-primary);
-            font-weight: 600;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
 
-        /* Container */
+        /* Container - Tighter */
         .container {
-            max-width: 800px;
+            max-width: 680px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 12px;
         }
 
-        /* Enhanced Search Bar */
+        /* Search Bar - Compact */
         .search-container {
             position: relative;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .search-bar {
             background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 9999px;
-            padding: 12px 16px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 8px 12px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            gap: 8px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
 
         .search-bar:focus-within {
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 1px var(--accent-primary);
+            box-shadow: 0 0 0 1px var(--accent-subtle);
         }
 
         .search-bar input {
@@ -113,18 +120,18 @@
             background: transparent;
             border: none;
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 12px;
             outline: none;
         }
 
         .search-bar input::placeholder {
-            color: var(--text-secondary);
+            color: var(--text-muted);
         }
 
         .search-bar svg {
-            width: 20px;
-            height: 20px;
-            color: var(--text-secondary);
+            width: 14px;
+            height: 14px;
+            color: var(--text-muted);
             flex-shrink: 0;
         }
 
@@ -135,9 +142,9 @@
         .search-clear {
             background: none;
             border: none;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             cursor: pointer;
-            padding: 4px;
+            padding: 2px;
             border-radius: 50%;
             display: none;
             align-items: center;
@@ -145,8 +152,8 @@
         }
 
         .search-clear:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
         }
 
         .search-clear.visible {
@@ -154,9 +161,9 @@
         }
 
         .search-results-info {
-            font-size: 13px;
-            color: var(--text-secondary);
-            padding: 8px 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 6px 12px;
             display: none;
         }
 
@@ -165,25 +172,31 @@
         }
 
         .search-results-info strong {
-            color: var(--text-primary);
+            color: var(--text-secondary);
         }
 
-        /* Tweet List */
+        /* Tweet List - Timeline Style */
         .tweet-list {
             display: flex;
             flex-direction: column;
-            gap: 1px;
-            background: var(--border-color);
-            border-radius: 16px;
+            gap: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
             overflow: hidden;
         }
 
-        /* Tweet Card */
+        /* Tweet Card - Compact Timeline Item */
         .tweet-card {
             background: var(--bg-secondary);
-            padding: 16px;
+            padding: 12px 14px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.15s;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .tweet-card:last-child {
+            border-bottom: none;
         }
 
         .tweet-card:hover {
@@ -193,23 +206,23 @@
         .tweet-header {
             display: flex;
             align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 6px;
         }
 
         .tweet-avatar {
-            width: 48px;
-            height: 48px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            background: var(--border-color);
+            background: var(--bg-elevated);
             flex-shrink: 0;
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
         }
 
         .tweet-avatar img {
@@ -221,80 +234,84 @@
         .tweet-author {
             flex: 1;
             min-width: 0;
-        }
-
-        .tweet-author-name {
-            font-weight: 700;
-            font-size: 15px;
             display: flex;
-            align-items: center;
+            align-items: baseline;
             gap: 4px;
             flex-wrap: wrap;
         }
 
+        .tweet-author-name {
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            color: var(--text-primary);
+        }
+
         .verified-badge {
-            width: 18px;
-            height: 18px;
+            width: 14px;
+            height: 14px;
             color: var(--accent-primary);
             flex-shrink: 0;
         }
 
         .tweet-author-username {
-            color: var(--text-secondary);
-            font-size: 14px;
+            color: var(--text-muted);
+            font-size: 12px;
         }
 
         .tweet-meta-row {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 2px;
+            gap: 6px;
+            margin-top: 1px;
         }
 
         .tweet-date {
-            color: var(--text-secondary);
-            font-size: 13px;
+            color: var(--text-muted);
+            font-size: 11px;
         }
 
-        /* AI title badge removed per user request */
-
         .tweet-text {
-            font-size: 15px;
+            font-size: 13px;
             line-height: 1.4;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             white-space: pre-wrap;
             word-wrap: break-word;
+            color: var(--text-primary);
         }
 
         .tweet-text .highlight {
-            background: rgba(29, 155, 240, 0.3);
+            background: var(--accent-subtle);
             border-radius: 2px;
             padding: 0 2px;
         }
 
-        /* Media Thumbnails in List */
+        /* Media Thumbnails - Compact Grid */
         .tweet-media-preview {
             display: grid;
-            gap: 4px;
-            border-radius: 12px;
+            gap: 2px;
+            border-radius: 6px;
             overflow: hidden;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            max-width: 280px;
         }
 
-        .tweet-media-preview.single { grid-template-columns: 1fr; }
-        .tweet-media-preview.double { grid-template-columns: 1fr 1fr; }
-        .tweet-media-preview.triple { grid-template-columns: 1fr 1fr; }
-        .tweet-media-preview.quad { grid-template-columns: 1fr 1fr; }
+        .tweet-media-preview.single { grid-template-columns: 1fr; max-width: 220px; }
+        .tweet-media-preview.double { grid-template-columns: 1fr 1fr; max-width: 280px; }
+        .tweet-media-preview.triple { grid-template-columns: 1fr 1fr; max-width: 280px; }
+        .tweet-media-preview.quad { grid-template-columns: 1fr 1fr; max-width: 280px; }
 
         .tweet-media-preview .media-thumb {
             position: relative;
-            background: var(--border-color);
-            aspect-ratio: 16/9;
+            background: var(--bg-elevated);
+            aspect-ratio: 16/10;
             overflow: hidden;
         }
 
         .tweet-media-preview.single .media-thumb {
-            aspect-ratio: 16/10;
+            aspect-ratio: 16/9;
         }
 
         .tweet-media-preview .media-thumb img,
@@ -309,10 +326,10 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.75);
             border-radius: 50%;
-            width: 44px;
-            height: 44px;
+            width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -320,10 +337,10 @@
         }
 
         .tweet-media-preview .video-indicator svg {
-            width: 20px;
-            height: 20px;
+            width: 12px;
+            height: 12px;
             fill: white;
-            margin-left: 3px;
+            margin-left: 2px;
         }
 
         .tweet-media-preview .more-media {
@@ -333,35 +350,46 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
         }
 
-        /* Tweet Footer */
+        .tweet-media-preview .media-thumb.no-thumb {
+            background: var(--bg-elevated);
+        }
+
+        .tweet-media-preview .thumb-placeholder {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-elevated);
+        }
+
+        /* Tweet Footer - Compact */
         .tweet-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
         }
 
         .tweet-metrics {
             display: flex;
-            gap: 16px;
-            color: var(--text-secondary);
-            font-size: 13px;
+            gap: 12px;
+            color: var(--text-muted);
+            font-size: 11px;
         }
 
         .tweet-metrics .metric {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
 
         .tweet-metrics .metric svg {
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
         }
 
         .tweet-metrics .metric.replies svg { color: var(--reply); }
@@ -369,49 +397,49 @@
         .tweet-metrics .metric.likes svg { color: var(--like); }
 
         .media-badge {
-            background: var(--border-color);
-            color: var(--text-secondary);
-            padding: 4px 10px;
-            border-radius: 9999px;
-            font-size: 12px;
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
         }
 
         .media-badge svg {
-            width: 14px;
-            height: 14px;
+            width: 10px;
+            height: 10px;
         }
 
         .tweet-actions {
             display: flex;
-            gap: 8px;
+            gap: 4px;
         }
 
-        /* Buttons */
+        /* Buttons - Refined */
         .btn {
-            padding: 8px 16px;
-            border-radius: 9999px;
-            font-size: 14px;
-            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
             cursor: pointer;
             border: none;
-            transition: all 0.2s;
+            transition: all 0.15s;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             text-decoration: none;
         }
 
         .btn svg {
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
         }
 
         .btn-primary {
             background: var(--accent-primary);
-            color: var(--text-primary);
+            color: white;
         }
 
         .btn-primary:hover {
@@ -435,53 +463,58 @@
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
             color: var(--text-primary);
         }
 
         .btn-ghost {
             background: transparent;
-            color: var(--text-secondary);
-            padding: 8px;
+            color: var(--text-muted);
+            padding: 5px;
         }
 
         .btn-ghost:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
         }
 
-        /* Empty State */
+        /* Empty State - Minimal */
         .empty-state {
             text-align: center;
-            padding: 64px 24px;
-            color: var(--text-secondary);
+            padding: 40px 20px;
+            color: var(--text-muted);
             background: var(--bg-secondary);
-            border-radius: 16px;
+            border-radius: 8px;
         }
 
         .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 16px;
-            opacity: 0.5;
+            width: 40px;
+            height: 40px;
+            margin-bottom: 12px;
+            opacity: 0.4;
         }
 
         .empty-state h3 {
-            font-size: 18px;
-            color: var(--text-primary);
-            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
         }
 
-        /* Modal Base */
+        .empty-state p {
+            font-size: 12px;
+        }
+
+        /* Modal Base - Clean */
         .modal-overlay {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             z-index: 200;
             align-items: flex-start;
             justify-content: center;
-            padding: 24px;
+            padding: 20px;
             overflow-y: auto;
         }
 
@@ -491,64 +524,65 @@
 
         .modal {
             background: var(--bg-secondary);
-            border-radius: 16px;
-            max-width: 600px;
+            border-radius: 10px;
+            max-width: 520px;
             width: 100%;
             margin: auto;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-subtle);
         }
 
         .modal-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             background: var(--bg-secondary);
-            border-radius: 16px 16px 0 0;
+            border-radius: 10px 10px 0 0;
             z-index: 10;
         }
 
         .modal-header h2 {
-            font-size: 18px;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
         }
 
         .modal-close {
             background: none;
             border: none;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             cursor: pointer;
-            padding: 8px;
+            padding: 6px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            transition: all 0.15s;
         }
 
         .modal-close:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
         }
 
         .modal-body {
-            padding: 16px;
+            padding: 14px;
         }
 
         .modal-footer {
-            padding: 16px;
-            border-top: 1px solid var(--border-color);
+            padding: 12px 14px;
+            border-top: 1px solid var(--border-subtle);
             display: flex;
-            gap: 12px;
+            gap: 8px;
             justify-content: flex-end;
         }
 
-        /* Tweet Detail Modal */
+        /* Tweet Detail Modal - Refined */
         .tweet-detail-modal {
-            max-width: 680px;
+            max-width: 560px;
         }
 
         .tweet-detail-content {
@@ -556,25 +590,25 @@
         }
 
         .tweet-detail-header {
-            padding: 20px;
+            padding: 14px;
             display: flex;
-            gap: 12px;
-            border-bottom: 1px solid var(--border-color);
+            gap: 10px;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .tweet-detail-avatar {
-            width: 56px;
-            height: 56px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            background: var(--border-color);
+            background: var(--bg-elevated);
             flex-shrink: 0;
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-secondary);
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-muted);
         }
 
         .tweet-detail-avatar img {
@@ -588,35 +622,35 @@
         }
 
         .tweet-detail-author-name {
-            font-size: 17px;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 4px;
         }
 
         .tweet-detail-author-username {
-            color: var(--text-secondary);
-            font-size: 15px;
+            color: var(--text-muted);
+            font-size: 12px;
         }
 
         .tweet-detail-body {
-            padding: 20px;
+            padding: 14px;
         }
 
         .tweet-detail-text {
-            font-size: 23px;
-            line-height: 1.35;
-            margin-bottom: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+            margin-bottom: 12px;
             white-space: pre-wrap;
             word-wrap: break-word;
         }
 
         .tweet-detail-date {
-            color: var(--text-secondary);
-            font-size: 15px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .tweet-detail-date a {
@@ -628,54 +662,56 @@
             text-decoration: underline;
         }
 
-        /* Tweet Detail Metrics */
+        /* Tweet Detail Metrics - Compact */
         .tweet-detail-metrics {
             display: flex;
-            gap: 20px;
-            padding: 16px 0;
-            border-bottom: 1px solid var(--border-color);
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-subtle);
             flex-wrap: wrap;
         }
 
         .tweet-detail-metrics .metric {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
 
         .tweet-detail-metrics .metric-value {
-            font-weight: 700;
-            font-size: 15px;
+            font-weight: 600;
+            font-size: 13px;
         }
 
         .tweet-detail-metrics .metric-label {
-            color: var(--text-secondary);
-            font-size: 15px;
+            color: var(--text-muted);
+            font-size: 12px;
         }
 
-        /* Tweet Detail Media Grid */
+        /* Tweet Detail Media Grid - Constrained */
         .tweet-detail-media {
-            margin-top: 16px;
+            margin-top: 12px;
         }
 
         .tweet-detail-media h4 {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
 
         .tweet-detail-media h4 svg {
-            width: 18px;
-            height: 18px;
+            width: 14px;
+            height: 14px;
         }
 
         .media-grid {
             display: grid;
-            gap: 8px;
-            border-radius: 16px;
+            gap: 4px;
+            border-radius: 8px;
             overflow: hidden;
         }
 
@@ -696,7 +732,7 @@
         .media-item {
             position: relative;
             background: var(--bg-primary);
-            border-radius: 12px;
+            border-radius: 6px;
             overflow: hidden;
             cursor: pointer;
         }
@@ -705,33 +741,33 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            min-height: 200px;
-            max-height: 400px;
-            transition: transform 0.3s;
+            min-height: 120px;
+            max-height: 280px;
+            transition: transform 0.2s;
         }
 
         .media-grid.single .media-item img {
-            max-height: 500px;
+            max-height: 320px;
         }
 
         .media-item:hover img {
-            transform: scale(1.02);
+            transform: scale(1.01);
         }
 
         .media-download-btn {
             position: absolute;
-            bottom: 12px;
-            right: 12px;
-            background: rgba(0, 0, 0, 0.7);
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.75);
             color: white;
-            width: 36px;
-            height: 36px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transition: opacity 0.2s, background 0.2s;
+            transition: opacity 0.15s, background 0.15s;
             text-decoration: none;
         }
 
@@ -744,125 +780,76 @@
         }
 
         .media-download-btn svg {
-            width: 20px;
-            height: 20px;
+            width: 14px;
+            height: 14px;
         }
 
         .media-download-btn.video-download {
             bottom: auto;
-            top: 12px;
+            top: 8px;
         }
 
         .media-item.video {
             background: #000;
+            border-radius: 6px;
+            overflow: hidden;
         }
 
         .media-item video {
             width: 100%;
-            max-height: 500px;
+            max-height: 320px;
+            display: block;
             background: #000;
         }
 
-        .video-controls-overlay {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.3);
-            opacity: 1;
-            transition: opacity 0.3s;
-            cursor: pointer;
-        }
-
-        .video-controls-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .play-button-large {
-            width: 68px;
-            height: 68px;
-            background: var(--accent-primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, background 0.2s;
-        }
-
-        .play-button-large:hover {
-            transform: scale(1.1);
-            background: var(--accent-hover);
-        }
-
-        .play-button-large svg {
-            width: 28px;
-            height: 28px;
-            fill: white;
-            margin-left: 4px;
-        }
-
-        .video-duration {
-            position: absolute;
-            bottom: 12px;
-            right: 12px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        /* Archive Metadata */
+        /* Archive Metadata - Minimal */
         .archive-metadata {
-            margin-top: 16px;
-            padding: 16px;
+            margin-top: 12px;
+            padding: 12px;
             background: var(--bg-primary);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            border: 1px solid var(--border-subtle);
         }
 
         .archive-metadata h4 {
-            font-size: 13px;
-            color: var(--text-secondary);
+            font-size: 10px;
+            color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
 
         .archive-metadata h4 svg {
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
         }
 
         .metadata-row {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding: 8px 0;
-            font-size: 14px;
+            padding: 6px 0;
+            font-size: 12px;
         }
 
         .metadata-row:not(:last-child) {
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .metadata-label {
-            color: var(--text-secondary);
+            color: var(--text-muted);
             flex-shrink: 0;
         }
 
         .metadata-value {
             text-align: right;
             word-break: break-all;
-            margin-left: 16px;
+            margin-left: 12px;
+            color: var(--text-secondary);
         }
-
-        /* ai-generated styling removed */
 
         .metadata-value a {
             color: var(--accent-primary);
@@ -873,22 +860,22 @@
             text-decoration: underline;
         }
 
-        /* Tweet Detail Actions */
+        /* Tweet Detail Actions - Compact */
         .tweet-detail-actions {
-            padding: 16px 20px;
-            border-top: 1px solid var(--border-color);
+            padding: 12px 14px;
+            border-top: 1px solid var(--border-subtle);
             display: flex;
-            gap: 12px;
+            gap: 8px;
             justify-content: space-between;
             align-items: center;
         }
 
         .tweet-detail-actions .action-group {
             display: flex;
-            gap: 8px;
+            gap: 6px;
         }
 
-        /* Image Lightbox */
+        /* Image Lightbox - Clean */
         .lightbox-overlay {
             display: none;
             position: fixed;
@@ -897,7 +884,7 @@
             z-index: 300;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 20px;
         }
 
         .lightbox-overlay.active {
@@ -914,24 +901,24 @@
             max-width: 100%;
             max-height: 90vh;
             object-fit: contain;
-            border-radius: 8px;
+            border-radius: 4px;
         }
 
         .lightbox-close {
             position: absolute;
-            top: -48px;
+            top: -40px;
             right: 0;
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
+            transition: background 0.15s;
         }
 
         .lightbox-close:hover {
@@ -945,30 +932,30 @@
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            width: 48px;
-            height: 48px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
+            transition: background 0.15s;
         }
 
         .lightbox-nav:hover {
             background: rgba(255, 255, 255, 0.2);
         }
 
-        .lightbox-nav.prev { left: -60px; }
-        .lightbox-nav.next { right: -60px; }
+        .lightbox-nav.prev { left: -50px; }
+        .lightbox-nav.next { right: -50px; }
 
         .lightbox-counter {
             position: absolute;
-            bottom: -40px;
+            bottom: -32px;
             left: 50%;
             transform: translateX(-50%);
-            color: var(--text-secondary);
-            font-size: 14px;
+            color: var(--text-muted);
+            font-size: 12px;
         }
 
         /* Loading States */
@@ -976,36 +963,36 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 48px;
+            padding: 32px;
         }
 
         .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid var(--border-color);
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
             border-top-color: var(--accent-primary);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            animation: spin 0.7s linear infinite;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        /* Keyboard shortcuts hint */
+        /* Keyboard shortcuts hint - Subtle */
         .keyboard-hint {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
+            bottom: 16px;
+            right: 16px;
             background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 13px;
-            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
             opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.3s;
+            transform: translateY(8px);
+            transition: all 0.2s;
             pointer-events: none;
         }
 
@@ -1017,32 +1004,32 @@
         .keyboard-hint kbd {
             background: var(--bg-primary);
             border: 1px solid var(--border-color);
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 1px 4px;
+            border-radius: 3px;
             font-family: inherit;
-            margin: 0 4px;
+            margin: 0 3px;
+            font-size: 10px;
         }
 
-        /* Scroll to top button */
+        /* Scroll to top button - Minimal */
         .scroll-top {
             position: fixed;
-            bottom: 24px;
-            left: 24px;
-            background: var(--accent-primary);
-            color: white;
-            width: 44px;
-            height: 44px;
+            bottom: 16px;
+            left: 16px;
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            border: none;
+            border: 1px solid var(--border-color);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.3s;
+            transform: translateY(16px);
+            transition: all 0.2s;
             pointer-events: none;
-            box-shadow: 0 4px 12px rgba(29, 155, 240, 0.4);
         }
 
         .scroll-top.visible {
@@ -1052,32 +1039,48 @@
         }
 
         .scroll-top:hover {
-            background: var(--accent-hover);
-            transform: translateY(-2px);
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-color);
         }
 
-        /* Responsive */
+        .scroll-top svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Responsive - Compact Mobile */
         @media (max-width: 768px) {
             .header {
-                flex-direction: column;
-                gap: 12px;
-                padding: 12px 16px;
+                flex-direction: row;
+                gap: 8px;
+                padding: 8px 12px;
+            }
+
+            .stats {
+                font-size: 10px;
+                gap: 10px;
             }
 
             .container {
-                padding: 12px;
+                padding: 8px;
+            }
+
+            .tweet-card {
+                padding: 10px 12px;
             }
 
             .tweet-detail-text {
-                font-size: 18px;
+                font-size: 14px;
             }
 
             .tweet-detail-metrics {
-                gap: 12px;
+                gap: 10px;
             }
 
             .tweet-detail-actions {
                 flex-direction: column;
+                gap: 8px;
             }
 
             .tweet-detail-actions .action-group {
@@ -1087,6 +1090,17 @@
 
             .lightbox-nav {
                 display: none;
+            }
+
+            .tweet-media-preview {
+                max-width: 100%;
+            }
+
+            .tweet-media-preview.single,
+            .tweet-media-preview.double,
+            .tweet-media-preview.triple,
+            .tweet-media-preview.quad {
+                max-width: 240px;
             }
         }
 
@@ -1456,17 +1470,31 @@
                     ${displayMedia.map((media, idx) => {
                         const isVideo = media.type === 'video' || media.type === 'gif';
                         const showMore = idx === 3 && mediaCount > 4;
-                        // Use thumbnail_url for videos, url for images - add API key
-                        const thumbUrl = (media.thumbnail_url || media.url || '') + (API_KEY ? (media.thumbnail_url || media.url || '').includes('?') ? '&' : '?' + 'key=' + encodeURIComponent(API_KEY) : '');
-                        // For our served images, add API key; for external twitter thumbnails, use as-is
-                        const isOurUrl = (media.thumbnail_url || media.url || '').startsWith('/api/');
-                        const finalThumbUrl = isOurUrl ? addApiKey(media.thumbnail_url || media.url || '') : (media.thumbnail_url || media.url || '');
+
+                        // For videos: prefer thumbnail_url, fallback to generating from video
+                        // For images: use url directly
+                        let thumbUrl = '';
+                        if (isVideo) {
+                            // Use thumbnail if available, otherwise we'll generate one
+                            thumbUrl = media.thumbnail_url || '';
+                        } else {
+                            thumbUrl = media.url || '';
+                        }
+
+                        // Add API key for our URLs
+                        const isOurUrl = thumbUrl.startsWith('/api/');
+                        const finalThumbUrl = isOurUrl ? addApiKey(thumbUrl) : thumbUrl;
+
+                        // For videos without thumbnails, create a placeholder with video element
+                        const videoUrl = isVideo && !thumbUrl ? addApiKey(media.url || '') : '';
 
                         return `
-                            <div class="media-thumb">
+                            <div class="media-thumb" ${isVideo && videoUrl ? `data-video-src="${videoUrl}"` : ''}>
                                 ${finalThumbUrl
-                                    ? `<img src="${finalThumbUrl}" alt="${isVideo ? 'Video thumbnail' : 'Tweet media'}" onerror="this.style.display='none'">`
-                                    : `<div style="background: var(--border-color); width: 100%; height: 100%;"></div>`
+                                    ? `<img src="${finalThumbUrl}" alt="${isVideo ? 'Video thumbnail' : 'Tweet media'}" onerror="this.parentElement.classList.add('no-thumb')">`
+                                    : isVideo && videoUrl
+                                        ? `<video src="${videoUrl}" preload="metadata" muted playsinline onloadeddata="this.currentTime=0.5" style="pointer-events:none;"></video>`
+                                        : `<div class="thumb-placeholder"></div>`
                                 }
                                 ${isVideo ? `
                                     <div class="video-indicator">
@@ -1635,8 +1663,6 @@
                     </div>
                 `;
 
-                // Initialize video players
-                initializeVideoPlayers();
 
             } catch (error) {
                 console.error('Failed to fetch tweet details:', error);
@@ -1712,18 +1738,13 @@
                     const downloadName = videos.length > 1 ? `${baseFilename}_video${idx + 1}.mp4` : `${baseFilename}.mp4`;
 
                     html += `
-                        <div class="media-item video" data-video-idx="${idx}" style="margin-top: 8px;">
+                        <div class="media-item video" data-video-idx="${idx}">
                             <video
                                 src="${videoUrl}"
                                 controls
                                 preload="metadata"
-                                style="width: 100%; max-height: 500px; background: #000;"
+                                playsinline
                             ></video>
-                            <div class="video-controls-overlay" onclick="playVideo(this)">
-                                <div class="play-button-large">
-                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                </div>
-                            </div>
                             <a class="media-download-btn video-download" href="${videoUrl}" download="${escapeHtml(downloadName)}" onclick="event.stopPropagation()" title="Download video">
                                 <svg viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
@@ -1743,35 +1764,6 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        function initializeVideoPlayers() {
-            document.querySelectorAll('.media-item.video').forEach(container => {
-                const video = container.querySelector('video');
-                const overlay = container.querySelector('.video-controls-overlay');
-
-                if (video && overlay) {
-                    video.addEventListener('play', () => {
-                        overlay.classList.add('hidden');
-                    });
-
-                    video.addEventListener('pause', () => {
-                        overlay.classList.remove('hidden');
-                    });
-
-                    video.addEventListener('ended', () => {
-                        overlay.classList.remove('hidden');
-                    });
-                }
-            });
-        }
-
-        function playVideo(overlay) {
-            const container = overlay.closest('.media-item');
-            const video = container.querySelector('video');
-            if (video) {
-                video.play();
-            }
         }
 
         // Lightbox

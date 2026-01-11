@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -424,12 +425,17 @@ func (s *TweetService) GetStatus(ctx context.Context, tweetID domain.TweetID) (*
 	}, nil
 }
 
-// List returns archived tweets.
+// List returns archived tweets sorted by date (newest first).
 func (s *TweetService) List(ctx context.Context, limit, offset int) ([]*domain.Tweet, int, error) {
 	var result []*domain.Tweet
 	for _, tweet := range s.tweets {
 		result = append(result, tweet)
 	}
+
+	// Sort by CreatedAt descending (newest first)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
 
 	total := len(result)
 
