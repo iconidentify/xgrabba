@@ -1,4 +1,4 @@
-module github.com/chrisk/xgrabba
+module github.com/iconidentify/xgrabba
 
 go 1.22
 

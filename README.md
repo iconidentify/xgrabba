@@ -34,7 +34,7 @@ Browser Extension  -->  Go Backend Server  -->  Filesystem/SMB
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/chrisk/xgrabba.git
+   git clone https://github.com/iconidentify/xgrabba.git
    cd xgrabba
    ```
 

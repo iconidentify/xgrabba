@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/chrisk/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/domain"
 )
 
 // VideoRepository handles video persistence.

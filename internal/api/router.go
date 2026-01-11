@@ -6,8 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/chrisk/xgrabba/internal/api/handler"
-	mw "github.com/chrisk/xgrabba/internal/api/middleware"
+	"github.com/iconidentify/xgrabba/internal/api/handler"
+	mw "github.com/iconidentify/xgrabba/internal/api/middleware"
 )
 
 // NewRouter creates the HTTP router with all routes configured.

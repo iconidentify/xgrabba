@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/chrisk/xgrabba/internal/config"
-	"github.com/chrisk/xgrabba/internal/domain"
-	"github.com/chrisk/xgrabba/internal/downloader"
-	"github.com/chrisk/xgrabba/internal/repository"
-	"github.com/chrisk/xgrabba/pkg/grok"
+	"github.com/iconidentify/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/downloader"
+	"github.com/iconidentify/xgrabba/internal/repository"
+	"github.com/iconidentify/xgrabba/pkg/grok"
 )
 
 // VideoService orchestrates video archiving workflow.

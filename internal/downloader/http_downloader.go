@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/chrisk/xgrabba/internal/config"
-	"github.com/chrisk/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/internal/domain"
 )
 
 // HTTPDownloader implements Downloader using HTTP requests.

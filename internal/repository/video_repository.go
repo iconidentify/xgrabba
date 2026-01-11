@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrisk/xgrabba/internal/config"
-	"github.com/chrisk/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/internal/domain"
 )
 
 // FilesystemVideoRepository implements VideoRepository using the filesystem.

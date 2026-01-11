@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/chrisk/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/domain"
 )
 
 // InMemoryJobRepository implements JobRepository using in-memory storage.

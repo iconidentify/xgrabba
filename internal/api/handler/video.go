@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/chrisk/xgrabba/internal/domain"
-	"github.com/chrisk/xgrabba/internal/service"
+	"github.com/iconidentify/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/internal/service"
 )
 
 // VideoHandler handles video-related HTTP requests.

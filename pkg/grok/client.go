@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrisk/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/internal/config"
 )
 
 // Client interfaces with Grok AI for filename generation.

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chrisk/xgrabba/internal/repository"
+	"github.com/iconidentify/xgrabba/internal/repository"
 )
 
 // HealthHandler handles health check endpoints.
