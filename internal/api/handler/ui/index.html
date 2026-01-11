@@ -1325,7 +1325,9 @@
 
         function getInitials(author) {
             if (!author) return '?';
-            return author.charAt(0).toUpperCase();
+            // Handle both string and object (from /full endpoint)
+            const username = typeof author === 'string' ? author : (author.username || author.display_name || '?');
+            return username.charAt(0).toUpperCase();
         }
 
         function formatNumber(num) {
@@ -1475,26 +1477,31 @@
                 const tweet = await response.json();
                 currentTweetDetail = tweet;
 
-                const displayName = tweet.author_display_name || tweet.author || 'Unknown';
+                // Handle author being an object (from /full endpoint) or string
+                const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
+                const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
+                const displayName = authorObj ? (authorObj.display_name || authorObj.username) : (tweet.author_display_name || tweet.author || 'Unknown');
+                const authorAvatar = authorObj ? authorObj.avatar_url : tweet.author_avatar;
+                const verified = authorObj ? authorObj.verified : tweet.verified;
 
                 content.innerHTML = `
                     <div class="tweet-detail-header">
                         <div class="tweet-detail-avatar">
-                            ${tweet.author_avatar
-                                ? `<img src="${tweet.author_avatar}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(tweet.author)}'">`
-                                : getInitials(tweet.author)
+                            ${authorAvatar
+                                ? `<img src="${authorAvatar}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(authorUsername)}'">`
+                                : getInitials(authorUsername)
                             }
                         </div>
                         <div class="tweet-detail-author">
                             <div class="tweet-detail-author-name">
                                 ${escapeHtml(displayName)}
-                                ${tweet.verified ? `
+                                ${verified ? `
                                     <svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>
                                     </svg>
                                 ` : ''}
                             </div>
-                            <div class="tweet-detail-author-username">@${escapeHtml(tweet.author || 'unknown')}</div>
+                            <div class="tweet-detail-author-username">@${escapeHtml(authorUsername)}</div>
                         </div>
                     </div>
 
@@ -1502,45 +1509,39 @@
                         <div class="tweet-detail-text">${escapeHtml(tweet.text || '')}</div>
 
                         <div class="tweet-detail-date">
-                            ${formatFullDate(tweet.tweet_created_at || tweet.created_at)}
+                            ${formatFullDate(tweet.posted_at || tweet.created_at)}
                             ${tweet.url ? ` - <a href="${tweet.url}" target="_blank" rel="noopener">View on X</a>` : ''}
                         </div>
 
-                        ${(tweet.like_count !== undefined || tweet.retweet_count !== undefined || tweet.reply_count !== undefined) ? `
+                        ${tweet.metrics ? `
                             <div class="tweet-detail-metrics">
-                                ${tweet.reply_count !== undefined ? `
+                                ${tweet.metrics.replies !== undefined ? `
                                     <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.reply_count)}</span>
+                                        <span class="metric-value">${formatNumber(tweet.metrics.replies)}</span>
                                         <span class="metric-label">Replies</span>
                                     </div>
                                 ` : ''}
-                                ${tweet.retweet_count !== undefined ? `
+                                ${tweet.metrics.retweets !== undefined ? `
                                     <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.retweet_count)}</span>
+                                        <span class="metric-value">${formatNumber(tweet.metrics.retweets)}</span>
                                         <span class="metric-label">Reposts</span>
                                     </div>
                                 ` : ''}
-                                ${tweet.quote_count !== undefined ? `
+                                ${tweet.metrics.quotes !== undefined ? `
                                     <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.quote_count)}</span>
+                                        <span class="metric-value">${formatNumber(tweet.metrics.quotes)}</span>
                                         <span class="metric-label">Quotes</span>
                                     </div>
                                 ` : ''}
-                                ${tweet.like_count !== undefined ? `
+                                ${tweet.metrics.likes !== undefined ? `
                                     <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.like_count)}</span>
+                                        <span class="metric-value">${formatNumber(tweet.metrics.likes)}</span>
                                         <span class="metric-label">Likes</span>
                                     </div>
                                 ` : ''}
-                                ${tweet.bookmark_count !== undefined ? `
+                                ${tweet.metrics.views !== undefined ? `
                                     <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.bookmark_count)}</span>
-                                        <span class="metric-label">Bookmarks</span>
-                                    </div>
-                                ` : ''}
-                                ${tweet.view_count !== undefined ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.view_count)}</span>
+                                        <span class="metric-value">${formatNumber(tweet.metrics.views)}</span>
                                         <span class="metric-label">Views</span>
                                     </div>
                                 ` : ''}
@@ -1565,7 +1566,7 @@
                             ` : ''}
                             <div class="metadata-row">
                                 <span class="metadata-label">Archived</span>
-                                <span class="metadata-value">${formatFullDate(tweet.created_at)}</span>
+                                <span class="metadata-value">${formatFullDate(tweet.archived_at || tweet.created_at)}</span>
                             </div>
                             <div class="metadata-row">
                                 <span class="metadata-label">Status</span>
@@ -1573,7 +1574,7 @@
                             </div>
                             <div class="metadata-row">
                                 <span class="metadata-label">Media Files</span>
-                                <span class="metadata-value">${tweet.media_count || 0} items</span>
+                                <span class="metadata-value">${tweet.media?.length || tweet.media_count || 0} items</span>
                             </div>
                             ${tweet.archive_path ? `
                                 <div class="metadata-row">
