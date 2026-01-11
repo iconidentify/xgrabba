@@ -73,9 +73,11 @@ type TweetResponse struct {
 	AITags        []string  `json:"ai_tags,omitempty"`
 	AIContentType string    `json:"ai_content_type,omitempty"`
 	AITopics      []string  `json:"ai_topics,omitempty"`
-	ArchivePath   string    `json:"archive_path,omitempty"`
-	Error         string    `json:"error,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	// Video transcripts (combined from all video media)
+	Transcripts []string `json:"transcripts,omitempty"`
+	ArchivePath string   `json:"archive_path,omitempty"`
+	Error       string   `json:"error,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // MediaPreview represents a media item in list responses for thumbnails.
@@ -197,6 +199,14 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			avatarURL = fmt.Sprintf("/api/v1/tweets/%s/avatar", t.ID)
 		}
 
+		// Collect transcripts from video media
+		var transcripts []string
+		for _, m := range t.Media {
+			if m.Transcript != "" {
+				transcripts = append(transcripts, m.Transcript)
+			}
+		}
+
 		tr := TweetResponse{
 			TweetID:           string(t.ID),
 			URL:               t.URL,
@@ -222,6 +232,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			AITags:            t.AITags,
 			AIContentType:     t.AIContentType,
 			AITopics:          t.AITopics,
+			Transcripts:       transcripts,
 			ArchivePath:       t.ArchivePath,
 			Error:             t.Error,
 			CreatedAt:         t.CreatedAt,

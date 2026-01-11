@@ -75,6 +75,10 @@ type Media struct {
 	LocalPath   string    `json:"local_path,omitempty"` // Path after download
 	Downloaded  bool      `json:"downloaded"`
 	AICaption   string    `json:"ai_caption,omitempty"` // AI-generated description
+
+	// Transcript fields for videos
+	Transcript         string `json:"transcript,omitempty"`          // Full audio transcript
+	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language (ISO-639-1)
 }
 
 // MediaType represents the type of media.

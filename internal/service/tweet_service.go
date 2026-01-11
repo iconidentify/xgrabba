@@ -15,17 +15,22 @@ import (
 	"github.com/iconidentify/xgrabba/internal/config"
 	"github.com/iconidentify/xgrabba/internal/domain"
 	"github.com/iconidentify/xgrabba/internal/downloader"
+	"github.com/iconidentify/xgrabba/pkg/ffmpeg"
 	"github.com/iconidentify/xgrabba/pkg/grok"
 	"github.com/iconidentify/xgrabba/pkg/twitter"
+	"github.com/iconidentify/xgrabba/pkg/whisper"
 )
 
 // TweetService orchestrates tweet archiving workflow.
 type TweetService struct {
-	twitterClient *twitter.Client
-	grokClient    grok.Client
-	downloader    *downloader.HTTPDownloader
-	cfg           config.StorageConfig
-	logger        *slog.Logger
+	twitterClient   *twitter.Client
+	grokClient      grok.Client
+	whisperClient   *whisper.HTTPClient
+	videoProcessor  *ffmpeg.VideoProcessor
+	downloader      *downloader.HTTPDownloader
+	cfg             config.StorageConfig
+	whisperEnabled  bool
+	logger          *slog.Logger
 
 	// In-memory storage (could be replaced with DB)
 	tweets map[domain.TweetID]*domain.Tweet
@@ -34,17 +39,37 @@ type TweetService struct {
 // NewTweetService creates a new tweet service.
 func NewTweetService(
 	grokClient grok.Client,
+	whisperClient *whisper.HTTPClient,
 	dl *downloader.HTTPDownloader,
 	storageCfg config.StorageConfig,
+	whisperEnabled bool,
 	logger *slog.Logger,
 ) *TweetService {
+	// Initialize video processor (ffmpeg)
+	var videoProc *ffmpeg.VideoProcessor
+	if ffmpeg.IsAvailable() {
+		var err error
+		videoProc, err = ffmpeg.NewVideoProcessor()
+		if err != nil {
+			logger.Warn("failed to initialize video processor", "error", err)
+		} else {
+			version, _ := ffmpeg.GetVersion()
+			logger.Info("video processor initialized", "ffmpeg_version", version)
+		}
+	} else {
+		logger.Warn("ffmpeg not available, video transcription disabled")
+	}
+
 	svc := &TweetService{
-		twitterClient: twitter.NewClient(),
-		grokClient:    grokClient,
-		downloader:    dl,
-		cfg:           storageCfg,
-		logger:        logger,
-		tweets:        make(map[domain.TweetID]*domain.Tweet),
+		twitterClient:  twitter.NewClient(),
+		grokClient:     grokClient,
+		whisperClient:  whisperClient,
+		videoProcessor: videoProc,
+		downloader:     dl,
+		cfg:            storageCfg,
+		whisperEnabled: whisperEnabled && whisperClient != nil && videoProc != nil,
+		logger:         logger,
+		tweets:         make(map[domain.TweetID]*domain.Tweet),
 	}
 
 	// Load existing tweets from disk on startup
@@ -591,7 +616,123 @@ func (s *TweetService) downloadMedia(ctx context.Context, tweet *domain.Tweet, m
 		}
 	}
 
+	// For videos, extract keyframes and transcribe audio
+	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && s.whisperEnabled {
+		s.processVideoForTranscription(ctx, media, archivePath)
+	}
+
 	return nil
+}
+
+// processVideoForTranscription extracts keyframes and audio from a video and transcribes it.
+func (s *TweetService) processVideoForTranscription(ctx context.Context, media *domain.Media, archivePath string) {
+	if s.videoProcessor == nil || s.whisperClient == nil {
+		return
+	}
+
+	logger := s.logger.With("media_id", media.ID)
+	logger.Info("processing video for transcription")
+
+	// Create temp directory for processing
+	tempDir := filepath.Join(archivePath, "temp_processing")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		logger.Warn("failed to create temp directory", "error", err)
+		return
+	}
+	defer os.RemoveAll(tempDir) // Clean up temp files
+
+	// Extract keyframes for vision analysis
+	framesDir := filepath.Join(tempDir, "frames")
+	frames, err := s.videoProcessor.ExtractKeyframes(ctx, media.LocalPath, ffmpeg.ExtractKeyframesConfig{
+		IntervalSeconds: 10,
+		MaxFrames:       10, // Limit for API
+		MaxWidth:        1280,
+		Quality:         5,
+		OutputDir:       framesDir,
+	})
+	if err != nil {
+		logger.Warn("failed to extract keyframes", "error", err)
+	} else {
+		logger.Info("extracted keyframes", "count", len(frames))
+
+		// Copy keyframes to media directory for permanent storage
+		keyframesDir := filepath.Join(archivePath, "media", "keyframes_"+media.ID)
+		if err := os.MkdirAll(keyframesDir, 0755); err == nil {
+			for i, framePath := range frames {
+				destPath := filepath.Join(keyframesDir, fmt.Sprintf("frame_%03d.jpg", i))
+				if data, err := os.ReadFile(framePath); err == nil {
+					os.WriteFile(destPath, data, 0644)
+				}
+			}
+		}
+	}
+
+	// Extract audio for transcription
+	audioPath := filepath.Join(tempDir, "audio.mp3")
+	_, audioDuration, err := s.videoProcessor.ExtractAudio(ctx, media.LocalPath, ffmpeg.ExtractAudioConfig{
+		OutputPath: audioPath,
+		Format:     "mp3",
+		SampleRate: 16000,
+		Channels:   1,
+		Bitrate:    "64k",
+	})
+	if err != nil {
+		logger.Warn("failed to extract audio", "error", err)
+		return
+	}
+
+	logger.Info("extracted audio", "duration_seconds", audioDuration)
+
+	// Check if audio needs to be chunked
+	audioStat, err := os.Stat(audioPath)
+	if err != nil {
+		logger.Warn("failed to stat audio file", "error", err)
+		return
+	}
+
+	var transcription *whisper.TranscriptionResponse
+
+	if audioStat.Size() > 20*1024*1024 { // Over 20MB, needs chunking
+		logger.Info("audio file large, chunking for transcription", "size_mb", audioStat.Size()/(1024*1024))
+
+		chunks, err := s.videoProcessor.ChunkAudio(ctx, audioPath, ffmpeg.ChunkAudioConfig{
+			ChunkDurationSec: 300, // 5 minutes per chunk
+			OutputDir:        filepath.Join(tempDir, "chunks"),
+			Format:           "mp3",
+		})
+		if err != nil {
+			logger.Warn("failed to chunk audio", "error", err)
+			return
+		}
+
+		transcription, err = s.whisperClient.TranscribeChunks(ctx, chunks, whisper.TranscriptionOptions{})
+		if err != nil {
+			logger.Warn("failed to transcribe audio chunks", "error", err)
+			return
+		}
+	} else {
+		// Transcribe directly
+		transcription, err = s.whisperClient.TranscribeFile(ctx, audioPath, whisper.TranscriptionOptions{})
+		if err != nil {
+			logger.Warn("failed to transcribe audio", "error", err)
+			return
+		}
+	}
+
+	// Store transcript in media
+	media.Transcript = transcription.Text
+	media.TranscriptLanguage = transcription.Language
+
+	logger.Info("transcription complete",
+		"transcript_length", len(transcription.Text),
+		"language", transcription.Language,
+	)
+
+	// Save transcript to file as well
+	transcriptPath := filepath.Join(archivePath, "media", fmt.Sprintf("%s_transcript.txt", media.ID))
+	if err := os.WriteFile(transcriptPath, []byte(transcription.Text), 0644); err != nil {
+		logger.Warn("failed to save transcript file", "error", err)
+	}
 }
 
 // downloadThumbnail downloads a thumbnail image to the specified path.

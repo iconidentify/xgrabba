@@ -25,7 +25,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+# Install ca-certificates, tzdata, and ffmpeg for video processing
+RUN apk add --no-cache ca-certificates tzdata ffmpeg
 
 # Create non-root user
 RUN addgroup -g 1000 xgrabba && \

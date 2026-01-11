@@ -19,6 +19,7 @@ import (
 	"github.com/iconidentify/xgrabba/internal/service"
 	"github.com/iconidentify/xgrabba/internal/worker"
 	"github.com/iconidentify/xgrabba/pkg/grok"
+	"github.com/iconidentify/xgrabba/pkg/whisper"
 )
 
 var (
@@ -71,6 +72,20 @@ func main() {
 	grokClient := grok.NewClient(cfg.Grok)
 	dl := downloader.NewHTTPDownloader(cfg.Download)
 
+	// Initialize Whisper client for audio transcription
+	var whisperClient *whisper.HTTPClient
+	if cfg.Whisper.Enabled && cfg.Whisper.APIKey != "" {
+		whisperClient = whisper.NewClient(whisper.Config{
+			APIKey:  cfg.Whisper.APIKey,
+			BaseURL: cfg.Whisper.BaseURL,
+			Model:   cfg.Whisper.Model,
+			Timeout: cfg.Whisper.Timeout,
+		})
+		logger.Info("whisper transcription enabled", "model", cfg.Whisper.Model)
+	} else {
+		logger.Info("whisper transcription disabled (no API key or disabled)")
+	}
+
 	// Initialize services
 	videoSvc := service.NewVideoService(
 		videoRepo,
@@ -85,8 +100,10 @@ func main() {
 	// Initialize tweet service (new architecture - backend handles everything)
 	tweetSvc := service.NewTweetService(
 		grokClient,
+		whisperClient,
 		dl,
 		cfg.Storage,
+		cfg.Whisper.Enabled,
 		logger,
 	)
 

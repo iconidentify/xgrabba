@@ -1366,7 +1366,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10.25 3.75a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm-8.5 6.5a8.5 8.5 0 1 1 15.176 5.262l4.781 4.781-1.414 1.414-4.781-4.781A8.5 8.5 0 0 1 1.75 10.25z"/>
                 </svg>
-                <input type="text" id="searchInput" placeholder="Search by author, text, or AI title..." aria-label="Search tweets">
+                <input type="text" id="searchInput" placeholder="Search by author, text, AI, or transcript..." aria-label="Search tweets">
                 <button class="search-clear" id="searchClear" aria-label="Clear search">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
@@ -2355,6 +2355,9 @@
 
                 // Search through AI topics array
                 if (t.ai_topics && t.ai_topics.some(topic => topic.toLowerCase().includes(lowerQuery))) return true;
+
+                // Search through video transcripts array
+                if (t.transcripts && t.transcripts.some(transcript => transcript.toLowerCase().includes(lowerQuery))) return true;
 
                 return false;
             });

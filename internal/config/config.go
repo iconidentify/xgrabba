@@ -15,6 +15,7 @@ type Config struct {
 	Storage  StorageConfig  `yaml:"storage"`
 	Worker   WorkerConfig   `yaml:"worker"`
 	Grok     GrokConfig     `yaml:"grok"`
+	Whisper  WhisperConfig  `yaml:"whisper"`
 	Download DownloadConfig `yaml:"download"`
 }
 
@@ -47,6 +48,15 @@ type GrokConfig struct {
 	BaseURL string        `yaml:"base_url" envconfig:"GROK_BASE_URL" default:"https://api.x.ai/v1"`
 	Timeout time.Duration `yaml:"timeout" envconfig:"GROK_TIMEOUT" default:"30s"`
 	Model   string        `yaml:"model" envconfig:"GROK_MODEL" default:"grok-3"`
+}
+
+// WhisperConfig holds OpenAI Whisper transcription configuration.
+type WhisperConfig struct {
+	APIKey  string        `yaml:"api_key" envconfig:"OPENAI_API_KEY"`
+	BaseURL string        `yaml:"base_url" envconfig:"WHISPER_BASE_URL" default:"https://api.openai.com/v1"`
+	Timeout time.Duration `yaml:"timeout" envconfig:"WHISPER_TIMEOUT" default:"5m"`
+	Model   string        `yaml:"model" envconfig:"WHISPER_MODEL" default:"whisper-1"`
+	Enabled bool          `yaml:"enabled" envconfig:"WHISPER_ENABLED" default:"true"`
 }
 
 // DownloadConfig holds video download configuration.
