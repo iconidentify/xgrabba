@@ -11,7 +11,7 @@ data:
   SERVER_WRITE_TIMEOUT: {{ .Values.config.server.writeTimeout | quote }}
   STORAGE_PATH: {{ .Values.config.storage.basePath | quote }}
   STORAGE_TEMP_PATH: {{ .Values.config.storage.tempPath | quote }}
-  MAX_FILE_SIZE: {{ .Values.config.storage.maxFileSize | quote }}
+  MAX_FILE_SIZE: "{{ .Values.config.storage.maxFileSize | int64 }}"
   WORKER_COUNT: {{ .Values.config.worker.count | quote }}
   WORKER_POLL_INTERVAL: {{ .Values.config.worker.pollInterval | quote }}
   WORKER_MAX_RETRIES: {{ .Values.config.worker.maxRetries | quote }}
