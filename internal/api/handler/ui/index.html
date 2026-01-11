@@ -426,6 +426,7 @@
         .tweet-metrics .metric.replies svg { color: var(--reply); }
         .tweet-metrics .metric.retweets svg { color: var(--retweet); }
         .tweet-metrics .metric.likes svg { color: var(--like); }
+        .tweet-metrics .metric.views svg { color: var(--text-muted); }
 
         .media-badge {
             background: var(--bg-elevated);
@@ -663,6 +664,28 @@
         .tweet-detail-author-username {
             color: var(--text-muted);
             font-size: 12px;
+        }
+
+        .tweet-detail-author-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .tweet-detail-author-stats span {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .tweet-detail-author-bio {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.4;
+            max-width: 400px;
         }
 
         /* Author tooltip */
@@ -1665,6 +1688,14 @@
                                         ${formatNumber(tweet.like_count)}
                                     </span>
                                 ` : ''}
+                                ${tweet.view_count ? `
+                                    <span class="metric views">
+                                        <svg viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 4C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                        </svg>
+                                        ${formatNumber(tweet.view_count)}
+                                    </span>
+                                ` : ''}
                                 <span class="media-badge">
                                     <svg viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M3 5.5C3 4.119 4.119 3 5.5 3h13C19.881 3 21 4.119 21 5.5v13c0 1.381-1.119 2.5-2.5 2.5h-13C4.119 21 3 19.881 3 18.5v-13zM5.5 5c-.276 0-.5.224-.5.5v9.086l3-3 3 3 5-5 3 3V5.5c0-.276-.224-.5-.5-.5h-13zM19 15.414l-3-3-5 5-3-3-3 3V18.5c0 .276.224.5.5.5h13c.276 0 .5-.224.5-.5v-3.086zM9.75 7C8.784 7 8 7.784 8 8.75s.784 1.75 1.75 1.75 1.75-.784 1.75-1.75S10.716 7 9.75 7z"/>
@@ -1833,6 +1864,14 @@
                                 ` : ''}
                             </div>
                             <div class="tweet-detail-author-username">@${escapeHtml(authorUsername)}</div>
+                            ${hasAuthorMeta ? `
+                                <div class="tweet-detail-author-stats">
+                                    ${followerCount ? `<span>${formatNumber(followerCount)} followers</span>` : ''}
+                                    ${followingCount ? `<span>${formatNumber(followingCount)} following</span>` : ''}
+                                    ${tweetCount ? `<span>${formatNumber(tweetCount)} posts</span>` : ''}
+                                </div>
+                            ` : ''}
+                            ${authorBio ? `<div class="tweet-detail-author-bio">${escapeHtml(authorBio)}</div>` : ''}
                             ${authorTooltip}
                         </div>
                     </div>
@@ -2110,7 +2149,15 @@
         }
 
         function closeTweetDetailModal() {
-            document.getElementById('tweetDetailModal').classList.remove('active');
+            // Pause all videos before closing to stop audio
+            const modal = document.getElementById('tweetDetailModal');
+            const videos = modal.querySelectorAll('video');
+            videos.forEach(video => {
+                video.pause();
+                video.currentTime = 0;
+            });
+
+            modal.classList.remove('active');
             document.body.style.overflow = '';
             currentTweetDetail = null;
         }

@@ -61,14 +61,21 @@ type TweetResponse struct {
 	Text              string         `json:"text,omitempty"`
 	MediaCount        int            `json:"media_count"`
 	Media             []MediaPreview `json:"media,omitempty"`
-	AITitle           string         `json:"ai_title,omitempty"`
-	AISummary         string         `json:"ai_summary,omitempty"`
-	AITags            []string       `json:"ai_tags,omitempty"`
-	AIContentType     string         `json:"ai_content_type,omitempty"`
-	AITopics          []string       `json:"ai_topics,omitempty"`
-	ArchivePath       string         `json:"archive_path,omitempty"`
-	Error             string         `json:"error,omitempty"`
-	CreatedAt         time.Time      `json:"created_at"`
+	// Tweet engagement metrics
+	LikeCount    int `json:"like_count,omitempty"`
+	RetweetCount int `json:"retweet_count,omitempty"`
+	ReplyCount   int `json:"reply_count,omitempty"`
+	QuoteCount   int `json:"quote_count,omitempty"`
+	ViewCount    int `json:"view_count,omitempty"`
+	// AI metadata
+	AITitle       string    `json:"ai_title,omitempty"`
+	AISummary     string    `json:"ai_summary,omitempty"`
+	AITags        []string  `json:"ai_tags,omitempty"`
+	AIContentType string    `json:"ai_content_type,omitempty"`
+	AITopics      []string  `json:"ai_topics,omitempty"`
+	ArchivePath   string    `json:"archive_path,omitempty"`
+	Error         string    `json:"error,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // MediaPreview represents a media item in list responses for thumbnails.
@@ -205,6 +212,11 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			Text:              truncateText(t.Text, 200),
 			MediaCount:        len(t.Media),
 			Media:             mediaPreviews,
+			LikeCount:         t.Metrics.Likes,
+			RetweetCount:      t.Metrics.Retweets,
+			ReplyCount:        t.Metrics.Replies,
+			QuoteCount:        t.Metrics.Quotes,
+			ViewCount:         t.Metrics.Views,
 			AITitle:           t.AITitle,
 			AISummary:         t.AISummary,
 			AITags:            t.AITags,
