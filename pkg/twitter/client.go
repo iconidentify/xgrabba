@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -29,6 +30,7 @@ const (
 type Client struct {
 	httpClient *http.Client
 	userAgent  string
+	logger     *slog.Logger
 
 	// Guest token caching
 	guestToken       string
@@ -37,12 +39,13 @@ type Client struct {
 }
 
 // NewClient creates a new Twitter client.
-func NewClient() *Client {
+func NewClient(logger *slog.Logger) *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+		logger:    logger,
 	}
 }
 

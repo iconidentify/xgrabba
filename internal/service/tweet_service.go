@@ -83,7 +83,7 @@ func NewTweetService(
 	}
 
 	svc := &TweetService{
-		twitterClient:  twitter.NewClient(),
+		twitterClient:  twitter.NewClient(logger),
 		grokClient:     grokClient,
 		whisperClient:  whisperClient,
 		videoProcessor: videoProc,
