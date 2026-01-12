@@ -82,11 +82,11 @@ spec:
         size: 100Gi
       resources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 200m
+          memory: 256Mi
         limits:
-          cpu: 500m
-          memory: 512Mi
+          cpu: "1"
+          memory: 4Gi
       # Uncomment to enable Samba file sharing (browse archives from Mac/Windows)
       # samba:
       #   enabled: true

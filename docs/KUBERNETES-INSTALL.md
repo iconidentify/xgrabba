@@ -272,14 +272,14 @@ values:
     worker:
       count: 4
 
-  # More resources
+  # More resources for heavy video processing
   resources:
     requests:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi
     limits:
       cpu: 2000m
-      memory: 2Gi
+      memory: 8Gi
 ```
 
 ---
