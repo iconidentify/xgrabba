@@ -107,28 +107,35 @@ func (m *Monitor) Start(ctx context.Context) {
 	}
 }
 
-// pollWithRetry attempts to poll and retries after rate limit backoff.
+// pollWithRetry attempts to poll and retries only once after rate limit backoff.
+// We're conservative here - after a rate limit, we only retry once to avoid
+// compounding rate limit issues with X's API.
 func (m *Monitor) pollWithRetry(ctx context.Context) {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
-			m.logger.Info("retrying bookmark poll", "attempt", attempt+1)
+	success, rateLimited := m.pollOnce(ctx)
+	if success || ctx.Err() != nil {
+		return
+	}
+
+	if rateLimited {
+		// pollOnce already waited out the rate limit. Add extra buffer before retry
+		// to be respectful of X's API and avoid edge cases with rate limit windows.
+		extraBuffer := time.Duration(10+rand.Intn(20)) * time.Second
+		m.logger.Info("adding extra buffer before retry", "buffer", extraBuffer.String())
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(extraBuffer):
 		}
 
-		success, rateLimited := m.pollOnce(ctx)
+		// Try ONE more time. If we hit the rate limit again, give up.
+		m.logger.Info("retrying bookmark poll after rate limit cleared")
+		success, _ = m.pollOnce(ctx)
 		if success {
 			return
 		}
-		if !rateLimited {
-			// Non-rate-limit error, don't retry immediately
-			return
-		}
-		// Rate limited - pollOnce already waited, try again
-		if ctx.Err() != nil {
-			return
-		}
+		// Still failing - don't keep retrying, wait for next scheduled poll
+		m.logger.Info("bookmark poll still failing after retry, will try again at next poll interval")
 	}
-	m.logger.Warn("bookmark poll failed after max retries", "retries", maxRetries)
 }
 
 // pollOnce attempts a single poll. Returns (success, wasRateLimited).
