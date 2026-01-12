@@ -2329,6 +2329,9 @@
         }
 
         async function pollBatchStatus() {
+            // Always re-scan for new active tweets on every poll
+            scanForActiveTweets();
+
             const ids = Array.from(activeTweets.keys());
             if (ids.length === 0) return;
 
@@ -2386,29 +2389,46 @@
             }
         }
 
-        function startStatusPolling() {
-            if (statusPollTimer) return;
+        // Scan tweets for any in non-terminal status and add to activeTweets
+        function scanForActiveTweets() {
+            // Check tweets data for non-completed status
+            for (const tweet of tweets) {
+                const id = tweet.tweet_id;
 
-            // Initial scan: find tweets that aren't completed
+                // Skip tweets we don't have IDs for
+                if (!id) continue;
+
+                // Add tweets with non-terminal status
+                if (tweet.status && !TERMINAL_STATUSES.includes(tweet.status)) {
+                    activeTweets.set(id, {
+                        status: tweet.status,
+                        media_downloaded: 0,
+                        media_total: tweet.media_count || 0
+                    });
+                }
+                // Also track tweets with AI in progress
+                else if (tweet.ai_in_progress) {
+                    activeTweets.set(id, { status: 'analyzing' });
+                }
+            }
+
+            // Also check DOM for badges that might indicate in-progress state
             const cards = document.querySelectorAll('.tweet-card[data-tweet-id]');
             for (const card of cards) {
                 const id = card.getAttribute('data-tweet-id');
-                // Check for existing badges (indicates in-progress)
-                const hasBadge = card.querySelector('.ai-progress-badge') || card.querySelector('.phase-badge');
-                if (hasBadge) {
+                const hasBadge = card.querySelector('.phase-badge:not(.completed)');
+                if (hasBadge && !activeTweets.has(id)) {
                     activeTweets.set(id, { status: 'unknown' });
                 }
             }
+        }
 
-            // Also check tweets data for non-completed status
-            for (const tweet of tweets) {
-                if (tweet.status && !TERMINAL_STATUSES.includes(tweet.status)) {
-                    activeTweets.set(tweet.tweet_id, { status: tweet.status });
-                }
-                if (tweet.ai_in_progress) {
-                    activeTweets.set(tweet.tweet_id, { status: 'analyzing' });
-                }
-            }
+        function startStatusPolling() {
+            // Always re-scan for active tweets when called
+            scanForActiveTweets();
+
+            // Only start timer once
+            if (statusPollTimer) return;
 
             // Poll every 2 seconds
             statusPollTimer = setInterval(pollBatchStatus, 2000);

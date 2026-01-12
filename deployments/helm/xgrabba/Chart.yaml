@@ -2,8 +2,8 @@ apiVersion: v2
 name: xgrabba
 description: X.com Tweet Archive Tool - Archive tweets with all media using AI-powered naming
 type: application
-version: 2.3.0
-appVersion: "v2.3.0"
+version: 2.3.1
+appVersion: "v2.3.1"
 keywords:
   - tweet
   - video
