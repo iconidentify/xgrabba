@@ -43,6 +43,9 @@ async function handleMessage(message, sender) {
     case 'GET_HISTORY':
       return await getHistory();
 
+    case 'GET_ARCHIVED_IDS':
+      return await getArchivedTweetIds();
+
     case 'CHECK_BACKEND':
       return await checkBackend();
 
@@ -187,6 +190,8 @@ async function pollForStatus(tweetId, backendUrl, apiKey) {
 
         // Stop polling if completed or failed
         if (data.status === 'completed' || data.status === 'failed') {
+          // Notify content scripts of the status change
+          await notifyContentScripts(tweetId, data.status);
           return;
         }
       }
@@ -252,6 +257,64 @@ async function getHistory() {
   // Fall back to local storage
   const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
   return { history: result[STORAGE_KEYS.HISTORY] || [] };
+}
+
+// Get list of archived tweet IDs for content script to mark buttons
+async function getArchivedTweetIds() {
+  try {
+    const { backendUrl, apiKey } = await getConfig();
+    if (!apiKey) {
+      // Fall back to local history
+      const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+      const history = result[STORAGE_KEYS.HISTORY] || [];
+      const tweetIds = history
+        .filter(h => h.status === 'success' || h.status === 'completed')
+        .map(h => h.tweetId);
+      return { tweetIds };
+    }
+
+    // Fetch more tweets for better coverage
+    const response = await fetch(`${backendUrl}/api/v1/tweets?limit=200`, {
+      headers: { 'X-API-Key': apiKey }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const tweetIds = (data.tweets || [])
+        .filter(t => t.status === 'completed')
+        .map(t => t.tweet_id);
+      return { tweetIds };
+    }
+  } catch (error) {
+    console.debug('Could not fetch archived IDs:', error.message);
+  }
+
+  // Fallback to local storage
+  const result = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+  const history = result[STORAGE_KEYS.HISTORY] || [];
+  const tweetIds = history
+    .filter(h => h.status === 'success' || h.status === 'completed')
+    .map(h => h.tweetId);
+  return { tweetIds };
+}
+
+// Notify content scripts of status updates
+async function notifyContentScripts(tweetId, status) {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['https://x.com/*', 'https://twitter.com/*'] });
+    for (const tab of tabs) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, {
+          type: 'ARCHIVE_STATUS_UPDATE',
+          payload: { tweetId, status }
+        });
+      } catch (e) {
+        // Tab might not have content script, ignore
+      }
+    }
+  } catch (error) {
+    console.debug('Could not notify content scripts:', error.message);
+  }
 }
 
 async function addToHistory(entry) {
