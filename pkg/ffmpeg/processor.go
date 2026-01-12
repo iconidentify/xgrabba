@@ -282,11 +282,13 @@ func (p *VideoProcessor) ExtractKeyframes(ctx context.Context, videoPath string,
 
 		outputPath := filepath.Join(cfg.OutputDir, fmt.Sprintf("frame_%03d.jpg", i))
 
-		// ffmpeg command to extract a single frame
+		// ffmpeg command to extract a single frame.
+		// IMPORTANT: -ss BEFORE -i uses fast input seeking (seeks to nearest keyframe).
+		// -ss AFTER -i uses slow output seeking (decodes entire stream up to timestamp).
+		// For large videos, input seeking is orders of magnitude faster.
 		cmd := exec.CommandContext(ctx, p.ffmpegPath,
+			"-ss", fmt.Sprintf("%.2f", timestamp), // Fast seek (before -i)
 			"-i", videoPath,
-			// Seek after opening input for better compatibility with some container/codec combinations.
-			"-ss", fmt.Sprintf("%.2f", timestamp),
 			"-vframes", "1",
 			"-vf", fmt.Sprintf("scale='min(%d,iw)':-1", cfg.MaxWidth),
 			"-q:v", strconv.Itoa(cfg.Quality),

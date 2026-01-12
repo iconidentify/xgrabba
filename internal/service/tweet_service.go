@@ -878,8 +878,13 @@ func (s *TweetService) ensureVideoKeyframes(ctx context.Context, tweet *domain.T
 		}
 		defer os.RemoveAll(tempDir)
 
+		// Add timeout to prevent unbounded processing on very large videos.
+		// With fast seeking (-ss before -i), 2 minutes should be plenty for 10 keyframes.
+		extractCtx, extractCancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer extractCancel()
+
 		framesDir := filepath.Join(tempDir, "frames")
-		frames, err := s.videoProcessor.ExtractKeyframes(ctx, m.LocalPath, ffmpeg.ExtractKeyframesConfig{
+		frames, err := s.videoProcessor.ExtractKeyframes(extractCtx, m.LocalPath, ffmpeg.ExtractKeyframesConfig{
 			IntervalSeconds: 10,
 			MaxFrames:       10,
 			MaxWidth:        1280,
@@ -1353,9 +1358,13 @@ func (s *TweetService) processVideoForTranscription(ctx context.Context, media *
 	}
 	defer os.RemoveAll(tempDir) // Clean up temp files
 
-	// Extract keyframes for vision analysis
+	// Extract keyframes for vision analysis with timeout.
+	// With fast seeking (-ss before -i), 2 minutes should be plenty.
+	keyframeCtx, keyframeCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer keyframeCancel()
+
 	framesDir := filepath.Join(tempDir, "frames")
-	frames, err := s.videoProcessor.ExtractKeyframes(ctx, media.LocalPath, ffmpeg.ExtractKeyframesConfig{
+	frames, err := s.videoProcessor.ExtractKeyframes(keyframeCtx, media.LocalPath, ffmpeg.ExtractKeyframesConfig{
 		IntervalSeconds: 10,
 		MaxFrames:       10, // Limit for API
 		MaxWidth:        1280,
