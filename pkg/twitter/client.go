@@ -60,9 +60,13 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 
 		// Check if text appears truncated (long tweets/notes)
 		if c.isTextTruncated(tweet.Text) {
+			c.logger.Info("detected truncated text, trying GraphQL", "tweet_id", tweetID, "text_len", len(tweet.Text))
 			// Try GraphQL API to get full text
-			if fullText, err := c.fetchFullTextFromGraphQL(ctx, tweetID); err == nil && fullText != "" {
+			if fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID); gqlErr == nil && fullText != "" {
+				c.logger.Info("got full text from GraphQL", "tweet_id", tweetID, "old_len", len(tweet.Text), "new_len", len(fullText))
 				tweet.Text = fullText
+			} else if gqlErr != nil {
+				c.logger.Warn("GraphQL full text fetch failed", "tweet_id", tweetID, "error", gqlErr)
 			}
 		}
 
