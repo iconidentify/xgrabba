@@ -6,7 +6,9 @@ X.com Tweet Archive Tool - Archive complete tweets including all media (images, 
 
 - **Full tweet archiving**: Archive any tweet from X.com - text, images, videos, and GIFs
 - **One-click from browser**: Simple Chrome/Edge extension with archive button on every tweet
+- **Bookmarks auto-archive**: Automatically archive tweets you bookmark on X (mobile-friendly)
 - **AI-powered naming**: Uses Grok AI to generate descriptive, intelligent filenames
+- **Audio transcription**: Whisper-powered transcription for videos with speech
 - **Complete metadata**: Stores tweet text, author info, metrics, timestamps in JSON and Markdown
 - **Backend-driven**: Just send tweet URL - server handles all fetching and processing
 - **Kubernetes-ready**: Deploy anywhere with Helm charts and Crossplane support
@@ -16,20 +18,26 @@ X.com Tweet Archive Tool - Archive complete tweets including all media (images, 
 
 ```
 Browser Extension  -->  Go Backend Server  -->  Filesystem Storage
-     |                        |
-     |                        v
-     |               Twitter Syndication API
-     |                        |
-     |                        v
-     v                   Grok AI (naming)
- Tweet URL only
+                              ^
+X Bookmarks (polling) --------+
+                              |
+                              v
+                    Twitter Syndication API (public, no auth)
+                              |
+                              v
+                    Grok AI (naming) + Whisper (transcription)
 ```
 
-The extension only sends the tweet URL. The backend:
-1. Fetches tweet data from Twitter's syndication API
+**Two ways to archive:**
+1. **Browser extension** - Click archive button on any tweet
+2. **Bookmarks polling** - Automatically archives tweets you bookmark on X
+
+The backend:
+1. Fetches tweet data from Twitter's syndication API (no auth required)
 2. Generates an AI-powered filename using Grok
-3. Downloads all media (images, videos, GIFs)
-4. Saves metadata as JSON and human-readable Markdown
+3. Transcribes audio using Whisper (optional)
+4. Downloads all media (images, videos, GIFs)
+5. Saves metadata as JSON and human-readable Markdown
 
 ## Quick Start
 
@@ -243,6 +251,125 @@ docker run -d \
 
 ---
 
+## Bookmarks Auto-Archive
+
+Automatically archive tweets you bookmark on X. When enabled, XGrabba polls your bookmarks and archives new ones without any manual intervention.
+
+### How It Works
+
+1. You bookmark a tweet on X (mobile or desktop)
+2. XGrabba detects the new bookmark within 20 minutes
+3. Tweet is automatically archived with all media
+
+### X API Usage
+
+XGrabba minimizes X API calls:
+
+| API | Endpoint | Auth | Frequency | Purpose |
+|-----|----------|------|-----------|---------|
+| Syndication | `cdn.syndication.twimg.com` | None | Per tweet | Fetch tweet data (no rate limit) |
+| X API v2 | `/oauth2/token` | OAuth | ~12/day | Token refresh |
+| X API v2 | `/users/me` | OAuth | Once ever | Get user ID (optional) |
+| X API v2 | `/users/{id}/bookmarks` | OAuth | Every 20 min | List bookmark IDs |
+
+**Free Tier Safe**: Default polling (20 min) stays well under the free tier limit of 1 request per 15 minutes.
+
+### Setup
+
+#### 1. Create X Developer App
+
+1. Go to [developer.x.com](https://developer.x.com)
+2. Create a new app or use existing
+3. Enable **OAuth 2.0** with:
+   - Type: **Confidential client**
+   - Callback URL: `http://YOUR_HOST:PORT/bookmarks/oauth/callback`
+4. Note your **Client ID** and **Client Secret**
+
+#### 2. Configure Kubernetes Secret
+
+```bash
+# Add the OAuth client secret to your secrets
+kubectl patch secret xgrabba-secrets -n xgrabba --type=json -p='[
+  {"op": "add", "path": "/data/twitter-oauth-client-secret", "value": "'$(echo -n "YOUR_CLIENT_SECRET" | base64)'"}
+]'
+```
+
+#### 3. Enable in Helm Values
+
+```yaml
+config:
+  bookmarks:
+    enabled: true
+    oauthClientId: "YOUR_CLIENT_ID"
+    oauthStorePath: "/data/videos/.x_bookmarks_oauth.json"
+    pollInterval: "20m"      # Free tier safe (1 req/15 min limit)
+    maxResults: "100"        # Fetch up to 100 bookmarks per poll
+    maxNewPerPoll: "100"     # Archive all new bookmarks
+```
+
+For Crossplane, patch the release:
+```bash
+kubectl patch release xgrabba --type=merge -p '{
+  "spec": {
+    "forProvider": {
+      "set": [
+        {"name": "secrets.twitterOAuthClientSecret", "valueFrom": {"secretKeyRef": {"key": "twitter-oauth-client-secret", "name": "xgrabba-secrets", "namespace": "xgrabba"}}}
+      ],
+      "values": {
+        "config": {
+          "bookmarks": {
+            "enabled": true,
+            "oauthClientId": "YOUR_CLIENT_ID",
+            "pollInterval": "20m",
+            "maxResults": "100",
+            "maxNewPerPoll": "100"
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+#### 4. Connect Your X Account (One-Time)
+
+1. Open XGrabba UI (`http://YOUR_HOST:PORT`)
+2. Click **"Connect X Bookmarks"**
+3. Authorize the app on X
+4. Done! Polling starts automatically
+
+The refresh token is stored on the PVC at `/data/videos/.x_bookmarks_oauth.json` - no need to reconnect after restarts.
+
+### Bookmarks Configuration
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `bookmarks.enabled` | Enable bookmarks monitoring | `false` |
+| `bookmarks.oauthClientId` | X OAuth 2.0 client ID | *required* |
+| `bookmarks.oauthStorePath` | Path to store OAuth tokens (must be on PVC) | `/data/videos/.x_bookmarks_oauth.json` |
+| `bookmarks.pollInterval` | How often to check for new bookmarks | `20m` |
+| `bookmarks.maxResults` | Max bookmarks to fetch per poll (1-100) | `100` |
+| `bookmarks.maxNewPerPoll` | Max new bookmarks to archive per poll | `100` |
+| `bookmarks.baseUrl` | X API base URL | `https://api.x.com/2` |
+| `bookmarks.tokenUrl` | OAuth token endpoint | `https://api.x.com/2/oauth2/token` |
+
+### Troubleshooting
+
+**Rate Limited**: If you see `bookmarks rate limited; backing off` in logs, the service will automatically wait and retry. The default 20-minute interval prevents this under normal use.
+
+**Token Refresh Failed**: The OAuth store may be corrupted. Delete it and reconnect:
+```bash
+kubectl exec -n xgrabba deployment/xgrabba -- rm /data/videos/.x_bookmarks_oauth.json
+# Then reconnect via the UI
+```
+
+**Bookmarks Not Archiving**: Check logs for errors:
+```bash
+kubectl logs -n xgrabba -l app.kubernetes.io/name=xgrabba | grep -i bookmark
+```
+
+---
+
 ## Configuration
 
 ### Environment Variables
@@ -257,6 +384,11 @@ docker run -d \
 | `STORAGE_TEMP_PATH` | Temporary file directory | `/data/temp` |
 | `WORKER_COUNT` | Number of background workers | `2` |
 | `GROK_MODEL` | Grok model to use | `grok-3` |
+| `OPENAI_API_KEY` | OpenAI API key for Whisper transcription | *optional* |
+| `WHISPER_ENABLED` | Enable audio transcription | `true` |
+| `BOOKMARKS_ENABLED` | Enable bookmarks auto-archive | `false` |
+| `TWITTER_OAUTH_CLIENT_ID` | X OAuth client ID for bookmarks | *optional* |
+| `TWITTER_OAUTH_CLIENT_SECRET` | X OAuth client secret for bookmarks | *optional* |
 
 ---
 
