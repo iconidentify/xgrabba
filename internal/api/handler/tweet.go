@@ -77,6 +77,9 @@ type TweetResponse struct {
 	AIInProgress bool `json:"ai_in_progress,omitempty"`
 	// Video transcripts (combined from all video media)
 	Transcripts []string  `json:"transcripts,omitempty"`
+	// Aggregated per-media AI (for search)
+	MediaTags     []string `json:"media_tags,omitempty"`
+	MediaCaptions []string `json:"media_captions,omitempty"`
 	ArchivePath string    `json:"archive_path,omitempty"`
 	Error       string    `json:"error,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -203,9 +206,18 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 
 		// Collect transcripts from video media
 		var transcripts []string
+		// Collect per-media AI for search
+		var mediaTags []string
+		var mediaCaptions []string
 		for _, m := range t.Media {
 			if m.Transcript != "" {
 				transcripts = append(transcripts, m.Transcript)
+			}
+			if len(m.AITags) > 0 {
+				mediaTags = append(mediaTags, m.AITags...)
+			}
+			if m.AICaption != "" {
+				mediaCaptions = append(mediaCaptions, m.AICaption)
 			}
 		}
 
@@ -236,6 +248,8 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			AITopics:          t.AITopics,
 			AIInProgress:      h.tweetSvc.IsAIAnalysisInProgress(t.ID),
 			Transcripts:       transcripts,
+			MediaTags:         mediaTags,
+			MediaCaptions:     mediaCaptions,
 			ArchivePath:       t.ArchivePath,
 			Error:             t.Error,
 			CreatedAt:         t.CreatedAt,
@@ -502,6 +516,10 @@ type MediaFileResponse struct {
 	Duration           int    `json:"duration_seconds,omitempty"`
 	Transcript         string `json:"transcript,omitempty"`          // Video transcript
 	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language
+	AICaption          string `json:"ai_caption,omitempty"`
+	AITags             []string `json:"ai_tags,omitempty"`
+	AIContentType      string `json:"ai_content_type,omitempty"`
+	AITopics           []string `json:"ai_topics,omitempty"`
 }
 
 // MediaListResponse contains the list of media files.
@@ -697,6 +715,10 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 			Width:       m.Width,
 			Height:      m.Height,
 			Duration:    m.Duration,
+			AICaption:   m.AICaption,
+			AITags:      m.AITags,
+			AIContentType: m.AIContentType,
+			AITopics:    m.AITopics,
 		}
 		// Include transcript for videos
 		if m.Transcript != "" {

@@ -213,7 +213,10 @@ func (s *TweetService) BackfillAIMetadata(ctx context.Context) {
 
 		s.logger.Info("backfilling AI metadata", "tweet_id", tweet.ID, "progress", fmt.Sprintf("%d/%d", i+1, len(needsBackfill)))
 
-		// Run vision analysis (will fall back to text if no media)
+		// Per-media analysis first (so each media item gets its own caption/tags)
+		s.runPerMediaAnalysis(ctx, tweet)
+
+		// Tweet-level vision analysis (will fall back to text if no media)
 		s.runVisionAnalysis(ctx, tweet)
 
 		// Save updated metadata to disk
@@ -374,6 +377,8 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 
 	// Step 4c: Run vision analysis now that media is available locally (images, video thumbnails, keyframes)
 	// This is intentionally AFTER downloads; otherwise we only have text and no local media paths.
+	// Also run per-media analysis so each image/video has its own caption/tags/topics.
+	s.runPerMediaAnalysis(ctx, tweet)
 	s.runVisionAnalysis(ctx, tweet)
 
 	// Step 5: Save tweet metadata
@@ -393,6 +398,116 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 	logger.Info("tweet archived successfully",
 		"path", archivePath,
 		"ai_title", tweet.AITitle,
+	)
+}
+
+func (s *TweetService) runPerMediaAnalysis(ctx context.Context, tweet *domain.Tweet) {
+	if tweet == nil {
+		return
+	}
+	for i := range tweet.Media {
+		m := &tweet.Media[i]
+		if m.LocalPath == "" {
+			continue
+		}
+		// Skip if already analyzed
+		if m.AICaption != "" || len(m.AITags) > 0 {
+			continue
+		}
+		s.analyzeMedia(ctx, tweet, m)
+	}
+}
+
+func (s *TweetService) analyzeMedia(ctx context.Context, tweet *domain.Tweet, media *domain.Media) {
+	if tweet == nil || media == nil || media.LocalPath == "" {
+		return
+	}
+
+	logger := s.logger.With("tweet_id", tweet.ID, "media_id", media.ID, "media_type", media.Type)
+
+	// Build transcript context for videos (if present)
+	var transcriptSnippet string
+	if media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF {
+		if media.Transcript != "" {
+			const max = 2000
+			t := strings.TrimSpace(media.Transcript)
+			if len(t) <= max {
+				transcriptSnippet = t
+			} else {
+				transcriptSnippet = t[:1600] + "\n...\n" + t[len(t)-300:]
+			}
+		}
+	}
+
+	// Decide which images to send for vision
+	var imagePaths []string
+	videoThumb := ""
+
+	switch media.Type {
+	case domain.MediaTypeImage:
+		imagePaths = []string{media.LocalPath}
+	case domain.MediaTypeVideo, domain.MediaTypeGIF:
+		// Ensure keyframes exist for this tweet/video, then pick frames for this media
+		s.ensureVideoKeyframes(ctx, tweet)
+		keyframesDir := filepath.Join(tweet.ArchivePath, "media", "keyframes_"+media.ID)
+		if entries, err := os.ReadDir(keyframesDir); err == nil {
+			sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+			for _, e := range entries {
+				if e.IsDir() {
+					continue
+				}
+				ext := strings.ToLower(filepath.Ext(e.Name()))
+				if ext != ".jpg" && ext != ".jpeg" {
+					continue
+				}
+				imagePaths = append(imagePaths, filepath.Join(keyframesDir, e.Name()))
+				if len(imagePaths) >= 4 {
+					break
+				}
+			}
+		}
+		// Fallback to thumbnail if no keyframes
+		if len(imagePaths) == 0 && media.PreviewURL != "" && filepath.IsAbs(media.PreviewURL) {
+			videoThumb = media.PreviewURL
+		}
+	default:
+		return
+	}
+
+	// Build a media-specific prompt using tweet text + transcript excerpt (optional)
+	var prompt strings.Builder
+	prompt.WriteString(tweet.Text)
+	prompt.WriteString("\n\n[IMPORTANT]\nAnalyze ONLY the attached media item (not the overall tweet). ")
+	prompt.WriteString("Describe what is visible in this media and extract highly searchable tags specific to this media.\n")
+	if transcriptSnippet != "" {
+		prompt.WriteString("\n[Audio transcript excerpt]\n")
+		prompt.WriteString(transcriptSnippet)
+	}
+
+	req := grok.VisionAnalysisRequest{
+		TweetText:      prompt.String(),
+		AuthorUsername: tweet.Author.Username,
+		ImagePaths:     imagePaths,
+		VideoThumbPath: videoThumb,
+		HasVideo:       media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF,
+		VideoDuration:  media.Duration,
+	}
+
+	analysis, err := s.grokClient.AnalyzeContentWithVision(ctx, req)
+	if err != nil {
+		logger.Warn("per-media vision analysis failed", "error", err)
+		return
+	}
+
+	media.AICaption = analysis.Summary
+	media.AITags = analysis.Tags
+	media.AIContentType = analysis.ContentType
+	media.AITopics = analysis.Topics
+
+	logger.Info("per-media analysis complete",
+		"tags_count", len(analysis.Tags),
+		"caption_len", len(analysis.Summary),
+		"content_type", analysis.ContentType,
 	)
 }
 
@@ -685,6 +800,14 @@ func (s *TweetService) regenerateAIMetadata(ctx context.Context, tweetID domain.
 	tweet.AIContentType = ""
 	tweet.AITopics = nil
 
+	// Clear per-media AI metadata so we can re-run the new paradigm
+	for i := range tweet.Media {
+		tweet.Media[i].AICaption = ""
+		tweet.Media[i].AITags = nil
+		tweet.Media[i].AIContentType = ""
+		tweet.Media[i].AITopics = nil
+	}
+
 	// Re-run transcription for videos if Whisper is enabled
 	if s.whisperEnabled && tweet.HasVideo() {
 		s.logger.Info("re-running video transcription", "tweet_id", tweetID)
@@ -699,6 +822,9 @@ func (s *TweetService) regenerateAIMetadata(ctx context.Context, tweetID domain.
 			}
 		}
 	}
+
+	// Re-run per-media analysis (uses transcript/keyframes when available)
+	s.runPerMediaAnalysis(ctx, tweet)
 
 	// Re-run vision analysis (ensures keyframes)
 	s.runVisionAnalysis(ctx, tweet)
@@ -873,6 +999,12 @@ func (s *TweetService) downloadMedia(ctx context.Context, tweet *domain.Tweet, m
 	// For videos, extract keyframes and transcribe audio
 	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && s.whisperEnabled {
 		s.processVideoForTranscription(ctx, media, archivePath)
+	}
+
+	// Per-media analysis after media is locally available (and transcript/keyframes if applicable).
+	// This supports the new paradigm: each media gets its own caption/tags/topics/content_type.
+	if tweet != nil {
+		s.analyzeMedia(ctx, tweet, media)
 	}
 
 	return nil

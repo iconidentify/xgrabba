@@ -74,7 +74,11 @@ type Media struct {
 	AltText    string    `json:"alt_text,omitempty"`
 	LocalPath  string    `json:"local_path,omitempty"` // Path after download
 	Downloaded bool      `json:"downloaded"`
-	AICaption  string    `json:"ai_caption,omitempty"` // AI-generated description
+	// Per-media AI analysis (vision and transcript when applicable)
+	AICaption     string   `json:"ai_caption,omitempty"`      // AI-generated media description
+	AITags        []string `json:"ai_tags,omitempty"`         // Searchable tags specific to this media
+	AIContentType string   `json:"ai_content_type,omitempty"` // Content type for this media
+	AITopics      []string `json:"ai_topics,omitempty"`       // Topics specific to this media
 
 	// Transcript fields for videos
 	Transcript         string `json:"transcript,omitempty"`          // Full audio transcript

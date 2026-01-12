@@ -2138,6 +2138,15 @@
                                     <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
                                 </svg>
                             </a>
+                            ${(img.ai_caption || (img.ai_tags && img.ai_tags.length)) ? `
+                                <div style="position:absolute; left:8px; bottom:8px; right:8px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.55); color: white;"
+                                     onclick="event.stopPropagation()">
+                                    ${img.ai_caption ? `<div style="font-size: 12px; line-height: 1.35; max-height: 52px; overflow:hidden;">${escapeHtml(img.ai_caption)}</div>` : ''}
+                                    ${(img.ai_tags && img.ai_tags.length) ? `<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+                                        ${img.ai_tags.slice(0,6).map(t => `<span style="font-size:11px; padding:2px 6px; border-radius:999px; background: rgba(255,255,255,0.18);">${escapeHtml(t)}</span>`).join('')}
+                                    </div>` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 });
@@ -2191,6 +2200,16 @@
                                 <button class="media-download-btn" style="right: 40px; opacity: 0.4; cursor: not-allowed;" onclick="event.stopPropagation()"
                                     title="No transcript yet">T</button>
                             `}
+
+                            ${(video.ai_caption || (video.ai_tags && video.ai_tags.length)) ? `
+                                <div style="margin-top: 8px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-secondary);">
+                                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Media AI</div>
+                                    ${video.ai_caption ? `<div style="font-size: 12px; white-space: pre-wrap; line-height: 1.4;">${escapeHtml(video.ai_caption)}</div>` : ''}
+                                    ${(video.ai_tags && video.ai_tags.length) ? `<div style="margin-top: 8px; display:flex; flex-wrap:wrap; gap:6px;">
+                                        ${video.ai_tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}
+                                    </div>` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 });
@@ -2530,6 +2549,12 @@
 
                 // Search through video transcripts array
                 if (t.transcripts && t.transcripts.some(transcript => transcript.toLowerCase().includes(lowerQuery))) return true;
+
+                // Search through per-media AI tags (aggregated server-side)
+                if (t.media_tags && t.media_tags.some(tag => tag.toLowerCase().includes(lowerQuery))) return true;
+
+                // Search through per-media AI captions (aggregated server-side)
+                if (t.media_captions && t.media_captions.some(caption => caption.toLowerCase().includes(lowerQuery))) return true;
 
                 return false;
             });
