@@ -1419,6 +1419,7 @@
             padding: 20px;
             overflow: hidden;
             min-width: 0;
+            background: #000; /* Black bars for letterboxing */
         }
 
         .theater-media-container {
@@ -1443,10 +1444,23 @@
         .theater-media-container video {
             max-width: 100%;
             max-height: calc(100vh - 140px);
+            width: auto;
+            height: auto;
+            object-fit: contain;
             border-radius: 4px;
             box-shadow: 0 20px 80px rgba(0,0,0,0.6);
             background: #000;
             transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Mobile floating close button - always visible */
+        .theater-floating-close {
+            display: none;
+        }
+
+        /* Mobile bottom action bar - hidden on desktop */
+        .theater-mobile-actions {
+            display: none;
         }
 
         .theater-nav {
@@ -2842,6 +2856,65 @@
                 display: none;
             }
 
+            /* Mobile Theater - Floating close button always visible */
+            .theater-floating-close {
+                display: flex;
+                position: fixed;
+                top: 12px;
+                right: 12px;
+                z-index: 500;
+                width: 44px;
+                height: 44px;
+                background: rgba(0, 0, 0, 0.8);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 50%;
+                color: #fff;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+
+            .theater-floating-close:active {
+                background: rgba(255, 77, 77, 0.5);
+                transform: scale(0.95);
+            }
+
+            .theater-floating-close svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            /* Hide desktop theater header on mobile - replaced by floating close + bottom bar */
+            .theater-header {
+                display: none;
+            }
+
+            /* Mobile bottom action bar */
+            .theater-mobile-actions {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 450;
+                padding: 12px 16px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
+                background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.8) 70%, transparent 100%);
+                justify-content: center;
+                gap: 12px;
+            }
+
+            .theater-mobile-actions .theater-btn {
+                flex: 1;
+                max-width: 140px;
+                justify-content: center;
+                min-height: 44px;
+                font-size: 12px;
+                padding: 10px 12px;
+            }
+
             .theater-ai-panel {
                 position: fixed;
                 top: auto;
@@ -2850,11 +2923,12 @@
                 bottom: 0;
                 width: 100% !important;
                 min-width: 100% !important;
-                max-height: 60vh;
+                max-height: 50vh;
                 border-left: none;
                 border-top: 1px solid rgba(255,255,255,0.1);
                 border-radius: 16px 16px 0 0;
                 transform: translateY(100%);
+                z-index: 460;
             }
 
             .theater-ai-panel.active {
@@ -2885,37 +2959,34 @@
             .theater-nav {
                 width: 44px;
                 height: 44px;
+                opacity: 0.7;
             }
 
-            .theater-nav.prev { left: 12px; }
-            .theater-nav.next { right: 12px; }
+            .theater-nav.prev { left: 8px; }
+            .theater-nav.next { right: 8px; }
 
-            .theater-btn {
-                padding: 8px 12px;
-                font-size: 12px;
+            .theater-stage {
+                padding: 10px;
             }
 
-            .theater-btn svg {
-                width: 16px;
-                height: 16px;
-            }
-
-            .theater-header {
-                padding: 12px 16px;
-            }
-
-            .theater-title {
-                font-size: 14px;
+            .theater-footer {
+                bottom: 80px;
+                padding: 8px 16px;
             }
 
             .theater-media-container video,
             .theater-media-container img {
-                max-height: calc(100vh - 200px);
+                max-height: calc(100vh - 160px);
+                width: auto;
+                height: auto;
+                object-fit: contain;
+                border-radius: 0;
+                box-shadow: none;
             }
 
             .media-theater.ai-panel-open .theater-media-container video,
             .media-theater.ai-panel-open .theater-media-container img {
-                max-height: calc(40vh - 80px);
+                max-height: calc(50vh - 80px);
             }
         }
 
@@ -3064,18 +3135,27 @@
         @media (max-width: 768px) {
             .header {
                 flex-direction: row;
+                flex-wrap: wrap;
                 gap: 8px;
                 padding: 8px 12px;
             }
 
+            .header h1 {
+                flex-shrink: 0;
+            }
+
             .stats {
                 font-size: 10px;
-                gap: 10px;
+                gap: 8px;
+                flex: 1;
+                justify-content: center;
+                min-width: 0;
             }
 
             .btn-browse-media {
                 padding: 6px 12px;
                 font-size: 11px;
+                flex-shrink: 0;
             }
 
             .btn-browse-media .btn-text-full {
@@ -3125,6 +3205,17 @@
             .tweet-media-preview.triple,
             .tweet-media-preview.quad {
                 max-width: 240px;
+            }
+        }
+
+        /* Very small screens - hide stats to prevent cramping */
+        @media (max-width: 400px) {
+            .stats {
+                display: none;
+            }
+
+            .header {
+                justify-content: space-between;
             }
         }
 
@@ -3443,6 +3534,13 @@
     <div class="media-theater" id="mediaTheater" role="dialog" aria-modal="true" aria-label="Media viewer">
         <div class="theater-backdrop" onclick="closeTheater()"></div>
 
+        <!-- Mobile floating close button - always visible on mobile -->
+        <button class="theater-floating-close" onclick="closeTheater()" aria-label="Close media viewer">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+            </svg>
+        </button>
+
         <header class="theater-header">
             <div>
                 <div class="theater-title" id="theaterTitle"></div>
@@ -3518,6 +3616,28 @@
                     </div>
                 </div>
             </aside>
+        </div>
+
+        <!-- Mobile action bar - shown only on mobile -->
+        <div class="theater-mobile-actions">
+            <button class="theater-btn" onclick="toggleTheaterAI()">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                </svg>
+                Info
+            </button>
+            <a class="theater-btn" id="theaterDownloadMobile" href="#" download>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
+                </svg>
+                Download
+            </a>
+            <button class="theater-btn" id="mobilePlayBtn" onclick="toggleMobilePlay()">
+                <svg viewBox="0 0 24 24" fill="currentColor" id="mobilePlayIcon">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+                Play
+            </button>
         </div>
     </div>
 
@@ -4699,15 +4819,25 @@
             theater.classList.add('active');
             document.body.style.overflow = 'hidden';
 
-            // Auto-open info panel
-            document.getElementById('theaterAiPanel').classList.add('active');
+            // Auto-open info panel only on desktop (not mobile)
+            const isMobile = window.innerWidth <= 768;
+            if (!isMobile) {
+                document.getElementById('theaterAiPanel').classList.add('active');
+                theater.classList.add('ai-panel-open');
+            } else {
+                // Ensure AI panel is closed on mobile
+                document.getElementById('theaterAiPanel').classList.remove('active');
+                theater.classList.remove('ai-panel-open');
+            }
 
             // Initialize autoplay checkbox
             document.getElementById('autoplayCheckbox').checked = autoplayEnabled;
 
-            // Show controls briefly then hide
-            theater.classList.add('controls-visible');
-            setTimeout(() => theater.classList.remove('controls-visible'), 2000);
+            // Show controls briefly then hide (desktop only)
+            if (!isMobile) {
+                theater.classList.add('controls-visible');
+                setTimeout(() => theater.classList.remove('controls-visible'), 2000);
+            }
         }
 
         function closeTheater() {
@@ -4728,6 +4858,7 @@
             }
 
             theater.classList.remove('active');
+            theater.classList.remove('ai-panel-open');
             document.getElementById('theaterAiPanel').classList.remove('active');
             document.body.style.overflow = '';
             theaterTweet = null;
@@ -4754,6 +4885,7 @@
             const media = theaterMedia[theaterIndex];
             const mediaUrl = addApiKey(media.url || '');
             const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+            const isMobile = window.innerWidth <= 768;
 
             // Clear any pending autoplay timer
             if (autoplayTimer) {
@@ -4762,18 +4894,40 @@
             }
 
             if (isVideo) {
+                // On mobile, don't autoplay - let user tap play button
+                // On desktop, autoplay as before
+                const autoplayAttr = isMobile ? '' : 'autoplay';
                 container.innerHTML = `
                     <video
                         src="${mediaUrl}"
                         controls
-                        autoplay
+                        ${autoplayAttr}
                         playsinline
+                        webkit-playsinline
                         style="outline: none;"
                     ></video>
                 `;
-                // Add ended event for autoplay
                 const video = container.querySelector('video');
+
+                // Add ended event for autoplay
                 video.addEventListener('ended', handleMediaEnded);
+
+                // Update mobile play button state when video plays/pauses
+                video.addEventListener('play', () => {
+                    const playBtn = document.getElementById('mobilePlayBtn');
+                    if (playBtn) playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause';
+                });
+                video.addEventListener('pause', () => {
+                    const playBtn = document.getElementById('mobilePlayBtn');
+                    if (playBtn) playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play';
+                });
+
+                // On mobile, add a tap-to-play overlay hint
+                if (isMobile) {
+                    // Reset play button to Play state
+                    const playBtn = document.getElementById('mobilePlayBtn');
+                    if (playBtn) playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play';
+                }
             } else {
                 container.innerHTML = `<img src="${mediaUrl}" alt="Media">`;
                 // For images in autoplay mode, advance after 5 seconds
@@ -4837,6 +4991,7 @@
 
         function updateTheaterDownload() {
             const downloadBtn = document.getElementById('theaterDownload');
+            const downloadBtnMobile = document.getElementById('theaterDownloadMobile');
             const media = theaterMedia[theaterIndex];
             const mediaUrl = addApiKey(media.url || '');
 
@@ -4854,11 +5009,53 @@
 
             downloadBtn.href = mediaUrl;
             downloadBtn.download = filename;
+
+            // Also update mobile download button
+            if (downloadBtnMobile) {
+                downloadBtnMobile.href = mediaUrl;
+                downloadBtnMobile.download = filename;
+            }
+
+            // Update mobile play button visibility
+            updateMobilePlayButton();
         }
 
         function toggleTheaterAI() {
             const panel = document.getElementById('theaterAiPanel');
+            const theater = document.getElementById('mediaTheater');
             panel.classList.toggle('active');
+            theater.classList.toggle('ai-panel-open');
+        }
+
+        // Mobile play button for video playback
+        function updateMobilePlayButton() {
+            const playBtn = document.getElementById('mobilePlayBtn');
+            const media = theaterMedia[theaterIndex];
+            const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+
+            if (playBtn) {
+                playBtn.style.display = isVideo ? 'flex' : 'none';
+            }
+        }
+
+        function toggleMobilePlay() {
+            const container = document.getElementById('theaterMediaContainer');
+            const video = container.querySelector('video');
+            const playBtn = document.getElementById('mobilePlayBtn');
+            const playIcon = document.getElementById('mobilePlayIcon');
+
+            if (!video) return;
+
+            if (video.paused) {
+                video.play().then(() => {
+                    if (playBtn) playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause';
+                }).catch(err => {
+                    console.log('Video play failed:', err);
+                });
+            } else {
+                video.pause();
+                if (playBtn) playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play';
+            }
         }
 
         function updateTheaterAiContent() {
