@@ -61,17 +61,15 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	if err == nil {
 		tweet.URL = tweetURL
 
-		// Check if text appears truncated (long tweets/notes)
-		if c.isTextTruncated(tweet.Text) {
-			c.logger.Info("detected truncated text, trying GraphQL", "tweet_id", tweetID, "text_len", len(tweet.Text))
-			// Try GraphQL API to get full text
-			if fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID); gqlErr == nil && fullText != "" {
-				c.logger.Info("got full text from GraphQL", "tweet_id", tweetID, "old_len", len(tweet.Text), "new_len", len(fullText))
+		// Always check GraphQL for full text - syndication often truncates long tweets.
+		// If GraphQL returns longer text, use it. No heuristics needed.
+		if fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID); gqlErr == nil && fullText != "" {
+			if len(fullText) > len(tweet.Text) {
+				c.logger.Info("GraphQL returned longer text, using it", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText))
 				tweet.Text = fullText
-			} else if gqlErr != nil {
-				c.logger.Warn("GraphQL full text fetch failed", "tweet_id", tweetID, "error", gqlErr)
 			}
 		}
+		// Don't log GraphQL failures - it's just a best-effort enhancement
 
 		return tweet, nil
 	}

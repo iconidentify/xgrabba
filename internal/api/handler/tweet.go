@@ -912,30 +912,12 @@ func truncateText(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// isTextPotentiallyTruncated checks if tweet text might be truncated.
-// Uses the same heuristics as the twitter client.
+// isTextPotentiallyTruncated checks if tweet text is clearly truncated.
+// Only flags the most obvious case: text ending with "..." or "…"
+// We now always try GraphQL for full text, so this is just for legacy detection.
 func isTextPotentiallyTruncated(text string) bool {
-	// Common truncation indicators
-	if strings.HasSuffix(text, "...") || strings.HasSuffix(text, "\u2026") {
-		return true
-	}
-
-	textLen := len(text)
-
-	// Check if text ends with a t.co link near the limit
-	if textLen > 240 && strings.Contains(text, "https://t.co/") {
-		lastSpaceIdx := strings.LastIndex(text, " ")
-		if lastSpaceIdx > 0 && strings.Contains(text[lastSpaceIdx:], "t.co/") {
-			return true
-		}
-	}
-
-	// If text is near the 280 character boundary
-	if textLen >= 275 && textLen <= 285 {
-		return true
-	}
-
-	return false
+	// Only flag if text clearly ends with truncation marker
+	return strings.HasSuffix(text, "...") || strings.HasSuffix(text, "\u2026")
 }
 
 // TruncatedTweetInfo represents a tweet that may have truncated text.
