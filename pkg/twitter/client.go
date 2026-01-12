@@ -85,11 +85,25 @@ func (c *Client) isTextTruncated(text string) bool {
 	if strings.HasSuffix(text, "...") || strings.HasSuffix(text, "\u2026") {
 		return true
 	}
+
 	// X Premium long tweets can be up to 25,000 chars; old limit was 280
+	// If text is near the character limit, check for truncation signs
+	textLen := len(text)
+
+	// Check if text ends with a t.co link (common truncation pattern)
+	// Long tweets often get cut off with the media link at the end
+	if textLen >= 250 && textLen <= 320 {
+		// Ends with t.co link - likely truncated if near limit
+		if strings.Contains(text, "https://t.co/") && strings.HasSuffix(text, strings.TrimSpace(text[strings.LastIndex(text, "https://t.co/"):])) {
+			return true
+		}
+	}
+
 	// If text is exactly at common boundaries, might be truncated
-	if len(text) >= 275 && len(text) <= 285 {
+	if textLen >= 275 && textLen <= 285 {
 		return true
 	}
+
 	return false
 }
 
