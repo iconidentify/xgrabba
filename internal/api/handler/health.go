@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/repository"
@@ -124,15 +123,7 @@ func (h *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats.StoragePath = storagePath
 
-	var statfs syscall.Statfs_t
-	if err := syscall.Statfs(storagePath, &statfs); err == nil {
-		stats.DiskTotalBytes = int64(statfs.Blocks) * int64(statfs.Bsize)
-		stats.DiskFreeBytes = int64(statfs.Bavail) * int64(statfs.Bsize)
-		stats.DiskUsedBytes = stats.DiskTotalBytes - stats.DiskFreeBytes
-		if stats.DiskTotalBytes > 0 {
-			stats.DiskUsedPct = float64(stats.DiskUsedBytes) / float64(stats.DiskTotalBytes) * 100
-		}
-	}
+	stats.DiskTotalBytes, stats.DiskFreeBytes, stats.DiskUsedBytes, stats.DiskUsedPct = getDiskStats(storagePath)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
