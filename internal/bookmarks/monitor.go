@@ -130,7 +130,8 @@ func (m *Monitor) pollOnce(ctx context.Context) {
 
 	m.logger.Info("new bookmarks detected", "count", len(newIDs))
 	for _, id := range newIDs {
-		tweetURL := fmt.Sprintf("https://x.com/i/web/status/%s", id)
+		// Use placeholder username - the syndication API doesn't require the real username
+		tweetURL := fmt.Sprintf("https://x.com/x/status/%s", id)
 		_, err := m.arch.Archive(ctx, service.ArchiveRequest{TweetURL: tweetURL})
 		if err != nil {
 			m.logger.Warn("failed to enqueue bookmark archive", "tweet_id", id, "error", err)
