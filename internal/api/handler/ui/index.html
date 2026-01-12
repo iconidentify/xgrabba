@@ -2563,13 +2563,13 @@
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
-                    overlay.classList.remove('active');
-                    document.body.style.overflow = '';
-
                     if (overlay.id === 'deleteModal') {
-                        deleteTarget = null;
+                        closeDeleteModal();
                     } else if (overlay.id === 'tweetDetailModal') {
-                        currentTweetDetail = null;
+                        closeTweetDetailModal();
+                    } else {
+                        overlay.classList.remove('active');
+                        document.body.style.overflow = '';
                     }
                 }
             });
