@@ -2856,6 +2856,17 @@
         .tweet-text.expanded {
             -webkit-line-clamp: unset;
             max-height: none;
+            display: block;
+            background: var(--bg-secondary);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            border-left: 3px solid var(--brand-start);
+        }
+
+        .tweet-more-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
         }
 
         /* Loading States */
@@ -4767,12 +4778,59 @@
             return num.toString();
         }
 
-        // Toggle expanded tweet text
-        function toggleTweetExpand(tweetId, btn) {
+        // Cache for full tweet text
+        const fullTextCache = new Map();
+
+        // Toggle expanded tweet text - fetches full text on first expand
+        async function toggleTweetExpand(tweetId, btn) {
             const card = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"]`);
             const textEl = card.querySelector('.tweet-text');
-            const isExpanded = textEl.classList.toggle('expanded');
-            btn.textContent = isExpanded ? 'Less' : 'More';
+            const isCurrentlyExpanded = textEl.classList.contains('expanded');
+
+            if (isCurrentlyExpanded) {
+                // Collapse - just toggle CSS, keep full text in DOM
+                textEl.classList.remove('expanded');
+                btn.textContent = 'More';
+                return;
+            }
+
+            // Expand - fetch full text if not cached
+            if (!fullTextCache.has(tweetId)) {
+                btn.textContent = 'Loading...';
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch(`/api/v1/tweets/${tweetId}/full`, {
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        fullTextCache.set(tweetId, data.text || '');
+                    } else {
+                        // Fallback to current text
+                        fullTextCache.set(tweetId, textEl.textContent);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch full text:', error);
+                    fullTextCache.set(tweetId, textEl.textContent);
+                }
+
+                btn.disabled = false;
+            }
+
+            // Update text content with full text (preserves line breaks via CSS white-space: pre-wrap)
+            const fullText = fullTextCache.get(tweetId);
+            if (fullText && fullText !== textEl.textContent) {
+                // Store original truncated text for potential future use
+                if (!textEl.dataset.truncatedText) {
+                    textEl.dataset.truncatedText = textEl.textContent;
+                }
+                textEl.textContent = fullText;
+            }
+
+            textEl.classList.add('expanded');
+            btn.textContent = 'Less';
         }
 
         // Gallery Mode - Browse All Media
