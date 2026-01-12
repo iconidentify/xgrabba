@@ -392,29 +392,20 @@ func (p *VideoProcessor) ChunkAudio(ctx context.Context, audioPath string, cfg C
 		startTime := i * cfg.ChunkDurationSec
 		outputPath := filepath.Join(cfg.OutputDir, fmt.Sprintf("chunk_%03d.%s", i, cfg.Format))
 
+		// Always re-encode chunks.
+		// "Copy" can produce chunks that start mid-frame and are valid files but fail to decode/transcribe,
+		// which looks like a truncated transcript.
 		cmd := exec.CommandContext(ctx, p.ffmpegPath,
 			"-ss", strconv.Itoa(startTime),
 			"-i", audioPath,
 			"-t", strconv.Itoa(cfg.ChunkDurationSec),
-			"-acodec", "copy", // Copy codec to avoid re-encoding
+			"-acodec", getAudioCodec(cfg.Format),
+			"-b:a", "64k",
 			"-y",
 			outputPath,
 		)
-
 		if err := cmd.Run(); err != nil {
-			// If copy fails, try re-encoding
-			cmd = exec.CommandContext(ctx, p.ffmpegPath,
-				"-ss", strconv.Itoa(startTime),
-				"-i", audioPath,
-				"-t", strconv.Itoa(cfg.ChunkDurationSec),
-				"-acodec", getAudioCodec(cfg.Format),
-				"-b:a", "64k",
-				"-y",
-				outputPath,
-			)
-			if err := cmd.Run(); err != nil {
-				continue // Skip failed chunks
-			}
+			continue // Skip failed chunks
 		}
 
 		// Verify chunk was created and has content

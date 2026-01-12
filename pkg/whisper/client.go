@@ -231,8 +231,8 @@ func (c *HTTPClient) TranscribeChunks(ctx context.Context, chunkPaths []string, 
 
 		result, err := c.TranscribeFile(ctx, chunkPath, opts)
 		if err != nil {
-			// Log error but continue with other chunks
-			continue
+			// IMPORTANT: don't silently drop chunks; that yields truncated transcripts.
+			return nil, fmt.Errorf("transcribe chunk %d/%d (%s): %w", i+1, len(chunkPaths), chunkPath, err)
 		}
 
 		// Add text with space separator
