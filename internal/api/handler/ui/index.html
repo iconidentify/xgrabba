@@ -2770,8 +2770,15 @@
                 alert('Set your XGrabba API key first.');
                 return;
             }
+            const userId = prompt('Enter your numeric X user id (needed for bookmarks polling):');
+            if (!userId) return;
+            const trimmed = userId.trim();
+            if (!/^[0-9]+$/.test(trimmed)) {
+                alert('User id must be numeric.');
+                return;
+            }
             // Start endpoint is a browser redirect; it validates API key via ?key=
-            window.open(`/bookmarks/oauth/start?key=${encodeURIComponent(API_KEY)}`, '_blank');
+            window.open(`/bookmarks/oauth/start?key=${encodeURIComponent(API_KEY)}&user_id=${encodeURIComponent(trimmed)}`, '_blank');
             // Refresh status after the user completes OAuth in the other window.
             setTimeout(refreshBookmarksAuthStatus, 3000);
         }
