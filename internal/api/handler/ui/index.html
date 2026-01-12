@@ -1281,6 +1281,324 @@
             font-size: 12px;
         }
 
+        /* Premium Media Theater */
+        .media-theater {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 400;
+            background: #000;
+        }
+
+        .media-theater.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .theater-backdrop {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%);
+        }
+
+        .theater-header {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .media-theater:hover .theater-header,
+        .media-theater.controls-visible .theater-header {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .theater-title {
+            color: #fff;
+            font-size: 15px;
+            font-weight: 500;
+            max-width: 60%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .theater-subtitle {
+            color: rgba(255,255,255,0.5);
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        .theater-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .theater-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+        }
+
+        .theater-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .theater-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .theater-btn.icon-only {
+            padding: 10px;
+            border-radius: 50%;
+        }
+
+        .theater-btn.close-btn {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .theater-btn.close-btn:hover {
+            background: rgba(255,77,77,0.2);
+        }
+
+        .theater-stage {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .theater-media-container {
+            position: relative;
+            max-width: 100%;
+            max-height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theater-media-container img {
+            max-width: 95vw;
+            max-height: calc(100vh - 140px);
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+        }
+
+        .theater-media-container video {
+            max-width: 95vw;
+            max-height: calc(100vh - 140px);
+            border-radius: 4px;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+            background: #000;
+        }
+
+        .theater-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 56px;
+            height: 56px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s, background 0.2s;
+            backdrop-filter: blur(10px);
+        }
+
+        .media-theater:hover .theater-nav,
+        .media-theater.controls-visible .theater-nav {
+            opacity: 1;
+        }
+
+        .theater-nav:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .theater-nav.prev { left: 24px; }
+        .theater-nav.next { right: 24px; }
+
+        .theater-nav svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .theater-footer {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 24px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .media-theater:hover .theater-footer,
+        .media-theater.controls-visible .theater-footer {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .theater-counter {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* AI Notes Panel */
+        .theater-ai-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 380px;
+            max-width: 90vw;
+            background: rgba(15, 20, 25, 0.95);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .theater-ai-panel.active {
+            transform: translateX(0);
+        }
+
+        .ai-panel-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ai-panel-header h3 {
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-panel-header h3 svg {
+            width: 18px;
+            height: 18px;
+            color: var(--brand-start);
+        }
+
+        .ai-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .ai-panel-section {
+            margin-bottom: 24px;
+        }
+
+        .ai-panel-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .ai-panel-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 8px;
+        }
+
+        .ai-panel-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .ai-panel-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .ai-panel-tag {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 20px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .ai-panel-transcript {
+            font-size: 13px;
+            line-height: 1.7;
+            color: rgba(255,255,255,0.8);
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        /* More button for tweets */
+        .tweet-more-btn {
+            background: none;
+            border: none;
+            color: var(--brand-start);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 4px 0;
+            margin-top: 4px;
+        }
+
+        .tweet-more-btn:hover {
+            color: var(--brand-end);
+            text-decoration: underline;
+        }
+
+        .tweet-text.expanded {
+            -webkit-line-clamp: unset;
+            max-height: none;
+        }
+
         /* Loading States */
         .loading {
             display: flex;
@@ -1535,7 +1853,7 @@
         </div>
     </div>
 
-    <!-- Image Lightbox -->
+    <!-- Image Lightbox (legacy - kept for compatibility) -->
     <div class="lightbox-overlay" id="lightbox" role="dialog" aria-modal="true" aria-label="Image viewer">
         <div class="lightbox-content">
             <button class="lightbox-close" onclick="closeLightbox()" aria-label="Close">
@@ -1556,6 +1874,79 @@
             </button>
             <div class="lightbox-counter" id="lightboxCounter"></div>
         </div>
+    </div>
+
+    <!-- Premium Media Theater -->
+    <div class="media-theater" id="mediaTheater" role="dialog" aria-modal="true" aria-label="Media viewer">
+        <div class="theater-backdrop" onclick="closeTheater()"></div>
+
+        <header class="theater-header">
+            <div>
+                <div class="theater-title" id="theaterTitle"></div>
+                <div class="theater-subtitle" id="theaterSubtitle"></div>
+            </div>
+            <div class="theater-actions">
+                <button class="theater-btn" id="theaterAiToggle" onclick="toggleTheaterAI()">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    AI Notes
+                </button>
+                <a class="theater-btn" id="theaterDownload" href="#" download>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
+                    </svg>
+                    Download
+                </a>
+                <button class="theater-btn icon-only close-btn" onclick="closeTheater()" aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="theater-stage">
+            <button class="theater-nav prev" onclick="navigateTheater(-1)" aria-label="Previous">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                </svg>
+            </button>
+
+            <div class="theater-media-container" id="theaterMediaContainer">
+                <!-- Media (image or video) inserted here dynamically -->
+            </div>
+
+            <button class="theater-nav next" onclick="navigateTheater(1)" aria-label="Next">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                </svg>
+            </button>
+        </div>
+
+        <footer class="theater-footer">
+            <div class="theater-counter" id="theaterCounter"></div>
+        </footer>
+
+        <!-- AI Notes Side Panel -->
+        <aside class="theater-ai-panel" id="theaterAiPanel">
+            <div class="ai-panel-header">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    AI Analysis
+                </h3>
+                <button class="theater-btn icon-only" onclick="toggleTheaterAI()" aria-label="Close panel">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="ai-panel-content" id="theaterAiContent">
+                <!-- AI content inserted dynamically -->
+            </div>
+        </aside>
     </div>
 
     <!-- Scroll to top -->
@@ -1997,6 +2388,7 @@
                             </div>
                         </div>
                         <div class="tweet-text">${highlightText(tweet.text || '', searchQuery)}</div>
+                        ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand('${tweet.tweet_id}', this)">More</button>` : ''}
                         ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
                             <div class="tweet-tags">
                                 ${tweet.ai_tags.slice(0, 5).map(tag => `<span class="tweet-tag">${escapeHtml(tag)}</span>`).join('')}
@@ -2069,7 +2461,7 @@
                         const videoUrl = isVideo && !thumbUrl ? addApiKey(media.url || '') : '';
 
                         return `
-                            <div class="media-thumb" ${isVideo && videoUrl ? `data-video-src="${videoUrl}"` : ''}>
+                            <div class="media-thumb" ${isVideo && videoUrl ? `data-video-src="${videoUrl}"` : ''} onclick="event.stopPropagation(); openTheater('${tweet.tweet_id}', ${idx})" style="cursor:pointer;">
                                 ${finalThumbUrl
                                     ? `<img src="${finalThumbUrl}" alt="${isVideo ? 'Video thumbnail' : 'Tweet media'}" onerror="this.parentElement.classList.add('no-thumb')">`
                                     : isVideo && videoUrl
@@ -2514,6 +2906,195 @@
             document.getElementById('lightboxCounter').textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
         }
 
+        // Premium Media Theater
+        let theaterMedia = [];
+        let theaterIndex = 0;
+        let theaterTweet = null;
+
+        function openTheater(tweetId, mediaIndex = 0) {
+            const tweet = tweets.find(t => t.tweet_id === tweetId);
+            if (!tweet || !tweet.media || tweet.media.length === 0) return;
+
+            theaterTweet = tweet;
+            theaterMedia = tweet.media;
+            theaterIndex = mediaIndex;
+
+            renderTheaterMedia();
+            updateTheaterInfo();
+
+            const theater = document.getElementById('mediaTheater');
+            theater.classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            // Show controls briefly then hide
+            theater.classList.add('controls-visible');
+            setTimeout(() => theater.classList.remove('controls-visible'), 2000);
+        }
+
+        function closeTheater() {
+            const theater = document.getElementById('mediaTheater');
+            const container = document.getElementById('theaterMediaContainer');
+
+            // Pause any playing video
+            const video = container.querySelector('video');
+            if (video) {
+                video.pause();
+                video.currentTime = 0;
+            }
+
+            theater.classList.remove('active');
+            document.getElementById('theaterAiPanel').classList.remove('active');
+            document.body.style.overflow = '';
+            theaterTweet = null;
+            theaterMedia = [];
+        }
+
+        function navigateTheater(direction) {
+            if (theaterMedia.length <= 1) return;
+
+            // Pause current video if any
+            const container = document.getElementById('theaterMediaContainer');
+            const video = container.querySelector('video');
+            if (video) video.pause();
+
+            theaterIndex = (theaterIndex + direction + theaterMedia.length) % theaterMedia.length;
+            renderTheaterMedia();
+            updateTheaterInfo();
+        }
+
+        function renderTheaterMedia() {
+            const container = document.getElementById('theaterMediaContainer');
+            const media = theaterMedia[theaterIndex];
+            const mediaUrl = addApiKey(media.url || '');
+            const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+
+            if (isVideo) {
+                container.innerHTML = `
+                    <video
+                        src="${mediaUrl}"
+                        controls
+                        autoplay
+                        playsinline
+                        style="outline: none;"
+                    ></video>
+                `;
+            } else {
+                container.innerHTML = `<img src="${mediaUrl}" alt="Media">`;
+            }
+
+            // Update counter
+            document.getElementById('theaterCounter').textContent =
+                theaterMedia.length > 1 ? `${theaterIndex + 1} / ${theaterMedia.length}` : '';
+
+            // Update download link
+            updateTheaterDownload();
+        }
+
+        function updateTheaterInfo() {
+            if (!theaterTweet) return;
+
+            const authorObj = typeof theaterTweet.author === 'object' ? theaterTweet.author : null;
+            const authorName = authorObj ? (authorObj.name || authorObj.username) : (theaterTweet.author || 'Unknown');
+            const authorUsername = authorObj ? authorObj.username : (theaterTweet.author || 'unknown');
+
+            document.getElementById('theaterTitle').textContent = theaterTweet.ai_title || theaterTweet.text?.slice(0, 80) || 'Media';
+            document.getElementById('theaterSubtitle').textContent = `@${authorUsername}`;
+
+            // Update AI panel content
+            updateTheaterAiContent();
+        }
+
+        function updateTheaterDownload() {
+            const downloadBtn = document.getElementById('theaterDownload');
+            const media = theaterMedia[theaterIndex];
+            const mediaUrl = addApiKey(media.url || '');
+
+            // Build smart filename
+            const authorObj = typeof theaterTweet.author === 'object' ? theaterTweet.author : null;
+            const authorUsername = authorObj ? authorObj.username : (theaterTweet.author || 'unknown');
+            const dateStr = theaterTweet.posted_at ? new Date(theaterTweet.posted_at).toISOString().split('T')[0] : 'archived';
+            const titleSlug = (theaterTweet.ai_title || theaterTweet.text || '').slice(0, 40).replace(/[^a-zA-Z0-9]+/g, '_').replace(/_+$/, '') || 'media';
+
+            const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+            const ext = isVideo ? 'mp4' : ((media.filename || media.url || '').split('.').pop() || 'jpg');
+            const indexSuffix = theaterMedia.length > 1 ? `_${theaterIndex + 1}` : '';
+
+            const filename = `${authorUsername}_${dateStr}_${titleSlug}${indexSuffix}.${ext}`;
+
+            downloadBtn.href = mediaUrl;
+            downloadBtn.download = filename;
+        }
+
+        function toggleTheaterAI() {
+            const panel = document.getElementById('theaterAiPanel');
+            panel.classList.toggle('active');
+        }
+
+        function updateTheaterAiContent() {
+            const content = document.getElementById('theaterAiContent');
+            const media = theaterMedia[theaterIndex];
+            const tweet = theaterTweet;
+
+            let html = '';
+
+            // Tweet AI summary
+            if (tweet.ai_summary) {
+                html += `
+                    <div class="ai-panel-section">
+                        <div class="ai-panel-label">Summary</div>
+                        <div class="ai-panel-text">${escapeHtml(tweet.ai_summary)}</div>
+                    </div>
+                `;
+            }
+
+            // Media-specific AI caption
+            if (media.ai_caption) {
+                html += `
+                    <div class="ai-panel-section">
+                        <div class="ai-panel-label">Media Description</div>
+                        <div class="ai-panel-text">${escapeHtml(media.ai_caption)}</div>
+                    </div>
+                `;
+            }
+
+            // Tags
+            const tags = media.ai_tags || tweet.ai_tags || [];
+            if (tags.length > 0) {
+                html += `
+                    <div class="ai-panel-section">
+                        <div class="ai-panel-label">Tags</div>
+                        <div class="ai-panel-tags">
+                            ${tags.map(tag => `<span class="ai-panel-tag">${escapeHtml(tag)}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Transcript (for videos)
+            if (media.transcript) {
+                html += `
+                    <div class="ai-panel-section">
+                        <div class="ai-panel-label">Transcript</div>
+                        <div class="ai-panel-transcript">${escapeHtml(media.transcript)}</div>
+                    </div>
+                `;
+            }
+
+            if (!html) {
+                html = '<div class="ai-panel-text" style="color: rgba(255,255,255,0.5);">No AI analysis available for this media.</div>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        // Toggle expanded tweet text
+        function toggleTweetExpand(tweetId, btn) {
+            const card = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"]`);
+            const textEl = card.querySelector('.tweet-text');
+            const isExpanded = textEl.classList.toggle('expanded');
+            btn.textContent = isExpanded ? 'Less' : 'More';
+        }
+
         function closeTweetDetailModal() {
             // Pause all videos before closing to stop audio
             const modal = document.getElementById('tweetDetailModal');
@@ -2839,13 +3420,16 @@
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Escape to close modals
-            if (e.key === 'Escape') {
-                const lightbox = document.getElementById('lightbox');
-                const tweetDetail = document.getElementById('tweetDetailModal');
-                const deleteModal = document.getElementById('deleteModal');
+            const theater = document.getElementById('mediaTheater');
+            const lightbox = document.getElementById('lightbox');
+            const tweetDetail = document.getElementById('tweetDetailModal');
+            const deleteModal = document.getElementById('deleteModal');
 
-                if (lightbox.classList.contains('active')) {
+            // Escape to close modals (priority: theater > lightbox > delete > detail)
+            if (e.key === 'Escape') {
+                if (theater.classList.contains('active')) {
+                    closeTheater();
+                } else if (lightbox.classList.contains('active')) {
                     closeLightbox();
                 } else if (deleteModal.classList.contains('active')) {
                     closeDeleteModal();
@@ -2860,8 +3444,15 @@
                 searchInput.focus();
             }
 
+            // Arrow keys for theater navigation
+            if (theater.classList.contains('active')) {
+                if (e.key === 'ArrowLeft') navigateTheater(-1);
+                if (e.key === 'ArrowRight') navigateTheater(1);
+                if (e.key === 'i' || e.key === 'I') toggleTheaterAI();
+            }
+
             // Arrow keys for lightbox navigation
-            if (document.getElementById('lightbox').classList.contains('active')) {
+            if (lightbox.classList.contains('active')) {
                 if (e.key === 'ArrowLeft') navigateLightbox(-1);
                 if (e.key === 'ArrowRight') navigateLightbox(1);
             }
