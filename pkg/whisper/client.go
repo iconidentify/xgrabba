@@ -42,9 +42,9 @@ type TranscriptionOptions struct {
 
 // TranscriptionResponse contains the transcription result.
 type TranscriptionResponse struct {
-	Text     string  `json:"text"`
-	Language string  `json:"language,omitempty"`
-	Duration float64 `json:"duration,omitempty"`
+	Text     string                 `json:"text"`
+	Language string                 `json:"language,omitempty"`
+	Duration float64                `json:"duration,omitempty"`
 	Segments []TranscriptionSegment `json:"segments,omitempty"`
 }
 

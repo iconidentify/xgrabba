@@ -56,17 +56,17 @@ type SubmitResponse struct {
 
 // VideoResponse represents a video in list/get responses.
 type VideoResponse struct {
-	VideoID      string    `json:"video_id"`
-	TweetURL     string    `json:"tweet_url"`
-	TweetID      string    `json:"tweet_id"`
-	Status       string    `json:"status"`
-	Filename     string    `json:"filename,omitempty"`
-	FilePath     string    `json:"file_path,omitempty"`
-	Author       string    `json:"author"`
-	TweetText    string    `json:"tweet_text"`
-	Error        string    `json:"error,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	ProcessedAt  time.Time `json:"processed_at,omitempty"`
+	VideoID     string    `json:"video_id"`
+	TweetURL    string    `json:"tweet_url"`
+	TweetID     string    `json:"tweet_id"`
+	Status      string    `json:"status"`
+	Filename    string    `json:"filename,omitempty"`
+	FilePath    string    `json:"file_path,omitempty"`
+	Author      string    `json:"author"`
+	TweetText   string    `json:"tweet_text"`
+	Error       string    `json:"error,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	ProcessedAt time.Time `json:"processed_at,omitempty"`
 }
 
 // StatusResponse is returned for status queries.

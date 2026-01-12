@@ -24,14 +24,14 @@ import (
 
 // TweetService orchestrates tweet archiving workflow.
 type TweetService struct {
-	twitterClient   *twitter.Client
-	grokClient      grok.Client
-	whisperClient   *whisper.HTTPClient
-	videoProcessor  *ffmpeg.VideoProcessor
-	downloader      *downloader.HTTPDownloader
-	cfg             config.StorageConfig
-	whisperEnabled  bool
-	logger          *slog.Logger
+	twitterClient  *twitter.Client
+	grokClient     grok.Client
+	whisperClient  *whisper.HTTPClient
+	videoProcessor *ffmpeg.VideoProcessor
+	downloader     *downloader.HTTPDownloader
+	cfg            config.StorageConfig
+	whisperEnabled bool
+	logger         *slog.Logger
 
 	// In-memory storage (could be replaced with DB)
 	tweets map[domain.TweetID]*domain.Tweet

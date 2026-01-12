@@ -36,10 +36,10 @@ func NewRouter(
 	r.Get("/ready", healthHandler.Ready)
 
 	// Web UI (no auth - authentication handled via API key in UI)
-	r.Get("/", uiHandler.Smart)       // Auto-detect mobile vs desktop
-	r.Get("/ui", uiHandler.Index)     // Full archive browser
-	r.Get("/quick", uiHandler.Quick)  // Mobile-optimized quick archive
-	r.Get("/q", uiHandler.Quick)      // Short alias for mobile
+	r.Get("/", uiHandler.Smart)      // Auto-detect mobile vs desktop
+	r.Get("/ui", uiHandler.Index)    // Full archive browser
+	r.Get("/quick", uiHandler.Quick) // Mobile-optimized quick archive
+	r.Get("/q", uiHandler.Quick)     // Short alias for mobile
 
 	// API v1 (authenticated)
 	r.Route("/api/v1", func(r chi.Router) {

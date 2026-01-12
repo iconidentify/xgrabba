@@ -68,15 +68,15 @@ type TweetResponse struct {
 	QuoteCount   int `json:"quote_count,omitempty"`
 	ViewCount    int `json:"view_count,omitempty"`
 	// AI metadata
-	AITitle       string    `json:"ai_title,omitempty"`
-	AISummary     string    `json:"ai_summary,omitempty"`
-	AITags        []string  `json:"ai_tags,omitempty"`
-	AIContentType string    `json:"ai_content_type,omitempty"`
-	AITopics      []string  `json:"ai_topics,omitempty"`
+	AITitle       string   `json:"ai_title,omitempty"`
+	AISummary     string   `json:"ai_summary,omitempty"`
+	AITags        []string `json:"ai_tags,omitempty"`
+	AIContentType string   `json:"ai_content_type,omitempty"`
+	AITopics      []string `json:"ai_topics,omitempty"`
 	// Video transcripts (combined from all video media)
-	Transcripts []string `json:"transcripts,omitempty"`
-	ArchivePath string   `json:"archive_path,omitempty"`
-	Error       string   `json:"error,omitempty"`
+	Transcripts []string  `json:"transcripts,omitempty"`
+	ArchivePath string    `json:"archive_path,omitempty"`
+	Error       string    `json:"error,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -321,8 +321,8 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 		// Check if already processing
 		if strings.Contains(err.Error(), "already in progress") {
 			h.writeJSON(w, http.StatusConflict, map[string]interface{}{
-				"success": false,
-				"message": "AI analysis already in progress for this tweet",
+				"success":     false,
+				"message":     "AI analysis already in progress for this tweet",
 				"in_progress": true,
 			})
 			return
@@ -340,14 +340,14 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":      true,
-		"message":      "AI metadata regenerated successfully",
-		"ai_title":     stored.AITitle,
-		"ai_summary":   stored.AISummary,
-		"ai_tags":      stored.AITags,
-		"ai_topics":    stored.AITopics,
+		"success":         true,
+		"message":         "AI metadata regenerated successfully",
+		"ai_title":        stored.AITitle,
+		"ai_summary":      stored.AISummary,
+		"ai_tags":         stored.AITags,
+		"ai_topics":       stored.AITopics,
 		"ai_content_type": stored.AIContentType,
-		"in_progress":  false,
+		"in_progress":     false,
 	})
 }
 
@@ -368,15 +368,15 @@ func (h *TweetHandler) CheckAIAnalysisStatus(w http.ResponseWriter, r *http.Requ
 
 // MediaFileResponse represents a media file in the list response.
 type MediaFileResponse struct {
-	Filename          string `json:"filename"`
-	Type              string `json:"type"`
-	Size              int64  `json:"size"`
-	URL               string `json:"url"`
-	ContentType       string `json:"content_type"`
-	Width             int    `json:"width,omitempty"`
-	Height            int    `json:"height,omitempty"`
-	Duration          int    `json:"duration_seconds,omitempty"`
-	Transcript        string `json:"transcript,omitempty"`          // Video transcript
+	Filename           string `json:"filename"`
+	Type               string `json:"type"`
+	Size               int64  `json:"size"`
+	URL                string `json:"url"`
+	ContentType        string `json:"content_type"`
+	Width              int    `json:"width,omitempty"`
+	Height             int    `json:"height,omitempty"`
+	Duration           int    `json:"duration_seconds,omitempty"`
+	Transcript         string `json:"transcript,omitempty"`          // Video transcript
 	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language
 }
 

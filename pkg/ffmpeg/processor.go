@@ -37,15 +37,15 @@ func NewVideoProcessor() (*VideoProcessor, error) {
 
 // VideoInfo contains metadata about a video file.
 type VideoInfo struct {
-	Duration    float64 // Duration in seconds
-	Width       int
-	Height      int
-	HasAudio    bool
-	AudioCodec  string
-	VideoCodec  string
-	Bitrate     int64
-	FrameRate   float64
-	FileSize    int64
+	Duration   float64 // Duration in seconds
+	Width      int
+	Height     int
+	HasAudio   bool
+	AudioCodec string
+	VideoCodec string
+	Bitrate    int64
+	FrameRate  float64
+	FileSize   int64
 }
 
 // GetVideoInfo extracts metadata from a video file.
@@ -209,12 +209,12 @@ func (p *VideoProcessor) ExtractKeyframes(ctx context.Context, videoPath string,
 
 // ExtractAudioConfig configures audio extraction.
 type ExtractAudioConfig struct {
-	OutputPath    string // Path for output audio file
-	Format        string // Output format: "mp3", "wav", "m4a" (default: "mp3")
-	SampleRate    int    // Sample rate in Hz (default: 16000 for speech)
-	Channels      int    // Number of channels, 1=mono (default: 1)
-	Bitrate       string // Audio bitrate (default: "64k")
-	MaxDurationSec int   // Max duration to extract in seconds (0 = full)
+	OutputPath     string // Path for output audio file
+	Format         string // Output format: "mp3", "wav", "m4a" (default: "mp3")
+	SampleRate     int    // Sample rate in Hz (default: 16000 for speech)
+	Channels       int    // Number of channels, 1=mono (default: 1)
+	Bitrate        string // Audio bitrate (default: "64k")
+	MaxDurationSec int    // Max duration to extract in seconds (0 = full)
 }
 
 // ExtractAudio extracts the audio track from a video file.
@@ -423,11 +423,11 @@ func (p *VideoProcessor) ProcessVideo(ctx context.Context, videoPath, outputDir 
 	if info.HasAudio {
 		audioPath := filepath.Join(audioDir, "audio.mp3")
 		path, duration, err := p.ExtractAudio(ctx, videoPath, ExtractAudioConfig{
-			OutputPath:  audioPath,
-			Format:      "mp3",
-			SampleRate:  16000,
-			Channels:    1,
-			Bitrate:     "64k",
+			OutputPath: audioPath,
+			Format:     "mp3",
+			SampleRate: 16000,
+			Channels:   1,
+			Bitrate:    "64k",
 		})
 		if err == nil {
 			result.AudioPath = path

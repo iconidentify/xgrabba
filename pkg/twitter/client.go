@@ -132,16 +132,16 @@ type syndicationResponse struct {
 			ExtAltText string `json:"ext_alt_text"`
 		} `json:"media"`
 	} `json:"extended_entities"`
-	FavoriteCount    int    `json:"favorite_count"`
-	RetweetCount     int    `json:"retweet_count"`
-	ReplyCount       int    `json:"reply_count"`
-	QuoteCount       int    `json:"quote_count"`
+	FavoriteCount     int    `json:"favorite_count"`
+	RetweetCount      int    `json:"retweet_count"`
+	ReplyCount        int    `json:"reply_count"`
+	QuoteCount        int    `json:"quote_count"`
 	InReplyToStatusID string `json:"in_reply_to_status_id_str"`
 	QuotedStatusID    string `json:"quoted_status_id_str"`
-	Photos           []struct {
-		URL            string `json:"url"`
-		Width          int    `json:"width"`
-		Height         int    `json:"height"`
+	Photos            []struct {
+		URL                string `json:"url"`
+		Width              int    `json:"width"`
+		Height             int    `json:"height"`
 		AccessibilityLabel string `json:"accessibilityLabel"`
 	} `json:"photos"`
 	Video struct {
@@ -149,8 +149,8 @@ type syndicationResponse struct {
 			Type string `json:"type"`
 			Src  string `json:"src"`
 		} `json:"variants"`
-		Poster       string `json:"poster"`
-		DurationMs   int    `json:"durationMs"`
+		Poster     string `json:"poster"`
+		DurationMs int    `json:"durationMs"`
 	} `json:"video"`
 	MediaDetails []struct {
 		MediaURLHTTPS string `json:"media_url_https"`

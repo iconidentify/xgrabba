@@ -37,9 +37,9 @@ type Tweet struct {
 	QuotedTweet   *TweetID // If this quotes another tweet
 	Status        ArchiveStatus
 	Error         string
-	ArchivePath   string // Base path where tweet is stored
-	AITitle       string // AI-generated descriptive title
-	AISummary     string // AI-generated summary
+	ArchivePath   string   // Base path where tweet is stored
+	AITitle       string   // AI-generated descriptive title
+	AISummary     string   // AI-generated summary
 	AITags        []string // AI-generated searchable tags
 	AIContentType string   // AI-detected content type (documentary, news, etc.)
 	AITopics      []string // AI-detected main topics
@@ -63,18 +63,18 @@ type Author struct {
 
 // Media represents an image or video in a tweet.
 type Media struct {
-	ID          string    `json:"id"`
-	Type        MediaType `json:"type"`
-	URL         string    `json:"url"`
-	PreviewURL  string    `json:"preview_url,omitempty"`
-	Width       int       `json:"width,omitempty"`
-	Height      int       `json:"height,omitempty"`
-	Duration    int       `json:"duration_seconds,omitempty"` // For videos
-	Bitrate     int       `json:"bitrate,omitempty"`          // For videos
-	AltText     string    `json:"alt_text,omitempty"`
-	LocalPath   string    `json:"local_path,omitempty"` // Path after download
-	Downloaded  bool      `json:"downloaded"`
-	AICaption   string    `json:"ai_caption,omitempty"` // AI-generated description
+	ID         string    `json:"id"`
+	Type       MediaType `json:"type"`
+	URL        string    `json:"url"`
+	PreviewURL string    `json:"preview_url,omitempty"`
+	Width      int       `json:"width,omitempty"`
+	Height     int       `json:"height,omitempty"`
+	Duration   int       `json:"duration_seconds,omitempty"` // For videos
+	Bitrate    int       `json:"bitrate,omitempty"`          // For videos
+	AltText    string    `json:"alt_text,omitempty"`
+	LocalPath  string    `json:"local_path,omitempty"` // Path after download
+	Downloaded bool      `json:"downloaded"`
+	AICaption  string    `json:"ai_caption,omitempty"` // AI-generated description
 
 	// Transcript fields for videos
 	Transcript         string `json:"transcript,omitempty"`          // Full audio transcript
