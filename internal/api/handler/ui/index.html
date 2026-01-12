@@ -509,6 +509,15 @@
             color: var(--text-primary);
         }
 
+        .btn-processing {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .btn-processing:hover {
+            background: transparent;
+        }
+
         .btn-ghost {
             background: transparent;
             color: var(--text-muted);
@@ -2019,6 +2028,9 @@
                     </div>
                 `;
 
+                // Check AI analysis status and update button
+                updateRegenerateButtonState(tweet.tweet_id);
+
                 // Autoplay first video if present
                 setTimeout(() => {
                     const firstVideo = content.querySelector('.media-item.video video');
@@ -2180,19 +2192,84 @@
 
         // Delete modal
         // Regenerate AI metadata for a tweet
+        // Check if AI analysis is in progress for a tweet
+        async function checkAIAnalysisStatus(tweetId) {
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/ai-status`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    return result.in_progress || false;
+                }
+            } catch (error) {
+                console.error('Failed to check AI status:', error);
+            }
+            return false;
+        }
+
+        // Update button state based on AI analysis status
+        async function updateRegenerateButtonState(tweetId) {
+            const btn = document.getElementById(`regenAiBtn-${tweetId}`);
+            if (!btn) return;
+
+            const inProgress = await checkAIAnalysisStatus(tweetId);
+            if (inProgress) {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Analyzing...';
+                btn.classList.add('btn-processing');
+                // Check again in 2 seconds
+                setTimeout(() => updateRegenerateButtonState(tweetId), 2000);
+            } else {
+                btn.disabled = false;
+                if (btn.classList.contains('btn-processing')) {
+                    btn.classList.remove('btn-processing');
+                    // Restore original button content
+                    btn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                        Regenerate AI
+                    `;
+                }
+            }
+        }
+
         async function regenerateAI(tweetId) {
             const btn = document.getElementById(`regenAiBtn-${tweetId}`);
             if (!btn) return;
 
+            // Check if already in progress
+            const inProgress = await checkAIAnalysisStatus(tweetId);
+            if (inProgress) {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Already analyzing...';
+                // Start polling for status
+                setTimeout(() => updateRegenerateButtonState(tweetId), 2000);
+                return;
+            }
+
             const originalContent = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Analyzing...';
+            btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Analyzing...';
+            btn.classList.add('btn-processing');
 
             try {
                 const response = await fetch(`/api/v1/tweets/${tweetId}/regenerate-ai`, {
                     method: 'POST',
                     headers: { 'X-API-Key': API_KEY }
                 });
+
+                if (response.status === 409) {
+                    // Already in progress
+                    const result = await response.json();
+                    if (result.in_progress) {
+                        btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Already analyzing...';
+                        // Start polling for status
+                        setTimeout(() => updateRegenerateButtonState(tweetId), 2000);
+                        return;
+                    }
+                }
 
                 if (!response.ok) {
                     throw new Error('Failed to regenerate AI metadata');

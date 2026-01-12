@@ -318,6 +318,15 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusNotFound, "tweet not found")
 			return
 		}
+		// Check if already processing
+		if strings.Contains(err.Error(), "already in progress") {
+			h.writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"success": false,
+				"message": "AI analysis already in progress for this tweet",
+				"in_progress": true,
+			})
+			return
+		}
 		h.logger.Error("regenerate AI failed", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "failed to regenerate AI metadata")
 		return
@@ -338,6 +347,22 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 		"ai_tags":      stored.AITags,
 		"ai_topics":    stored.AITopics,
 		"ai_content_type": stored.AIContentType,
+		"in_progress":  false,
+	})
+}
+
+// CheckAIAnalysisStatus handles GET /api/v1/tweets/{tweetID}/ai-status
+// Returns whether AI analysis is currently in progress for a tweet.
+func (h *TweetHandler) CheckAIAnalysisStatus(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	inProgress := h.tweetSvc.IsAIAnalysisInProgress(domain.TweetID(tweetID))
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"in_progress": inProgress,
 	})
 }
 

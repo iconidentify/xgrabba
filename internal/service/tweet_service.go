@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/config"
@@ -34,6 +35,10 @@ type TweetService struct {
 
 	// In-memory storage (could be replaced with DB)
 	tweets map[domain.TweetID]*domain.Tweet
+
+	// Mutex to prevent duplicate AI analysis
+	aiAnalysisLock sync.Mutex
+	processingAI   map[domain.TweetID]bool // Track which tweets are currently being analyzed
 }
 
 // NewTweetService creates a new tweet service.
@@ -70,6 +75,7 @@ func NewTweetService(
 		whisperEnabled: whisperEnabled && whisperClient != nil && videoProc != nil,
 		logger:         logger,
 		tweets:         make(map[domain.TweetID]*domain.Tweet),
+		processingAI:   make(map[domain.TweetID]bool),
 	}
 
 	// Load existing tweets from disk on startup
@@ -483,7 +489,24 @@ func (s *TweetService) runTextAnalysis(ctx context.Context, tweet *domain.Tweet)
 
 // RegenerateAIMetadata re-runs AI analysis on a tweet and updates its metadata.
 // This is useful when the AI algorithm is improved or to get better results.
+// Returns an error if analysis is already in progress for this tweet.
 func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.TweetID) error {
+	// Check if already processing
+	s.aiAnalysisLock.Lock()
+	if s.processingAI[tweetID] {
+		s.aiAnalysisLock.Unlock()
+		return fmt.Errorf("AI analysis already in progress for this tweet")
+	}
+	s.processingAI[tweetID] = true
+	s.aiAnalysisLock.Unlock()
+
+	// Ensure we clear the processing flag when done
+	defer func() {
+		s.aiAnalysisLock.Lock()
+		delete(s.processingAI, tweetID)
+		s.aiAnalysisLock.Unlock()
+	}()
+
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
 		return domain.ErrVideoNotFound
@@ -540,6 +563,13 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 	)
 
 	return nil
+}
+
+// IsAIAnalysisInProgress checks if AI analysis is currently running for a tweet.
+func (s *TweetService) IsAIAnalysisInProgress(tweetID domain.TweetID) bool {
+	s.aiAnalysisLock.Lock()
+	defer s.aiAnalysisLock.Unlock()
+	return s.processingAI[tweetID]
 }
 
 func buildTweetPrompt(tweet *domain.Tweet) string {
