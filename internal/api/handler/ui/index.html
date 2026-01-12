@@ -2234,33 +2234,15 @@
                             ${tweet.url ? ` - <a href="${tweet.url}" target="_blank" rel="noopener">View on X</a>` : ''}
                         </div>
 
-                        ${tweet.metrics ? `
+                        ${tweet.metrics && (tweet.metrics.likes || tweet.metrics.views) ? `
                             <div class="tweet-detail-metrics">
-                                ${tweet.metrics.replies !== undefined ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.metrics.replies)}</span>
-                                        <span class="metric-label">Replies</span>
-                                    </div>
-                                ` : ''}
-                                ${tweet.metrics.retweets !== undefined ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.metrics.retweets)}</span>
-                                        <span class="metric-label">Reposts</span>
-                                    </div>
-                                ` : ''}
-                                ${tweet.metrics.quotes !== undefined ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.metrics.quotes)}</span>
-                                        <span class="metric-label">Quotes</span>
-                                    </div>
-                                ` : ''}
-                                ${tweet.metrics.likes !== undefined ? `
+                                ${tweet.metrics.likes ? `
                                     <div class="metric">
                                         <span class="metric-value">${formatNumber(tweet.metrics.likes)}</span>
                                         <span class="metric-label">Likes</span>
                                     </div>
                                 ` : ''}
-                                ${tweet.metrics.views !== undefined ? `
+                                ${tweet.metrics.views ? `
                                     <div class="metric">
                                         <span class="metric-value">${formatNumber(tweet.metrics.views)}</span>
                                         <span class="metric-label">Views</span>
