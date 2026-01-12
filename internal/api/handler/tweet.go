@@ -911,3 +911,149 @@ func truncateText(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
+
+// isTextPotentiallyTruncated checks if tweet text might be truncated.
+// Uses the same heuristics as the twitter client.
+func isTextPotentiallyTruncated(text string) bool {
+	// Common truncation indicators
+	if strings.HasSuffix(text, "...") || strings.HasSuffix(text, "\u2026") {
+		return true
+	}
+
+	textLen := len(text)
+
+	// Check if text ends with a t.co link near the limit
+	if textLen > 240 && strings.Contains(text, "https://t.co/") {
+		lastSpaceIdx := strings.LastIndex(text, " ")
+		if lastSpaceIdx > 0 && strings.Contains(text[lastSpaceIdx:], "t.co/") {
+			return true
+		}
+	}
+
+	// If text is near the 280 character boundary
+	if textLen >= 275 && textLen <= 285 {
+		return true
+	}
+
+	return false
+}
+
+// TruncatedTweetInfo represents a tweet that may have truncated text.
+type TruncatedTweetInfo struct {
+	TweetID    string `json:"tweet_id"`
+	Author     string `json:"author"`
+	TextLength int    `json:"text_length"`
+	TextEnd    string `json:"text_end"` // Last 50 chars
+}
+
+// TruncatedTweetsResponse contains list of potentially truncated tweets.
+type TruncatedTweetsResponse struct {
+	Tweets []TruncatedTweetInfo `json:"tweets"`
+	Total  int                  `json:"total"`
+}
+
+// ListTruncated handles GET /api/v1/tweets/truncated
+// Returns a list of tweets that may have truncated text.
+func (h *TweetHandler) ListTruncated(w http.ResponseWriter, r *http.Request) {
+	// Get all tweets to check for truncation
+	tweets, _, err := h.tweetSvc.List(r.Context(), 1000, 0)
+	if err != nil {
+		h.logger.Error("list failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to list tweets")
+		return
+	}
+
+	truncated := make([]TruncatedTweetInfo, 0)
+	for _, t := range tweets {
+		if isTextPotentiallyTruncated(t.Text) {
+			textEnd := t.Text
+			if len(textEnd) > 50 {
+				textEnd = "..." + textEnd[len(textEnd)-50:]
+			}
+			truncated = append(truncated, TruncatedTweetInfo{
+				TweetID:    string(t.ID),
+				Author:     t.Author.Username,
+				TextLength: len(t.Text),
+				TextEnd:    textEnd,
+			})
+		}
+	}
+
+	h.writeJSON(w, http.StatusOK, TruncatedTweetsResponse{
+		Tweets: truncated,
+		Total:  len(truncated),
+	})
+}
+
+// BackfillTruncatedResponse contains the result of backfill operation.
+type BackfillTruncatedResponse struct {
+	Started int      `json:"started"`
+	Skipped int      `json:"skipped"`
+	IDs     []string `json:"ids"`
+	Message string   `json:"message"`
+}
+
+// BackfillTruncated handles POST /api/v1/tweets/backfill-truncated
+// Starts resync for all tweets with potentially truncated text.
+// Resyncs are staggered to avoid X API rate limits.
+func (h *TweetHandler) BackfillTruncated(w http.ResponseWriter, r *http.Request) {
+	// Get all tweets to check for truncation
+	tweets, _, err := h.tweetSvc.List(r.Context(), 1000, 0)
+	if err != nil {
+		h.logger.Error("list failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to list tweets")
+		return
+	}
+
+	// Collect truncated tweet IDs
+	var truncatedIDs []domain.TweetID
+	for _, t := range tweets {
+		if isTextPotentiallyTruncated(t.Text) {
+			truncatedIDs = append(truncatedIDs, t.ID)
+		}
+	}
+
+	if len(truncatedIDs) == 0 {
+		h.writeJSON(w, http.StatusOK, BackfillTruncatedResponse{
+			Started: 0,
+			Skipped: 0,
+			IDs:     []string{},
+			Message: "No truncated tweets found",
+		})
+		return
+	}
+
+	// Start a background worker to process resyncs with rate limiting
+	// This returns immediately while processing happens in background
+	go func() {
+		const resyncDelay = 10 * time.Second // Delay between resyncs to avoid rate limits
+
+		for i, tweetID := range truncatedIDs {
+			err := h.tweetSvc.StartResync(tweetID)
+			if err != nil {
+				h.logger.Debug("backfill skipped resync", "tweet_id", tweetID, "error", err)
+				continue
+			}
+			h.logger.Info("backfill started resync", "tweet_id", tweetID, "index", i+1, "total", len(truncatedIDs))
+
+			// Wait before starting next resync (except for last one)
+			if i < len(truncatedIDs)-1 {
+				time.Sleep(resyncDelay)
+			}
+		}
+		h.logger.Info("backfill batch completed", "total", len(truncatedIDs))
+	}()
+
+	// Return immediately with the count of tweets to be processed
+	ids := make([]string, len(truncatedIDs))
+	for i, id := range truncatedIDs {
+		ids[i] = string(id)
+	}
+
+	h.writeJSON(w, http.StatusAccepted, BackfillTruncatedResponse{
+		Started: len(truncatedIDs),
+		Skipped: 0,
+		IDs:     ids,
+		Message: fmt.Sprintf("Queued %d tweets for backfill (processing with 10s delay between each to avoid rate limits)", len(truncatedIDs)),
+	})
+}
