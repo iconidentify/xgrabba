@@ -536,6 +536,31 @@ func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Twee
 
 	// If we have images or video thumbnail, use vision analysis
 	if len(imagePaths) > 0 || len(keyframePaths) > 0 || videoThumbPath != "" {
+		// Build transcript context (if available) so the summary reflects the whole video, not just frames.
+		// Keep it bounded to avoid blowing up token limits.
+		var transcriptSnippet string
+		for _, m := range tweet.Media {
+			if m.Transcript == "" {
+				continue
+			}
+			// Prefer full transcript if it's short; otherwise take a head+tail excerpt.
+			const max = 3000
+			t := strings.TrimSpace(m.Transcript)
+			if len(t) <= max {
+				transcriptSnippet = t
+			} else {
+				head := t[:2000]
+				tail := t[len(t)-800:]
+				transcriptSnippet = head + "\n...\n" + tail
+			}
+			break
+		}
+
+		tweetTextForVision := tweet.Text
+		if transcriptSnippet != "" {
+			tweetTextForVision = tweetTextForVision + "\n\n[Video transcript excerpt]\n" + transcriptSnippet
+		}
+
 		// Prefer multiple keyframes over a single thumbnail: pass keyframes as ImagePaths
 		// and only include VideoThumbPath if we have no keyframes.
 		maxImages := 4
@@ -567,7 +592,7 @@ func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Twee
 		)
 
 		analysis, err := s.grokClient.AnalyzeContentWithVision(ctx, grok.VisionAnalysisRequest{
-			TweetText:      tweet.Text,
+			TweetText:      tweetTextForVision,
 			AuthorUsername: tweet.Author.Username,
 			ImagePaths:     visionPaths,
 			VideoThumbPath: thumb,

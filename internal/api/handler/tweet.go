@@ -368,19 +368,19 @@ type TweetDiagnosticsResponse struct {
 
 	ArchivePath string `json:"archive_path,omitempty"`
 
-	HasVideo bool `json:"has_video"`
+	HasVideo  bool `json:"has_video"`
 	HasImages bool `json:"has_images"`
 
 	Media []struct {
-		ID                string `json:"id"`
-		Type              string `json:"type"`
-		LocalPath         string `json:"local_path,omitempty"`
-		HasThumbnail      bool   `json:"has_thumbnail"`
-		ThumbnailPath     string `json:"thumbnail_path,omitempty"`
-		KeyframesDir      string `json:"keyframes_dir,omitempty"`
-		KeyframesCount    int    `json:"keyframes_count"`
-		TranscriptLength  int    `json:"transcript_length"`
-		TranscriptLang    string `json:"transcript_language,omitempty"`
+		ID               string `json:"id"`
+		Type             string `json:"type"`
+		LocalPath        string `json:"local_path,omitempty"`
+		HasThumbnail     bool   `json:"has_thumbnail"`
+		ThumbnailPath    string `json:"thumbnail_path,omitempty"`
+		KeyframesDir     string `json:"keyframes_dir,omitempty"`
+		KeyframesCount   int    `json:"keyframes_count"`
+		TranscriptLength int    `json:"transcript_length"`
+		TranscriptLang   string `json:"transcript_language,omitempty"`
 	} `json:"media"`
 }
 
@@ -415,22 +415,22 @@ func (h *TweetHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := TweetDiagnosticsResponse{
-		TweetID:       tweetID,
-		AIInProgress:  h.tweetSvc.IsAIAnalysisInProgress(domain.TweetID(tweetID)),
-		Pipeline:      h.tweetSvc.GetPipelineDiagnostics(),
-		ArchivePath:   archivePath,
-		HasVideo:      false,
-		HasImages:     false,
-		Media:         make([]struct {
-			ID                string `json:"id"`
-			Type              string `json:"type"`
-			LocalPath         string `json:"local_path,omitempty"`
-			HasThumbnail      bool   `json:"has_thumbnail"`
-			ThumbnailPath     string `json:"thumbnail_path,omitempty"`
-			KeyframesDir      string `json:"keyframes_dir,omitempty"`
-			KeyframesCount    int    `json:"keyframes_count"`
-			TranscriptLength  int    `json:"transcript_length"`
-			TranscriptLang    string `json:"transcript_language,omitempty"`
+		TweetID:      tweetID,
+		AIInProgress: h.tweetSvc.IsAIAnalysisInProgress(domain.TweetID(tweetID)),
+		Pipeline:     h.tweetSvc.GetPipelineDiagnostics(),
+		ArchivePath:  archivePath,
+		HasVideo:     false,
+		HasImages:    false,
+		Media: make([]struct {
+			ID               string `json:"id"`
+			Type             string `json:"type"`
+			LocalPath        string `json:"local_path,omitempty"`
+			HasThumbnail     bool   `json:"has_thumbnail"`
+			ThumbnailPath    string `json:"thumbnail_path,omitempty"`
+			KeyframesDir     string `json:"keyframes_dir,omitempty"`
+			KeyframesCount   int    `json:"keyframes_count"`
+			TranscriptLength int    `json:"transcript_length"`
+			TranscriptLang   string `json:"transcript_language,omitempty"`
 		}, 0, len(stored.Media)),
 	}
 
@@ -444,15 +444,15 @@ func (h *TweetHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
 		}
 
 		item := struct {
-			ID                string `json:"id"`
-			Type              string `json:"type"`
-			LocalPath         string `json:"local_path,omitempty"`
-			HasThumbnail      bool   `json:"has_thumbnail"`
-			ThumbnailPath     string `json:"thumbnail_path,omitempty"`
-			KeyframesDir      string `json:"keyframes_dir,omitempty"`
-			KeyframesCount    int    `json:"keyframes_count"`
-			TranscriptLength  int    `json:"transcript_length"`
-			TranscriptLang    string `json:"transcript_language,omitempty"`
+			ID               string `json:"id"`
+			Type             string `json:"type"`
+			LocalPath        string `json:"local_path,omitempty"`
+			HasThumbnail     bool   `json:"has_thumbnail"`
+			ThumbnailPath    string `json:"thumbnail_path,omitempty"`
+			KeyframesDir     string `json:"keyframes_dir,omitempty"`
+			KeyframesCount   int    `json:"keyframes_count"`
+			TranscriptLength int    `json:"transcript_length"`
+			TranscriptLang   string `json:"transcript_language,omitempty"`
 		}{
 			ID:               m.ID,
 			Type:             mt,

@@ -2032,12 +2032,13 @@
                                 </svg>
                                 Diagnostics
                             </h4>
-                            <div id="tweetDiagnostics" class="metadata-value" style="font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; opacity: 0.9;">
-                                Loading diagnostics...
-                            </div>
                             <div style="margin-top: 8px; display:flex; gap:8px;">
                                 <button class="btn btn-secondary" id="copyDiagnosticsBtn" onclick="event.stopPropagation(); copyDiagnostics()">Copy JSON</button>
+                                <button class="btn btn-ghost" id="toggleDiagnosticsBtn" onclick="event.stopPropagation(); toggleDiagnostics()">Show</button>
                                 <button class="btn btn-ghost" onclick="event.stopPropagation(); loadDiagnostics('${tweet.tweet_id}')">Refresh</button>
+                            </div>
+                            <div id="tweetDiagnostics" class="metadata-value" style="display:none; margin-top: 8px; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; opacity: 0.9;">
+                                Loading diagnostics...
                             </div>
                         </div>
                     </div>
@@ -2157,6 +2158,9 @@
                 videos.forEach((video, idx) => {
                     const videoUrl = addApiKey(video.url || '');
                     const downloadName = videos.length > 1 ? `${baseFilename}_video${idx + 1}.mp4` : `${baseFilename}.mp4`;
+                    const hasTranscript = !!(video.transcript && video.transcript.length > 0);
+                    const transcriptId = `transcript-${tweet.tweet_id}-${idx}`;
+                    const transcriptCopyId = `transcript-copy-${tweet.tweet_id}-${idx}`;
 
                     html += `
                         <div class="media-item video" data-video-idx="${idx}">
@@ -2171,6 +2175,22 @@
                                     <path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/>
                                 </svg>
                             </a>
+                            ${hasTranscript ? `
+                                <button class="media-download-btn" style="right: 40px;" onclick="event.stopPropagation(); toggleTranscript('${transcriptId}')"
+                                    title="Show transcript">T</button>
+                                <div id="${transcriptId}" style="display:none; margin-top: 8px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-secondary);">
+                                    <div style="display:flex; justify-content: space-between; align-items:center; gap:8px; margin-bottom:8px;">
+                                        <div style="font-size: 12px; color: var(--text-muted);">
+                                            Transcript ${video.transcript_language ? `(${escapeHtml(video.transcript_language)})` : ''} — ${video.transcript.length} chars
+                                        </div>
+                                        <button class="btn btn-ghost" id="${transcriptCopyId}" onclick="event.stopPropagation(); copyTranscript('${transcriptCopyId}', ${JSON.stringify(video.transcript)})">Copy</button>
+                                    </div>
+                                    <div style="font-size: 12px; white-space: pre-wrap; line-height: 1.4;">${escapeHtml(video.transcript)}</div>
+                                </div>
+                            ` : `
+                                <button class="media-download-btn" style="right: 40px; opacity: 0.4; cursor: not-allowed;" onclick="event.stopPropagation()"
+                                    title="No transcript yet">T</button>
+                            `}
                         </div>
                     `;
                 });
@@ -2287,6 +2307,15 @@
         }
 
         let lastDiagnosticsJson = null;
+        let diagnosticsExpanded = false;
+
+        function toggleDiagnostics() {
+            diagnosticsExpanded = !diagnosticsExpanded;
+            const el = document.getElementById('tweetDiagnostics');
+            const btn = document.getElementById('toggleDiagnosticsBtn');
+            if (el) el.style.display = diagnosticsExpanded ? 'block' : 'none';
+            if (btn) btn.textContent = diagnosticsExpanded ? 'Hide' : 'Show';
+        }
 
         async function loadDiagnostics(tweetId) {
             const el = document.getElementById('tweetDiagnostics');
@@ -2330,6 +2359,26 @@
             } catch {
                 // Fallback: prompt
                 prompt('Copy diagnostics JSON:', JSON.stringify(lastDiagnosticsJson, null, 2));
+            }
+        }
+
+        function toggleTranscript(transcriptId) {
+            const el = document.getElementById(transcriptId);
+            if (!el) return;
+            el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+        }
+
+        async function copyTranscript(btnId, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    const old = btn.textContent;
+                    btn.textContent = 'Copied';
+                    setTimeout(() => { btn.textContent = old; }, 1000);
+                }
+            } catch {
+                prompt('Copy transcript:', text);
             }
         }
 
