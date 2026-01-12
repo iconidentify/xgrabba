@@ -2076,15 +2076,8 @@
                 // Load diagnostics panel
                 loadDiagnostics(tweet.tweet_id);
 
-                // Autoplay first video if present
-                setTimeout(() => {
-                    const firstVideo = content.querySelector('.media-item.video video');
-                    if (firstVideo) {
-                        firstVideo.play().catch(() => {
-                            // Autoplay blocked, user will need to click play
-                        });
-                    }
-                }, 100);
+                // Do NOT autoplay videos when opening tweet detail.
+                // Only play when the user explicitly clicks the play button.
 
             } catch (error) {
                 console.error('Failed to fetch tweet details:', error);

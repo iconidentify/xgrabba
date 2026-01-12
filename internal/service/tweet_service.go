@@ -33,6 +33,7 @@ type TweetService struct {
 	videoProcessor *ffmpeg.VideoProcessor
 	downloader     *downloader.HTTPDownloader
 	cfg            config.StorageConfig
+	aiCfg          config.AIConfig
 	whisperEnabled bool
 	logger         *slog.Logger
 
@@ -59,6 +60,7 @@ func NewTweetService(
 	whisperClient *whisper.HTTPClient,
 	dl *downloader.HTTPDownloader,
 	storageCfg config.StorageConfig,
+	aiCfg config.AIConfig,
 	whisperEnabled bool,
 	logger *slog.Logger,
 ) *TweetService {
@@ -84,6 +86,7 @@ func NewTweetService(
 		videoProcessor: videoProc,
 		downloader:     dl,
 		cfg:            storageCfg,
+		aiCfg:          aiCfg,
 		whisperEnabled: whisperEnabled && whisperClient != nil && videoProc != nil,
 		logger:         logger,
 		tweets:         make(map[domain.TweetID]*domain.Tweet),
@@ -887,7 +890,14 @@ func (s *TweetService) StartRegenerateAIMetadata(tweetID domain.TweetID) error {
 		}()
 
 		s.logger.Info("starting background AI regeneration", "tweet_id", tweetID)
-		if err := s.regenerateAIMetadata(context.Background(), tweetID); err != nil {
+		ctx := context.Background()
+		if s.aiCfg.RegenerateTimeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, s.aiCfg.RegenerateTimeout)
+			defer cancel()
+		}
+
+		if err := s.regenerateAIMetadata(ctx, tweetID); err != nil {
 			s.logger.Warn("background AI regeneration failed", "tweet_id", tweetID, "error", err)
 			return
 		}

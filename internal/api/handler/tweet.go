@@ -76,13 +76,13 @@ type TweetResponse struct {
 	// True while Regenerate AI (and other AI backfills) are running
 	AIInProgress bool `json:"ai_in_progress,omitempty"`
 	// Video transcripts (combined from all video media)
-	Transcripts []string  `json:"transcripts,omitempty"`
+	Transcripts []string `json:"transcripts,omitempty"`
 	// Aggregated per-media AI (for search)
-	MediaTags     []string `json:"media_tags,omitempty"`
-	MediaCaptions []string `json:"media_captions,omitempty"`
-	ArchivePath string    `json:"archive_path,omitempty"`
-	Error       string    `json:"error,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	MediaTags     []string  `json:"media_tags,omitempty"`
+	MediaCaptions []string  `json:"media_captions,omitempty"`
+	ArchivePath   string    `json:"archive_path,omitempty"`
+	Error         string    `json:"error,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // MediaPreview represents a media item in list responses for thumbnails.
@@ -506,19 +506,19 @@ func (h *TweetHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
 
 // MediaFileResponse represents a media file in the list response.
 type MediaFileResponse struct {
-	Filename           string `json:"filename"`
-	Type               string `json:"type"`
-	Size               int64  `json:"size"`
-	URL                string `json:"url"`
-	ContentType        string `json:"content_type"`
-	Width              int    `json:"width,omitempty"`
-	Height             int    `json:"height,omitempty"`
-	Duration           int    `json:"duration_seconds,omitempty"`
-	Transcript         string `json:"transcript,omitempty"`          // Video transcript
-	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language
-	AICaption          string `json:"ai_caption,omitempty"`
+	Filename           string   `json:"filename"`
+	Type               string   `json:"type"`
+	Size               int64    `json:"size"`
+	URL                string   `json:"url"`
+	ContentType        string   `json:"content_type"`
+	Width              int      `json:"width,omitempty"`
+	Height             int      `json:"height,omitempty"`
+	Duration           int      `json:"duration_seconds,omitempty"`
+	Transcript         string   `json:"transcript,omitempty"`          // Video transcript
+	TranscriptLanguage string   `json:"transcript_language,omitempty"` // Detected language
+	AICaption          string   `json:"ai_caption,omitempty"`
 	AITags             []string `json:"ai_tags,omitempty"`
-	AIContentType      string `json:"ai_content_type,omitempty"`
+	AIContentType      string   `json:"ai_content_type,omitempty"`
 	AITopics           []string `json:"ai_topics,omitempty"`
 }
 
@@ -707,18 +707,18 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mediaResp := MediaFileResponse{
-			Filename:    filename,
-			Type:        string(m.Type),
-			URL:         fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
-			ContentType: getContentTypeFromMediaType(m.Type),
-			Size:        size,
-			Width:       m.Width,
-			Height:      m.Height,
-			Duration:    m.Duration,
-			AICaption:   m.AICaption,
-			AITags:      m.AITags,
+			Filename:      filename,
+			Type:          string(m.Type),
+			URL:           fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
+			ContentType:   getContentTypeFromMediaType(m.Type),
+			Size:          size,
+			Width:         m.Width,
+			Height:        m.Height,
+			Duration:      m.Duration,
+			AICaption:     m.AICaption,
+			AITags:        m.AITags,
 			AIContentType: m.AIContentType,
-			AITopics:    m.AITopics,
+			AITopics:      m.AITopics,
 		}
 		// Include transcript for videos
 		if m.Transcript != "" {

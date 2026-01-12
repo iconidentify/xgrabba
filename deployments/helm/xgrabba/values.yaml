@@ -84,6 +84,8 @@ config:
     baseUrl: "https://api.openai.com/v1"
     timeout: "5m"
     model: "whisper-1"
+  ai:
+    regenerateTimeout: "20m"
   download:
     timeout: "10m"
     retryDelay: "5s"

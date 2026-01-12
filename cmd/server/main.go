@@ -103,6 +103,7 @@ func main() {
 		whisperClient,
 		dl,
 		cfg.Storage,
+		cfg.AI,
 		cfg.Whisper.Enabled,
 		logger,
 	)

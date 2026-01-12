@@ -17,6 +17,7 @@ type Config struct {
 	Grok     GrokConfig     `yaml:"grok"`
 	Whisper  WhisperConfig  `yaml:"whisper"`
 	Download DownloadConfig `yaml:"download"`
+	AI       AIConfig       `yaml:"ai"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -65,6 +66,13 @@ type DownloadConfig struct {
 	RetryDelay    time.Duration `yaml:"retry_delay" envconfig:"DOWNLOAD_RETRY_DELAY" default:"5s"`
 	MaxRetryDelay time.Duration `yaml:"max_retry_delay" envconfig:"DOWNLOAD_MAX_RETRY_DELAY" default:"60s"`
 	UserAgent     string        `yaml:"user_agent" envconfig:"DOWNLOAD_USER_AGENT" default:"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"`
+}
+
+// AIConfig holds orchestration timeouts for background AI jobs (not per-provider timeouts).
+type AIConfig struct {
+	// RegenerateTimeout is the max wall-clock time a background regenerate/backfill job is allowed to run.
+	// This prevents "AI in progress" from getting stuck forever if an external process hangs.
+	RegenerateTimeout time.Duration `yaml:"regenerate_timeout" envconfig:"AI_REGENERATE_TIMEOUT" default:"20m"`
 }
 
 // Load reads configuration from file and environment variables.
