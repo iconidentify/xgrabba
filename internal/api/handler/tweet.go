@@ -343,14 +343,16 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 
 // MediaFileResponse represents a media file in the list response.
 type MediaFileResponse struct {
-	Filename    string `json:"filename"`
-	Type        string `json:"type"`
-	Size        int64  `json:"size"`
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-	Width       int    `json:"width,omitempty"`
-	Height      int    `json:"height,omitempty"`
-	Duration    int    `json:"duration_seconds,omitempty"`
+	Filename          string `json:"filename"`
+	Type              string `json:"type"`
+	Size              int64  `json:"size"`
+	URL               string `json:"url"`
+	ContentType       string `json:"content_type"`
+	Width             int    `json:"width,omitempty"`
+	Height            int    `json:"height,omitempty"`
+	Duration          int    `json:"duration_seconds,omitempty"`
+	Transcript        string `json:"transcript,omitempty"`          // Video transcript
+	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language
 }
 
 // MediaListResponse contains the list of media files.
@@ -537,7 +539,7 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 			size = info.Size()
 		}
 
-		mediaResponses = append(mediaResponses, MediaFileResponse{
+		mediaResp := MediaFileResponse{
 			Filename:    filename,
 			Type:        string(m.Type),
 			URL:         fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
@@ -546,7 +548,13 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 			Width:       m.Width,
 			Height:      m.Height,
 			Duration:    m.Duration,
-		})
+		}
+		// Include transcript for videos
+		if m.Transcript != "" {
+			mediaResp.Transcript = m.Transcript
+			mediaResp.TranscriptLanguage = m.TranscriptLanguage
+		}
+		mediaResponses = append(mediaResponses, mediaResp)
 	}
 
 	// Use local avatar URL if available

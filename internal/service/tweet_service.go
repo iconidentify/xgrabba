@@ -387,7 +387,7 @@ func (s *TweetService) generateAIMetadata(ctx context.Context, tweet *domain.Twe
 // runVisionAnalysis performs AI analysis on the tweet's media content.
 // If media files are available locally, it uses vision analysis for rich metadata extraction.
 func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Tweet) {
-	// Collect local image paths and video thumbnails
+	// Collect local image paths, video thumbnails, and extracted keyframes
 	var imagePaths []string
 	var videoThumbPath string
 
@@ -402,6 +402,16 @@ func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Twee
 			// For videos, use the thumbnail if available
 			if m.PreviewURL != "" && filepath.IsAbs(m.PreviewURL) {
 				videoThumbPath = m.PreviewURL
+			}
+			// Also include extracted keyframes if they exist
+			keyframesDir := filepath.Join(tweet.ArchivePath, "media", "keyframes_"+m.ID)
+			if entries, err := os.ReadDir(keyframesDir); err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() && (filepath.Ext(entry.Name()) == ".jpg" || filepath.Ext(entry.Name()) == ".jpeg") {
+						framePath := filepath.Join(keyframesDir, entry.Name())
+						imagePaths = append(imagePaths, framePath)
+					}
+				}
 			}
 		}
 	}
@@ -487,7 +497,22 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 	tweet.AIContentType = ""
 	tweet.AITopics = nil
 
-	// Re-run vision analysis
+	// Re-run transcription for videos if Whisper is enabled
+	if s.whisperEnabled && tweet.HasVideo() {
+		s.logger.Info("re-running video transcription", "tweet_id", tweetID)
+		for i := range tweet.Media {
+			media := &tweet.Media[i]
+			if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && media.LocalPath != "" {
+				// Clear existing transcript
+				media.Transcript = ""
+				media.TranscriptLanguage = ""
+				// Re-run transcription
+				s.processVideoForTranscription(ctx, media, tweet.ArchivePath)
+			}
+		}
+	}
+
+	// Re-run vision analysis (this will also extract keyframes if needed)
 	s.runVisionAnalysis(ctx, tweet)
 
 	// Also regenerate the title
