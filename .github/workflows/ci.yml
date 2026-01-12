@@ -26,15 +26,10 @@ jobs:
       - name: Test
         run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        # Only attempt upload when a Codecov token is configured for the repo.
-        # Using a truthy check avoids edge-cases with empty-string comparisons.
-        if: ${{ secrets.CODECOV_TOKEN }}
-        with:
-          files: ./coverage.out
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+      # NOTE: Codecov uploads are disabled in CI by default.
+      # If you want coverage uploads, add a CODECOV_TOKEN repository secret and re-enable.
+      - name: Skip coverage upload (Codecov token not configured)
+        run: echo "Skipping Codecov upload"
 
   lint:
     runs-on: ubuntu-latest
