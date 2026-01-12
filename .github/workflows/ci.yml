@@ -42,10 +42,9 @@ jobs:
           go-version: '1.22'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v4
         with:
-          # Our repo uses `.golangci.yml` config version: 2, which requires golangci-lint v2+
-          version: v2.8.0
+          version: latest
 
   docker:
     runs-on: ubuntu-latest
