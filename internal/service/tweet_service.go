@@ -1177,6 +1177,104 @@ func (s *TweetService) IsAIAnalysisInProgress(tweetID domain.TweetID) bool {
 	return s.processingAI[tweetID]
 }
 
+// Resync re-fetches a tweet from Twitter and updates its metadata.
+// This is useful when the original fetch had truncated text or missing data.
+// It also re-runs AI analysis to ensure metadata reflects the new data.
+func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error {
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return domain.ErrVideoNotFound
+	}
+
+	s.logger.Info("resyncing tweet", "tweet_id", tweetID, "original_text_len", len(tweet.Text))
+
+	// Re-fetch tweet from Twitter (will use GraphQL for long tweets)
+	fetchedTweet, err := s.twitterClient.FetchTweet(ctx, tweet.URL)
+	if err != nil {
+		return fmt.Errorf("resync fetch failed: %w", err)
+	}
+
+	// Track what changed
+	textChanged := tweet.Text != fetchedTweet.Text
+	oldTextLen := len(tweet.Text)
+	newTextLen := len(fetchedTweet.Text)
+
+	// Update tweet data
+	tweet.Text = fetchedTweet.Text
+	tweet.Author = fetchedTweet.Author
+	tweet.PostedAt = fetchedTweet.PostedAt
+	tweet.Metrics = fetchedTweet.Metrics
+
+	// Don't overwrite media if already downloaded - just update metadata
+	if len(tweet.Media) == 0 && len(fetchedTweet.Media) > 0 {
+		tweet.Media = fetchedTweet.Media
+		tweet.MediaTotal = len(fetchedTweet.Media)
+	}
+
+	s.logger.Info("tweet data resynced",
+		"tweet_id", tweetID,
+		"text_changed", textChanged,
+		"old_text_len", oldTextLen,
+		"new_text_len", newTextLen,
+	)
+
+	// Re-generate AI title with new text
+	aiTitle, aiSummary := s.generateAIMetadata(ctx, tweet)
+	tweet.AITitle = aiTitle
+	if aiSummary != "" {
+		tweet.AISummary = aiSummary
+	}
+
+	// Save updated metadata
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		return fmt.Errorf("save resynced metadata: %w", err)
+	}
+
+	s.logger.Info("resync complete", "tweet_id", tweetID, "new_ai_title", tweet.AITitle)
+	return nil
+}
+
+// StartResync runs resync in the background so client disconnection doesn't cancel the work.
+func (s *TweetService) StartResync(tweetID domain.TweetID) error {
+	// Check if tweet exists
+	if _, ok := s.tweets[tweetID]; !ok {
+		return domain.ErrVideoNotFound
+	}
+
+	// Check if already processing AI (resync involves AI regeneration)
+	s.aiAnalysisLock.Lock()
+	if s.processingAI[tweetID] {
+		s.aiAnalysisLock.Unlock()
+		return ErrAIAlreadyInProgress
+	}
+	s.processingAI[tweetID] = true
+	s.aiAnalysisLock.Unlock()
+
+	go func() {
+		defer func() {
+			s.aiAnalysisLock.Lock()
+			delete(s.processingAI, tweetID)
+			s.aiAnalysisLock.Unlock()
+		}()
+
+		s.logger.Info("starting background resync", "tweet_id", tweetID)
+		ctx := context.Background()
+		if s.aiCfg.RegenerateTimeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, s.aiCfg.RegenerateTimeout)
+			defer cancel()
+		}
+
+		if err := s.Resync(ctx, tweetID); err != nil {
+			s.logger.Warn("background resync failed", "tweet_id", tweetID, "error", err)
+			return
+		}
+		s.logger.Info("background resync completed", "tweet_id", tweetID)
+	}()
+
+	return nil
+}
+
 // StartRegenerateAIMetadata runs regeneration in the background so it is not cancelled when a client disconnects.
 func (s *TweetService) StartRegenerateAIMetadata(tweetID domain.TweetID) error {
 	// Check if already processing

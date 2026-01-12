@@ -52,6 +52,9 @@ func NewRouter(
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.APIKeyAuth(apiKey))
 
+		// System stats
+		r.Get("/stats", healthHandler.Stats)
+
 		// Bookmarks OAuth connect flow (optional; used to obtain refresh_token once via browser)
 		if bookmarksOAuthHandler != nil {
 			r.Get("/bookmarks/oauth/status", bookmarksOAuthHandler.Status)
@@ -70,6 +73,7 @@ func NewRouter(
 		r.Get("/tweets/{tweetID}/avatar", tweetHandler.ServeAvatar)
 		r.Delete("/tweets/{tweetID}", tweetHandler.Delete)
 		r.Post("/tweets/{tweetID}/regenerate-ai", tweetHandler.RegenerateAI)
+		r.Post("/tweets/{tweetID}/resync", tweetHandler.Resync)
 		r.Get("/tweets/{tweetID}/ai-status", tweetHandler.CheckAIAnalysisStatus)
 		r.Get("/tweets/{tweetID}/diagnostics", tweetHandler.GetDiagnostics)
 

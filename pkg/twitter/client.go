@@ -6,18 +6,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/domain"
+)
+
+// bearerToken is the public bearer token used by X.com's web client.
+// This is not a secret - it's embedded in X.com's main.js and is the same for all users.
+const bearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+
+// GraphQL query IDs - these may change periodically as X updates their API
+const (
+	tweetResultByRestIDQueryID = "Xl5pC_lBk_gcO2ItU39DQw"
 )
 
 // Client fetches tweet data from X.com.
 type Client struct {
 	httpClient *http.Client
 	userAgent  string
+
+	// Guest token caching
+	guestToken       string
+	guestTokenExpiry time.Time
+	guestTokenMu     sync.Mutex
 }
 
 // NewClient creates a new Twitter client.
@@ -26,7 +42,7 @@ func NewClient() *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 	}
 }
 
@@ -37,14 +53,44 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		return nil, fmt.Errorf("could not extract tweet ID from URL: %s", tweetURL)
 	}
 
-	// Try syndication API (works for public tweets)
+	// Try syndication API first (works for public tweets, fast, no auth)
 	tweet, err := c.fetchFromSyndication(ctx, tweetID)
 	if err == nil {
+		tweet.URL = tweetURL
+
+		// Check if text appears truncated (long tweets/notes)
+		if c.isTextTruncated(tweet.Text) {
+			// Try GraphQL API to get full text
+			if fullText, err := c.fetchFullTextFromGraphQL(ctx, tweetID); err == nil && fullText != "" {
+				tweet.Text = fullText
+			}
+		}
+
+		return tweet, nil
+	}
+
+	// If syndication fails, try GraphQL directly
+	tweet, graphqlErr := c.fetchFromGraphQL(ctx, tweetID)
+	if graphqlErr == nil {
 		tweet.URL = tweetURL
 		return tweet, nil
 	}
 
-	return nil, fmt.Errorf("failed to fetch tweet: %w", err)
+	return nil, fmt.Errorf("failed to fetch tweet (syndication: %v, graphql: %v)", err, graphqlErr)
+}
+
+// isTextTruncated checks if tweet text appears to be truncated (long tweet/note).
+func (c *Client) isTextTruncated(text string) bool {
+	// Common truncation indicators
+	if strings.HasSuffix(text, "...") || strings.HasSuffix(text, "\u2026") {
+		return true
+	}
+	// X Premium long tweets can be up to 25,000 chars; old limit was 280
+	// If text is exactly at common boundaries, might be truncated
+	if len(text) >= 275 && len(text) <= 285 {
+		return true
+	}
+	return false
 }
 
 // fetchFromSyndication uses Twitter's public syndication API.
@@ -370,10 +416,10 @@ func ExtractTweetID(url string) string {
 	return ""
 }
 
-func extractBitrateFromURL(url string) int {
+func extractBitrateFromURL(urlStr string) int {
 	// Try to extract bitrate from URL patterns like /vid/avc1/720x1280/... or similar
 	re := regexp.MustCompile(`/(\d+)x(\d+)/`)
-	matches := re.FindStringSubmatch(url)
+	matches := re.FindStringSubmatch(urlStr)
 	if len(matches) > 2 {
 		// Use width * height as a rough bitrate proxy
 		var w, h int
@@ -386,4 +432,311 @@ func extractBitrateFromURL(url string) int {
 		return w * h
 	}
 	return 0
+}
+
+// ============================================================================
+// GraphQL API methods for fetching full tweet text (long tweets/notes)
+// ============================================================================
+
+// getGuestToken obtains a guest token from X's API.
+// Guest tokens are used to access the GraphQL API without user authentication.
+func (c *Client) getGuestToken(ctx context.Context) (string, error) {
+	c.guestTokenMu.Lock()
+	defer c.guestTokenMu.Unlock()
+
+	// Return cached token if still valid (tokens last ~3 hours, we refresh after 1 hour)
+	if c.guestToken != "" && time.Now().Before(c.guestTokenExpiry) {
+		return c.guestToken, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.x.com/1.1/guest/activate.json", nil)
+	if err != nil {
+		return "", fmt.Errorf("create guest token request: %w", err)
+	}
+
+	decodedBearer, _ := url.QueryUnescape(bearerToken)
+	req.Header.Set("Authorization", "Bearer "+decodedBearer)
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("guest token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("guest token error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		GuestToken string `json:"guest_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode guest token: %w", err)
+	}
+
+	c.guestToken = result.GuestToken
+	c.guestTokenExpiry = time.Now().Add(1 * time.Hour)
+
+	return c.guestToken, nil
+}
+
+// graphQLResponse represents the response from X's GraphQL API.
+type graphQLResponse struct {
+	Data struct {
+		TweetResult struct {
+			Result *graphQLTweetResult `json:"result"`
+		} `json:"tweetResult"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	} `json:"errors"`
+}
+
+type graphQLTweetResult struct {
+	TypeName string `json:"__typename"`
+	RestID   string `json:"rest_id"`
+	Core     struct {
+		UserResults struct {
+			Result struct {
+				Legacy struct {
+					Name            string `json:"name"`
+					ScreenName      string `json:"screen_name"`
+					ProfileImageURL string `json:"profile_image_url_https"`
+					Verified        bool   `json:"verified"`
+					FollowersCount  int    `json:"followers_count"`
+					FriendsCount    int    `json:"friends_count"`
+					StatusesCount   int    `json:"statuses_count"`
+					Description     string `json:"description"`
+				} `json:"legacy"`
+				IsBlueVerified bool `json:"is_blue_verified"`
+			} `json:"result"`
+		} `json:"user_results"`
+	} `json:"core"`
+	Legacy struct {
+		CreatedAt            string `json:"created_at"`
+		FullText             string `json:"full_text"`
+		FavoriteCount        int    `json:"favorite_count"`
+		RetweetCount         int    `json:"retweet_count"`
+		ReplyCount           int    `json:"reply_count"`
+		QuoteCount           int    `json:"quote_count"`
+		InReplyToStatusIDStr string `json:"in_reply_to_status_id_str"`
+		QuotedStatusIDStr    string `json:"quoted_status_id_str"`
+	} `json:"legacy"`
+	NoteTweet struct {
+		NoteTweetResults struct {
+			Result struct {
+				Text string `json:"text"`
+			} `json:"result"`
+		} `json:"note_tweet_results"`
+	} `json:"note_tweet"`
+	Views struct {
+		Count string `json:"count"`
+	} `json:"views"`
+}
+
+// fetchFullTextFromGraphQL fetches just the full text for a tweet using GraphQL.
+// This is used as a fallback when syndication API returns truncated text.
+func (c *Client) fetchFullTextFromGraphQL(ctx context.Context, tweetID string) (string, error) {
+	guestToken, err := c.getGuestToken(ctx)
+	if err != nil {
+		return "", fmt.Errorf("get guest token: %w", err)
+	}
+
+	// Build GraphQL request
+	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
+	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false}`
+
+	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
+		tweetResultByRestIDQueryID,
+		url.QueryEscape(variables),
+		url.QueryEscape(features))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("create graphql request: %w", err)
+	}
+
+	decodedBearer, _ := url.QueryUnescape(bearerToken)
+	req.Header.Set("Authorization", "Bearer "+decodedBearer)
+	req.Header.Set("x-guest-token", guestToken)
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-twitter-active-user", "yes")
+	req.Header.Set("x-twitter-client-language", "en")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("graphql request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		// If we get a 403, the guest token might be rate-limited; clear it
+		if resp.StatusCode == http.StatusForbidden {
+			c.guestTokenMu.Lock()
+			c.guestToken = ""
+			c.guestTokenMu.Unlock()
+		}
+		return "", fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var gqlResp graphQLResponse
+	if err := json.NewDecoder(resp.Body).Decode(&gqlResp); err != nil {
+		return "", fmt.Errorf("decode graphql response: %w", err)
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		return "", fmt.Errorf("graphql API error: %s", gqlResp.Errors[0].Message)
+	}
+
+	result := gqlResp.Data.TweetResult.Result
+	if result == nil {
+		return "", fmt.Errorf("no tweet result in graphql response")
+	}
+
+	// Prefer note_tweet.text for long-form content
+	if result.NoteTweet.NoteTweetResults.Result.Text != "" {
+		return result.NoteTweet.NoteTweetResults.Result.Text, nil
+	}
+
+	// Fall back to legacy full_text
+	if result.Legacy.FullText != "" {
+		return result.Legacy.FullText, nil
+	}
+
+	return "", fmt.Errorf("no text found in graphql response")
+}
+
+// fetchFromGraphQL fetches complete tweet data using X's GraphQL API.
+// This is used as a fallback when the syndication API fails entirely.
+func (c *Client) fetchFromGraphQL(ctx context.Context, tweetID string) (*domain.Tweet, error) {
+	guestToken, err := c.getGuestToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get guest token: %w", err)
+	}
+
+	// Build GraphQL request
+	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
+	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false}`
+
+	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
+		tweetResultByRestIDQueryID,
+		url.QueryEscape(variables),
+		url.QueryEscape(features))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create graphql request: %w", err)
+	}
+
+	decodedBearer, _ := url.QueryUnescape(bearerToken)
+	req.Header.Set("Authorization", "Bearer "+decodedBearer)
+	req.Header.Set("x-guest-token", guestToken)
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-twitter-active-user", "yes")
+	req.Header.Set("x-twitter-client-language", "en")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("graphql request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusForbidden {
+			c.guestTokenMu.Lock()
+			c.guestToken = ""
+			c.guestTokenMu.Unlock()
+		}
+		return nil, fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var gqlResp graphQLResponse
+	if err := json.NewDecoder(resp.Body).Decode(&gqlResp); err != nil {
+		return nil, fmt.Errorf("decode graphql response: %w", err)
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		return nil, fmt.Errorf("graphql API error: %s", gqlResp.Errors[0].Message)
+	}
+
+	return c.parseGraphQLResponse(tweetID, &gqlResp)
+}
+
+func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*domain.Tweet, error) {
+	result := resp.Data.TweetResult.Result
+	if result == nil {
+		return nil, fmt.Errorf("no tweet result in response")
+	}
+
+	// Handle "TweetTombstone" (deleted) or other non-tweet types
+	if result.TypeName == "TweetTombstone" {
+		return nil, fmt.Errorf("tweet is unavailable (deleted or protected)")
+	}
+
+	// Parse created_at
+	postedAt, _ := time.Parse(time.RubyDate, result.Legacy.CreatedAt)
+	if postedAt.IsZero() {
+		postedAt = time.Now()
+	}
+
+	// Get text - prefer note_tweet for long-form
+	text := result.Legacy.FullText
+	if result.NoteTweet.NoteTweetResults.Result.Text != "" {
+		text = result.NoteTweet.NoteTweetResults.Result.Text
+	}
+
+	user := result.Core.UserResults.Result
+
+	tweet := &domain.Tweet{
+		ID:       domain.TweetID(tweetID),
+		Text:     text,
+		PostedAt: postedAt,
+		Author: domain.Author{
+			Username:       user.Legacy.ScreenName,
+			DisplayName:    user.Legacy.Name,
+			AvatarURL:      user.Legacy.ProfileImageURL,
+			Verified:       user.Legacy.Verified || user.IsBlueVerified,
+			FollowerCount:  user.Legacy.FollowersCount,
+			FollowingCount: user.Legacy.FriendsCount,
+			TweetCount:     user.Legacy.StatusesCount,
+			Description:    user.Legacy.Description,
+		},
+		Metrics: domain.TweetMetrics{
+			Likes:    result.Legacy.FavoriteCount,
+			Retweets: result.Legacy.RetweetCount,
+			Replies:  result.Legacy.ReplyCount,
+			Quotes:   result.Legacy.QuoteCount,
+		},
+		Status:    domain.ArchiveStatusPending,
+		CreatedAt: time.Now(),
+	}
+
+	// Parse view count if available
+	if result.Views.Count != "" {
+		var views int
+		fmt.Sscanf(result.Views.Count, "%d", &views)
+		tweet.Metrics.Views = views
+	}
+
+	// Set reply/quote references
+	if result.Legacy.InReplyToStatusIDStr != "" {
+		replyTo := domain.TweetID(result.Legacy.InReplyToStatusIDStr)
+		tweet.ReplyTo = &replyTo
+	}
+	if result.Legacy.QuotedStatusIDStr != "" {
+		quoted := domain.TweetID(result.Legacy.QuotedStatusIDStr)
+		tweet.QuotedTweet = &quoted
+	}
+
+	// Note: Media parsing from GraphQL is more complex and would require additional work
+	// For now, we rely on syndication API for media when possible
+
+	return tweet, nil
 }

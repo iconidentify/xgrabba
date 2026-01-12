@@ -1665,8 +1665,944 @@
             font-family: inherit;
         }
 
+        /* ============================================
+           SYSTEM STATS BAR - Terminal/Dashboard Style
+           ============================================ */
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 8px 16px;
+            background: linear-gradient(180deg, rgba(20, 184, 166, 0.08) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(20, 184, 166, 0.15);
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 11px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .stats-bar::-webkit-scrollbar { display: none; }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .stat-pill:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-pill svg {
+            width: 12px;
+            height: 12px;
+            opacity: 0.6;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 9px;
+        }
+
+        .stat-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .stat-value.good { color: #00ba7c; }
+        .stat-value.warn { color: #ffd400; }
+        .stat-value.critical { color: #f4212e; }
+
+        .stat-bar {
+            width: 60px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .stat-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease-out;
+        }
+
+        .stat-bar-fill.good { background: linear-gradient(90deg, #00ba7c, #14b8a6); }
+        .stat-bar-fill.warn { background: linear-gradient(90deg, #ffd400, #ff9500); }
+        .stat-bar-fill.critical { background: linear-gradient(90deg, #f4212e, #ff6b6b); }
+
+        .stat-separator {
+            width: 1px;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* ============================================
+           DETAIL PANEL - Multi-Column Magazine Layout
+           ============================================ */
+        .detail-panel-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 200;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .detail-panel-overlay.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .detail-panel {
+            width: 100%;
+            max-width: 1200px;
+            background: var(--bg-primary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            animation: detailSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes detailSlideIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: linear-gradient(180deg, rgba(20, 184, 166, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detail-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .detail-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-elevated);
+            overflow: hidden;
+            border: 2px solid rgba(20, 184, 166, 0.3);
+        }
+
+        .detail-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-author-info h2 {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .detail-author-info .username {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .detail-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .detail-close:hover {
+            background: rgba(244, 33, 46, 0.15);
+            color: #f4212e;
+        }
+
+        .detail-body {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            min-height: 400px;
+        }
+
+        /* Left Column - Content */
+        .detail-content {
+            padding: 20px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .detail-section {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .detail-section-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .detail-section-label svg {
+            width: 12px;
+            height: 12px;
+            opacity: 0.7;
+        }
+
+        .detail-tweet-text {
+            font-size: 16px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .detail-ai-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .detail-ai-summary {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .detail-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .detail-tag {
+            padding: 5px 12px;
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.15), rgba(8, 145, 178, 0.15));
+            border: 1px solid rgba(20, 184, 166, 0.2);
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--brand-start);
+            font-weight: 500;
+        }
+
+        /* Media Preview in Detail */
+        .detail-media-preview {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        }
+
+        .detail-media-thumb {
+            position: relative;
+            aspect-ratio: 16/9;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg-elevated);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .detail-media-thumb:hover {
+            transform: scale(1.02);
+        }
+
+        .detail-media-thumb img,
+        .detail-media-thumb video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-media-badge {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            padding: 3px 8px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 500;
+            color: white;
+        }
+
+        /* Right Column - Metadata */
+        .detail-meta {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .detail-meta-group {
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .detail-meta-group:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .detail-meta-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .detail-meta-title svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .detail-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        .detail-meta-row:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .detail-meta-key {
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 11px;
+        }
+
+        .detail-meta-value {
+            color: var(--text-primary);
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .detail-meta-value.mono {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 11px;
+        }
+
+        /* Metrics Row */
+        .detail-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .detail-metric {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .detail-metric-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .detail-metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Transcript Section */
+        .detail-transcript {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            font-family: 'SF Mono', 'Menlo', monospace;
+        }
+
+        .detail-transcript::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .detail-transcript::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        /* Detail Actions */
+        .detail-actions {
+            display: flex;
+            gap: 8px;
+            padding: 16px 20px;
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .detail-action-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+            text-decoration: none;
+        }
+
+        .detail-action-btn.primary {
+            background: linear-gradient(135deg, var(--brand-start), var(--brand-end));
+            color: white;
+        }
+
+        .detail-action-btn.primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .detail-action-btn.secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .detail-action-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .detail-action-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Detail Panel Header */
+        .detail-close-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .detail-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .detail-close-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .detail-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .detail-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-header-actions .detail-action-btn {
+            flex: none;
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+            font-size: 12px;
+        }
+
+        .detail-header-actions .detail-action-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .detail-header-actions .detail-action-btn.danger:hover {
+            background: rgba(244, 33, 46, 0.15);
+            color: var(--danger);
+            border-color: rgba(244, 33, 46, 0.3);
+        }
+
+        .detail-header-actions .detail-action-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Detail Section Headers */
+        .detail-section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .detail-section-header svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0.7;
+        }
+
+        .detail-section-badge {
+            margin-left: auto;
+            padding: 2px 8px;
+            background: rgba(20, 184, 166, 0.15);
+            border-radius: 10px;
+            font-size: 10px;
+            color: var(--brand-start);
+        }
+
+        /* Detail Media Grid */
+        .detail-media-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .detail-media-empty {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .detail-media-item {
+            position: relative;
+            aspect-ratio: 16/9;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg-elevated);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .detail-media-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .detail-media-item img,
+        .detail-media-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-media-play {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.4);
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .detail-media-item:hover .detail-media-play {
+            opacity: 1;
+        }
+
+        .detail-media-play svg {
+            width: 36px;
+            height: 36px;
+            color: white;
+        }
+
+        .detail-media-duration {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            padding: 2px 6px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 500;
+            color: white;
+        }
+
+        /* Detail Tweet Text */
+        .detail-tweet-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Detail Transcript */
+        .detail-transcript-text {
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
+        }
+
+        .detail-transcript-text::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .detail-transcript-text::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        /* Detail Diagnostics */
+        .detail-diagnostics-code {
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 0;
+        }
+
+        /* Detail AI Section */
+        .detail-ai-type {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-top: 1px solid var(--border-subtle);
+            margin-top: 12px;
+        }
+
+        .detail-ai-pending {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        /* Detail Author Card */
+        .detail-author-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .detail-author-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-elevated);
+            overflow: hidden;
+            border: 2px solid rgba(20, 184, 166, 0.2);
+            flex-shrink: 0;
+        }
+
+        .detail-author-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-author-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .detail-author-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .detail-author-name .verified-badge {
+            width: 16px;
+            height: 16px;
+            color: var(--accent-primary);
+        }
+
+        .detail-author-handle {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .detail-author-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .detail-author-stat {
+            text-align: center;
+            padding: 8px 4px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+        }
+
+        .detail-stat-value {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .detail-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .detail-author-bio {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        /* Detail Technical Grid */
+        .detail-tech-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .detail-tech-item {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 6px;
+            align-items: center;
+        }
+
+        .detail-tech-type {
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-primary);
+            min-width: 60px;
+        }
+
+        .detail-tech-detail {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .detail-tech-empty {
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .detail-tech-summary {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        /* Detail Rows */
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 6px 0;
+        }
+
+        .detail-row:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .detail-value {
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 500;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-all;
+        }
+
+        .detail-path {
+            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .detail-status-completed { color: var(--success); }
+        .detail-status-processing, .detail-status-downloading { color: var(--accent-primary); }
+        .detail-status-failed { color: var(--danger); }
+
+        /* Small button variant */
+        .btn-sm {
+            padding: 6px 12px !important;
+            font-size: 11px !important;
+        }
+
         /* Mobile Styles */
         @media (max-width: 768px) {
+            /* Detail Panel Mobile */
+            .detail-panel-overlay {
+                padding: 0;
+            }
+
+            .detail-panel {
+                border-radius: 0;
+                min-height: 100vh;
+            }
+
+            .detail-header {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background: var(--bg-primary);
+            }
+
+            .detail-header-actions {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            .detail-header-actions .detail-action-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .detail-header-actions .detail-action-btn span {
+                display: none;
+            }
+
+            .detail-body {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-content {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .detail-meta {
+                padding: 16px;
+            }
+
+            .detail-section {
+                padding: 12px;
+            }
+
+            .detail-author-stats {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+            }
+
+            .detail-metrics {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .detail-media-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            /* Stats Bar Mobile */
+            .stats-bar {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+
+            .stat-pill {
+                padding: 6px 10px;
+                font-size: 10px;
+            }
+
+            .stat-label {
+                display: none;
+            }
+
             .theater-ai-panel {
                 position: fixed;
                 top: auto;
@@ -1990,6 +2926,48 @@
         </div>
     </header>
 
+    <!-- System Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+        <div class="stat-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <span class="stat-label">Uptime</span>
+            <span class="stat-value" id="statUptime">--</span>
+        </div>
+        <div class="stat-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/>
+            </svg>
+            <span class="stat-label">Disk</span>
+            <span class="stat-value" id="statDisk">--</span>
+            <div class="stat-bar">
+                <div class="stat-bar-fill" id="statDiskBar" style="width: 0%"></div>
+            </div>
+        </div>
+        <div class="stat-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/>
+            </svg>
+            <span class="stat-label">Mem</span>
+            <span class="stat-value" id="statMem">--</span>
+        </div>
+        <div class="stat-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+            </svg>
+            <span class="stat-label">Goroutines</span>
+            <span class="stat-value" id="statGoroutines">--</span>
+        </div>
+        <div class="stat-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/>
+            </svg>
+            <span class="stat-label">CPU</span>
+            <span class="stat-value" id="statCPU">--</span>
+        </div>
+    </div>
+
     <div class="container">
         <div class="search-container">
             <div class="search-bar">
@@ -2041,8 +3019,53 @@
         </div>
     </div>
 
-    <!-- Tweet Detail Modal -->
-    <div class="modal-overlay" id="tweetDetailModal" role="dialog" aria-modal="true" aria-labelledby="tweetDetailTitle">
+    <!-- Tweet Detail Panel (Redesigned) -->
+    <div class="detail-panel-overlay" id="detailPanelOverlay" role="dialog" aria-modal="true" aria-labelledby="detailPanelTitle">
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-header">
+                <div class="detail-header-left">
+                    <button class="detail-close-btn" onclick="closeDetailPanel()" aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                        </svg>
+                    </button>
+                    <h2 id="detailPanelTitle">Archive Details</h2>
+                </div>
+                <div class="detail-header-actions">
+                    <a class="detail-action-btn" id="detailViewOriginal" href="#" target="_blank" rel="noopener">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                        View on X
+                    </a>
+                    <button class="detail-action-btn" id="detailRegenAI" onclick="regenerateAI(currentTweetDetail?.tweet_id)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                        Regen AI
+                    </button>
+                    <button class="detail-action-btn" id="detailResync" onclick="resyncTweet(currentTweetDetail?.tweet_id)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                        </svg>
+                        Resync
+                    </button>
+                    <button class="detail-action-btn danger" onclick="closeDetailPanel(); showDeleteModal(currentTweetDetail?.tweet_id)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/>
+                        </svg>
+                        Delete
+                    </button>
+                </div>
+            </div>
+            <div class="detail-body" id="detailBody">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legacy Tweet Detail Modal (hidden, for backwards compat) -->
+    <div class="modal-overlay" id="tweetDetailModal" role="dialog" aria-modal="true" aria-labelledby="tweetDetailTitle" style="display:none;">
         <div class="modal tweet-detail-modal">
             <div class="modal-header">
                 <h2 id="tweetDetailTitle">Tweet</h2>
@@ -2455,6 +3478,54 @@
             document.getElementById('totalMedia').textContent = totalMedia;
         }
 
+        // System stats fetching
+        let statsInterval = null;
+        async function fetchSystemStats() {
+            try {
+                const response = await fetch('/api/v1/stats', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!response.ok) return;
+                const stats = await response.json();
+
+                // Update uptime
+                document.getElementById('statUptime').textContent = stats.uptime_human || '--';
+
+                // Update disk usage
+                const diskUsedGB = (stats.disk_used_bytes / (1024 * 1024 * 1024)).toFixed(1);
+                const diskTotalGB = (stats.disk_total_bytes / (1024 * 1024 * 1024)).toFixed(1);
+                const diskPct = stats.disk_used_pct || 0;
+                document.getElementById('statDisk').textContent = `${diskUsedGB}/${diskTotalGB} GB`;
+                const diskBar = document.getElementById('statDiskBar');
+                diskBar.style.width = `${Math.min(diskPct, 100)}%`;
+                // Color code disk usage
+                if (diskPct >= 90) {
+                    diskBar.style.background = 'var(--danger)';
+                } else if (diskPct >= 75) {
+                    diskBar.style.background = '#f59e0b';
+                } else {
+                    diskBar.style.background = 'var(--brand-gradient)';
+                }
+
+                // Update memory
+                document.getElementById('statMem').textContent = `${stats.mem_alloc_mb} MB`;
+
+                // Update goroutines
+                document.getElementById('statGoroutines').textContent = stats.num_goroutines;
+
+                // Update CPU cores
+                document.getElementById('statCPU').textContent = `${stats.num_cpu} cores`;
+            } catch (error) {
+                console.error('Failed to fetch system stats:', error);
+            }
+        }
+
+        function startSystemStatsPolling() {
+            fetchSystemStats(); // Initial fetch
+            if (statsInterval) clearInterval(statsInterval);
+            statsInterval = setInterval(fetchSystemStats, 30000); // Every 30 seconds
+        }
+
         function formatDate(dateStr) {
             if (!dateStr) return '';
             const date = new Date(dateStr);
@@ -2722,12 +3793,13 @@
 
         // Open tweet detail modal
         async function openTweetDetail(tweetId) {
-            const modal = document.getElementById('tweetDetailModal');
-            const content = document.getElementById('tweetDetailContent');
+            const overlay = document.getElementById('detailPanelOverlay');
+            const body = document.getElementById('detailBody');
+            const viewOriginalBtn = document.getElementById('detailViewOriginal');
 
             // Show loading state
-            content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-            modal.classList.add('active');
+            body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+            overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
 
             try {
@@ -2736,6 +3808,14 @@
                 });
                 const tweet = await response.json();
                 currentTweetDetail = tweet;
+
+                // Update header URL
+                if (tweet.url) {
+                    viewOriginalBtn.href = tweet.url;
+                    viewOriginalBtn.style.display = '';
+                } else {
+                    viewOriginalBtn.style.display = 'none';
+                }
 
                 // Handle author being an object (from /full endpoint) or string
                 const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
@@ -2795,164 +3875,175 @@
                 // Build avatar URL with API key
                 const avatarWithKey = authorAvatar ? addApiKey(authorAvatar) : '';
 
-                content.innerHTML = `
-                    <div class="tweet-detail-header">
-                        <div class="tweet-detail-avatar">
-                            ${avatarWithKey
-                                ? `<img src="${avatarWithKey}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(authorUsername)}'">`
-                                : getInitials(authorUsername)
-                            }
-                        </div>
-                        <div class="tweet-detail-author ${hasAuthorMeta ? 'author-tooltip-trigger' : ''}">
-                            <div class="tweet-detail-author-name">
-                                ${escapeHtml(displayName)}
-                                ${verified ? `
-                                    <svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>
-                                    </svg>
-                                ` : ''}
+                // Calculate total storage size
+                const totalSize = tweet.media?.reduce((sum, m) => sum + (m.size || 0), 0) || 0;
+
+                // Build transcript HTML
+                const hasTranscript = tweet.transcript && tweet.transcript.trim().length > 0;
+
+                body.innerHTML = `
+                    <!-- Left Column: Content -->
+                    <div class="detail-content">
+                        <!-- Media Preview -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                                Media
+                                <span class="detail-section-badge">${tweet.media?.length || 0}</span>
                             </div>
-                            <div class="tweet-detail-author-username">@${escapeHtml(authorUsername)}</div>
-                            ${hasAuthorMeta ? `
-                                <div class="tweet-detail-author-stats">
-                                    ${followerCount ? `<span>${formatNumber(followerCount)} followers</span>` : ''}
-                                    ${followingCount ? `<span>${formatNumber(followingCount)} following</span>` : ''}
-                                    ${tweetCount ? `<span>${formatNumber(tweetCount)} posts</span>` : ''}
+                            <div class="detail-media-grid">
+                                ${renderDetailMediaGrid(tweet)}
+                            </div>
+                        </div>
+
+                        <!-- Tweet Text -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+                                Original Post
+                            </div>
+                            <div class="detail-tweet-text">${escapeHtml(tweet.text || 'No text available')}</div>
+                        </div>
+
+                        <!-- Transcript -->
+                        ${hasTranscript ? `
+                            <div class="detail-section detail-transcript">
+                                <div class="detail-section-header">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
+                                    Transcript
                                 </div>
-                            ` : ''}
-                            ${authorBio ? `<div class="tweet-detail-author-bio">${escapeHtml(authorBio)}</div>` : ''}
-                            ${authorTooltip}
-                        </div>
-                    </div>
-
-                    <div class="tweet-detail-body">
-                        <div class="tweet-detail-text">${escapeHtml(tweet.text || '')}</div>
-
-                        ${tweet.ai_summary ? `
-                            <div class="ai-analysis">
-                                <div class="ai-summary">${escapeHtml(tweet.ai_summary)}</div>
+                                <div class="detail-transcript-text">${escapeHtml(tweet.transcript)}</div>
                             </div>
                         ` : ''}
 
-                        ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
-                            <div class="ai-tags">
-                                ${tweet.ai_tags.map(tag => `<span class="ai-tag">${escapeHtml(tag)}</span>`).join('')}
-                            </div>
-                        ` : ''}
-
-                        ${tweet.media && tweet.media.length > 0 && tweet.media.some(m => m.size || m.width || m.duration_seconds) ? `
-                            <div class="media-stats">
-                                ${tweet.media.filter(m => m.size || m.width || m.duration_seconds).map(m => `
-                                    <div class="media-stat-item">
-                                        <span class="media-stat-type">${m.type === 'video' ? 'Video' : m.type === 'image' ? 'Image' : m.type}</span>
-                                        ${m.width && m.height ? `<span class="media-stat-detail">${m.width}x${m.height}</span>` : ''}
-                                        ${m.duration_seconds ? `<span class="media-stat-detail">${formatDuration(m.duration_seconds)}</span>` : ''}
-                                        ${m.size ? `<span class="media-stat-detail">${formatFileSize(m.size)}</span>` : ''}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-
-                        <div class="tweet-detail-date">
-                            ${formatFullDate(tweet.posted_at || tweet.created_at)}
-                            ${tweet.url ? ` - <a href="${tweet.url}" target="_blank" rel="noopener">View on X</a>` : ''}
-                        </div>
-
-                        ${tweet.metrics && (tweet.metrics.likes || tweet.metrics.views) ? `
-                            <div class="tweet-detail-metrics">
-                                ${tweet.metrics.likes ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.metrics.likes)}</span>
-                                        <span class="metric-label">Likes</span>
-                                    </div>
-                                ` : ''}
-                                ${tweet.metrics.views ? `
-                                    <div class="metric">
-                                        <span class="metric-value">${formatNumber(tweet.metrics.views)}</span>
-                                        <span class="metric-label">Views</span>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        ` : ''}
-
-                        ${renderDetailMedia(tweet)}
-
-                        <div class="archive-metadata">
-                            <h4>
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 3v10.586l3.293-3.293 1.414 1.414L12 16.414l-4.707-4.707 1.414-1.414L12 13.586V3h2z"/>
-                                    <path d="M5 17v4h14v-4h2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4h2z"/>
-                                </svg>
-                                Archive Info
-                            </h4>
-                            ${tweet.ai_title ? `
-                                <div class="metadata-row">
-                                    <span class="metadata-label">Title</span>
-                                    <span class="metadata-value">${escapeHtml(tweet.ai_title)}</span>
-                                </div>
-                            ` : ''}
-                            <div class="metadata-row">
-                                <span class="metadata-label">Archived</span>
-                                <span class="metadata-value">${formatFullDate(tweet.archived_at || tweet.created_at)}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Status</span>
-                                <span class="metadata-value">${tweet.status || 'Complete'}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Media Files</span>
-                                <span class="metadata-value">${tweet.media?.length || tweet.media_count || 0} items</span>
-                            </div>
-                            ${tweet.archive_path ? `
-                                <div class="metadata-row">
-                                    <span class="metadata-label">Archive Path</span>
-                                    <span class="metadata-value" style="font-size: 12px; font-family: monospace;">${escapeHtml(tweet.archive_path)}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-
-                        <div class="archive-metadata" style="margin-top: 12px;">
-                            <h4>
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/>
-                                </svg>
+                        <!-- Diagnostics (Collapsible) -->
+                        <div class="detail-section" style="border-bottom: none;">
+                            <div class="detail-section-header" style="cursor: pointer;" onclick="toggleDiagnostics()">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
                                 Diagnostics
-                            </h4>
-                            <div style="margin-top: 8px; display:flex; gap:8px;">
-                                <button class="btn btn-secondary" id="copyDiagnosticsBtn" onclick="event.stopPropagation(); copyDiagnostics()">Copy JSON</button>
-                                <button class="btn btn-ghost" id="toggleDiagnosticsBtn" onclick="event.stopPropagation(); toggleDiagnostics()">Show</button>
-                                <button class="btn btn-ghost" onclick="event.stopPropagation(); loadDiagnostics('${tweet.tweet_id}')">Refresh</button>
+                                <svg id="diagToggleIcon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;margin-left:auto;transition:transform 0.2s;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
                             </div>
-                            <div id="tweetDiagnostics" class="metadata-value" style="display:none; margin-top: 8px; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; opacity: 0.9;">
-                                Loading diagnostics...
+                            <div id="tweetDiagnostics" style="display:none; margin-top: 8px;">
+                                <div style="display:flex; gap:8px; margin-bottom: 8px;">
+                                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); copyDiagnostics()">Copy JSON</button>
+                                    <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); loadDiagnostics('${tweet.tweet_id}')">Refresh</button>
+                                </div>
+                                <pre class="detail-diagnostics-code">Loading...</pre>
                             </div>
                         </div>
                     </div>
 
-                    <div class="tweet-detail-actions">
-                        <div class="action-group">
-                            ${tweet.url ? `
-                                <a href="${tweet.url}" target="_blank" rel="noopener" class="btn btn-primary">
-                                    <svg viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                                    </svg>
-                                    View Original
-                                </a>
+                    <!-- Right Column: Metadata -->
+                    <div class="detail-meta">
+                        <!-- AI Analysis -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                                AI Analysis
+                            </div>
+                            ${tweet.ai_title ? `
+                                <div class="detail-ai-title">${escapeHtml(tweet.ai_title)}</div>
+                            ` : ''}
+                            ${tweet.ai_summary ? `
+                                <div class="detail-ai-summary">${escapeHtml(tweet.ai_summary)}</div>
+                            ` : ''}
+                            ${tweet.ai_content_type ? `
+                                <div class="detail-ai-type">
+                                    <span class="detail-label">Type</span>
+                                    <span class="detail-value">${escapeHtml(tweet.ai_content_type)}</span>
+                                </div>
+                            ` : ''}
+                            ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
+                                <div class="detail-tags">
+                                    ${tweet.ai_tags.map(tag => `<span class="detail-tag">${escapeHtml(tag)}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                            ${!tweet.ai_title && !tweet.ai_summary && (!tweet.ai_tags || tweet.ai_tags.length === 0) ? `
+                                <div class="detail-ai-pending">AI analysis pending...</div>
                             ` : ''}
                         </div>
-                        <div class="action-group">
-                            <button class="btn btn-secondary" onclick="regenerateAI('${tweet.tweet_id}')" id="regenAiBtn-${tweet.tweet_id}">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                                </svg>
-                                Regenerate AI
-                            </button>
-                            <button class="btn btn-danger" onclick="closeTweetDetailModal(); showDeleteModal('${tweet.tweet_id}')">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/>
-                                </svg>
-                                Delete
-                            </button>
+
+                        <!-- Author -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                Author
+                            </div>
+                            <div class="detail-author-card">
+                                <div class="detail-author-avatar">
+                                    ${avatarWithKey
+                                        ? `<img src="${avatarWithKey}" alt="${escapeHtml(displayName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%;font-weight:600;color:var(--text-muted);">${getInitials(authorUsername)}</span>`
+                                        : `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-weight:600;color:var(--text-muted);">${getInitials(authorUsername)}</span>`
+                                    }
+                                </div>
+                                <div class="detail-author-info">
+                                    <div class="detail-author-name">
+                                        ${escapeHtml(displayName)}
+                                        ${verified ? `<svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/></svg>` : ''}
+                                    </div>
+                                    <div class="detail-author-handle">@${escapeHtml(authorUsername)}</div>
+                                </div>
+                            </div>
+                            ${hasAuthorMeta ? `
+                                <div class="detail-author-stats">
+                                    ${followerCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(followerCount)}</span><span class="detail-stat-label">Followers</span></div>` : ''}
+                                    ${followingCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(followingCount)}</span><span class="detail-stat-label">Following</span></div>` : ''}
+                                    ${tweetCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(tweetCount)}</span><span class="detail-stat-label">Posts</span></div>` : ''}
+                                </div>
+                            ` : ''}
+                            ${authorBio ? `<div class="detail-author-bio">${escapeHtml(authorBio)}</div>` : ''}
+                        </div>
+
+                        <!-- Engagement Metrics -->
+                        ${tweet.metrics && (tweet.metrics.likes || tweet.metrics.views || tweet.metrics.retweets || tweet.metrics.replies) ? `
+                            <div class="detail-section">
+                                <div class="detail-section-header">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                                    Engagement
+                                </div>
+                                <div class="detail-metrics">
+                                    ${tweet.metrics.views ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.views)}</span><span class="detail-metric-label">Views</span></div>` : ''}
+                                    ${tweet.metrics.likes ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.likes)}</span><span class="detail-metric-label">Likes</span></div>` : ''}
+                                    ${tweet.metrics.retweets ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.retweets)}</span><span class="detail-metric-label">Reposts</span></div>` : ''}
+                                    ${tweet.metrics.replies ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.replies)}</span><span class="detail-metric-label">Replies</span></div>` : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <!-- Technical Details -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                                Technical
+                            </div>
+                            <div class="detail-tech-grid">
+                                ${tweet.media && tweet.media.length > 0 ? tweet.media.map((m, i) => `
+                                    <div class="detail-tech-item">
+                                        <span class="detail-tech-type">${m.type === 'video' ? 'Video' : 'Image'} ${tweet.media.length > 1 ? (i + 1) : ''}</span>
+                                        ${m.width && m.height ? `<span class="detail-tech-detail">${m.width} x ${m.height}</span>` : ''}
+                                        ${m.duration_seconds ? `<span class="detail-tech-detail">${formatDuration(m.duration_seconds)}</span>` : ''}
+                                        ${m.size ? `<span class="detail-tech-detail">${formatFileSize(m.size)}</span>` : ''}
+                                    </div>
+                                `).join('') : '<div class="detail-tech-empty">No media files</div>'}
+                            </div>
+                            <div class="detail-tech-summary">
+                                <div class="detail-row"><span class="detail-label">Total Size</span><span class="detail-value">${formatFileSize(totalSize)}</span></div>
+                                <div class="detail-row"><span class="detail-label">Media Count</span><span class="detail-value">${tweet.media?.length || 0} files</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Archive Info -->
+                        <div class="detail-section" style="border-bottom: none;">
+                            <div class="detail-section-header">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.586l3.293-3.293 1.414 1.414L12 16.414l-4.707-4.707 1.414-1.414L12 13.586V3h2z"/><path d="M5 17v4h14v-4h2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4h2z"/></svg>
+                                Archive
+                            </div>
+                            <div class="detail-archive-info">
+                                <div class="detail-row"><span class="detail-label">Posted</span><span class="detail-value">${formatFullDate(tweet.posted_at)}</span></div>
+                                <div class="detail-row"><span class="detail-label">Archived</span><span class="detail-value">${formatFullDate(tweet.archived_at || tweet.created_at)}</span></div>
+                                <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value detail-status-${tweet.status || 'completed'}">${tweet.status || 'Completed'}</span></div>
+                                ${tweet.archive_path ? `<div class="detail-row"><span class="detail-label">Path</span><span class="detail-value detail-path">${escapeHtml(tweet.archive_path)}</span></div>` : ''}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -2962,17 +4053,57 @@
                 // Load diagnostics panel
                 loadDiagnostics(tweet.tweet_id);
 
-                // Do NOT autoplay videos when opening tweet detail.
-                // Only play when the user explicitly clicks the play button.
-
             } catch (error) {
                 console.error('Failed to fetch tweet details:', error);
-                content.innerHTML = `
+                body.innerHTML = `
                     <div class="empty-state" style="padding: 48px;">
                         <p>Failed to load tweet details.</p>
                     </div>
                 `;
             }
+        }
+
+        function closeDetailPanel() {
+            const overlay = document.getElementById('detailPanelOverlay');
+            // Pause all videos before closing
+            const videos = overlay.querySelectorAll('video');
+            videos.forEach(video => {
+                video.pause();
+                video.currentTime = 0;
+            });
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+            currentTweetDetail = null;
+        }
+
+        // New helper function for the detail panel media grid
+        function renderDetailMediaGrid(tweet) {
+            if (!tweet.media || tweet.media.length === 0) {
+                return '<div class="detail-media-empty">No media files</div>';
+            }
+
+            return tweet.media.map((m, index) => {
+                const mediaUrl = addApiKey(m.url);
+                const isVideo = m.type === 'video' || m.content_type?.startsWith('video/');
+
+                if (isVideo) {
+                    return `
+                        <div class="detail-media-item video" onclick="openTheater(${index})">
+                            <video src="${mediaUrl}" preload="metadata"></video>
+                            <div class="detail-media-play">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                            ${m.duration_seconds ? `<span class="detail-media-duration">${formatDuration(m.duration_seconds)}</span>` : ''}
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="detail-media-item" onclick="openTheater(${index})">
+                            <img src="${mediaUrl}" alt="Media ${index + 1}" loading="lazy">
+                        </div>
+                    `;
+                }
+            }).join('');
         }
 
         function renderDetailMedia(tweet) {
@@ -3420,17 +4551,8 @@
         };
 
         function closeTweetDetailModal() {
-            // Pause all videos before closing to stop audio
-            const modal = document.getElementById('tweetDetailModal');
-            const videos = modal.querySelectorAll('video');
-            videos.forEach(video => {
-                video.pause();
-                video.currentTime = 0;
-            });
-
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
-            currentTweetDetail = null;
+            // Redirect to new detail panel close function
+            closeDetailPanel();
         }
 
         // Delete modal
@@ -3491,15 +4613,16 @@
         function toggleDiagnostics() {
             diagnosticsExpanded = !diagnosticsExpanded;
             const el = document.getElementById('tweetDiagnostics');
-            const btn = document.getElementById('toggleDiagnosticsBtn');
+            const icon = document.getElementById('diagToggleIcon');
             if (el) el.style.display = diagnosticsExpanded ? 'block' : 'none';
-            if (btn) btn.textContent = diagnosticsExpanded ? 'Hide' : 'Show';
+            if (icon) icon.style.transform = diagnosticsExpanded ? 'rotate(180deg)' : 'rotate(0)';
         }
 
         async function loadDiagnostics(tweetId) {
-            const el = document.getElementById('tweetDiagnostics');
-            if (!el) return;
-            el.textContent = 'Loading diagnostics...';
+            const container = document.getElementById('tweetDiagnostics');
+            const codeEl = container?.querySelector('.detail-diagnostics-code') || container;
+            if (!codeEl) return;
+            codeEl.textContent = 'Loading diagnostics...';
 
             try {
                 const response = await fetch(`/api/v1/tweets/${tweetId}/diagnostics`, {
@@ -3521,10 +4644,10 @@
                     `Media items: ${data.media?.length || 0}`,
                 ].join('\n');
 
-                el.textContent = summary + '\n\n' + JSON.stringify(data, null, 2);
+                codeEl.textContent = summary + '\n\n' + JSON.stringify(data, null, 2);
             } catch (err) {
                 lastDiagnosticsJson = null;
-                el.textContent = `Failed to load diagnostics: ${err}`;
+                codeEl.textContent = `Failed to load diagnostics: ${err}`;
             }
         }
 
@@ -3611,6 +4734,91 @@
                 setTimeout(() => {
                     btn.innerHTML = originalContent;
                 }, 3000);
+            }
+        }
+
+        // Resync tweet - re-fetch from Twitter to get updated/full text
+        async function resyncTweet(tweetId) {
+            if (!tweetId) return;
+
+            const btn = document.getElementById('detailResync');
+            if (!btn) return;
+
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Resyncing...';
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/resync`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (response.status === 409) {
+                    // Already in progress
+                    const result = await response.json();
+                    if (result.in_progress) {
+                        btn.innerHTML = '<div class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 6px;"></div> Already syncing...';
+                        // Poll for completion
+                        pollResyncStatus(tweetId, originalContent);
+                        return;
+                    }
+                }
+
+                if (!response.ok) {
+                    throw new Error('Failed to resync tweet');
+                }
+
+                // Accepted: resync runs asynchronously. Poll status until complete.
+                pollResyncStatus(tweetId, originalContent);
+
+            } catch (error) {
+                console.error('Resync error:', error);
+                btn.innerHTML = 'Failed - Retry';
+                btn.disabled = false;
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                }, 3000);
+            }
+        }
+
+        async function pollResyncStatus(tweetId, originalBtnContent) {
+            const btn = document.getElementById('detailResync');
+
+            try {
+                const statusResponse = await fetch(`/api/v1/tweets/${tweetId}/ai-status`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (statusResponse.ok) {
+                    const status = await statusResponse.json();
+                    if (status.in_progress) {
+                        // Still processing, poll again
+                        setTimeout(() => pollResyncStatus(tweetId, originalBtnContent), 2000);
+                        return;
+                    }
+                }
+
+                // Complete - refresh detail panel
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalBtnContent;
+                }
+
+                // Reload the detail panel to show updated data
+                if (currentTweetDetail?.tweet_id === tweetId) {
+                    await openTweetDetail(tweetId);
+                }
+
+                // Refresh the main list too
+                await loadTweets();
+
+            } catch (error) {
+                console.error('Poll resync status error:', error);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalBtnContent;
+                }
             }
         }
 
@@ -3746,10 +4954,10 @@
         document.addEventListener('keydown', (e) => {
             const theater = document.getElementById('mediaTheater');
             const lightbox = document.getElementById('lightbox');
-            const tweetDetail = document.getElementById('tweetDetailModal');
+            const detailPanel = document.getElementById('detailPanelOverlay');
             const deleteModal = document.getElementById('deleteModal');
 
-            // Escape to close modals (priority: theater > lightbox > delete > detail)
+            // Escape to close modals (priority: theater > lightbox > delete > detail panel)
             if (e.key === 'Escape') {
                 if (theater.classList.contains('active')) {
                     closeTheater();
@@ -3757,8 +4965,8 @@
                     closeLightbox();
                 } else if (deleteModal.classList.contains('active')) {
                     closeDeleteModal();
-                } else if (tweetDetail.classList.contains('active')) {
-                    closeTweetDetailModal();
+                } else if (detailPanel.classList.contains('active')) {
+                    closeDetailPanel();
                 }
             }
 
@@ -3868,6 +5076,9 @@
 
         // Keep the list responsive: update AI progress badges without requiring a full reload.
         startAIPolling();
+
+        // Start system stats polling
+        startSystemStatsPolling();
 
         async function refreshBookmarksAuthStatus() {
             const el = document.getElementById('bookmarksAuthStatus');

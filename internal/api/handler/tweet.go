@@ -358,6 +358,45 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Resync handles POST /api/v1/tweets/{tweetID}/resync
+// This re-fetches the tweet from Twitter and updates its metadata.
+// Useful when original text was truncated or data is stale.
+func (h *TweetHandler) Resync(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	// Run in background so closing the UI / disconnecting the client does not cancel the work.
+	err := h.tweetSvc.StartResync(domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		// Check if already processing
+		if errors.Is(err, service.ErrAIAlreadyInProgress) || strings.Contains(err.Error(), "already in progress") {
+			h.writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"success":     false,
+				"message":     "Resync already in progress for this tweet",
+				"in_progress": true,
+			})
+			return
+		}
+		h.logger.Error("resync failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to resync tweet")
+		return
+	}
+
+	// 202 Accepted: work is running asynchronously
+	h.writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"success":     true,
+		"message":     "Resync started",
+		"in_progress": true,
+	})
+}
+
 // CheckAIAnalysisStatus handles GET /api/v1/tweets/{tweetID}/ai-status
 // Returns whether AI analysis is currently in progress for a tweet.
 func (h *TweetHandler) CheckAIAnalysisStatus(w http.ResponseWriter, r *http.Request) {
