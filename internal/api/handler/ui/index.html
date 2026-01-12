@@ -1746,6 +1746,22 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        .stat-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            margin: 0 4px;
+        }
+
+        .stat-pill.archive-stat {
+            background: rgba(29, 155, 240, 0.1);
+            border-color: rgba(29, 155, 240, 0.2);
+        }
+
+        .stat-pill.archive-stat .stat-label {
+            color: rgba(29, 155, 240, 0.8);
+        }
+
         /* ============================================
            DETAIL PANEL - Multi-Column Magazine Layout
            ============================================ */
@@ -2966,6 +2982,35 @@
             <span class="stat-label">CPU</span>
             <span class="stat-value" id="statCPU">--</span>
         </div>
+        <div class="stat-divider"></div>
+        <div class="stat-pill archive-stat">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+            </svg>
+            <span class="stat-label">Tweets</span>
+            <span class="stat-value" id="statTweets">--</span>
+        </div>
+        <div class="stat-pill archive-stat">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+            </svg>
+            <span class="stat-label">Videos</span>
+            <span class="stat-value" id="statVideos">--</span>
+        </div>
+        <div class="stat-pill archive-stat">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+            </svg>
+            <span class="stat-label">Images</span>
+            <span class="stat-value" id="statImages">--</span>
+        </div>
+        <div class="stat-pill archive-stat">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/>
+            </svg>
+            <span class="stat-label">Archive</span>
+            <span class="stat-value" id="statArchive">--</span>
+        </div>
     </div>
 
     <div class="container">
@@ -3515,6 +3560,12 @@
 
                 // Update CPU cores
                 document.getElementById('statCPU').textContent = `${stats.num_cpu} cores`;
+
+                // Update archive stats
+                document.getElementById('statTweets').textContent = stats.tweet_count || 0;
+                document.getElementById('statVideos').textContent = `${stats.video_mb || 0} MB`;
+                document.getElementById('statImages').textContent = `${stats.image_mb || 0} MB`;
+                document.getElementById('statArchive').textContent = `${stats.archive_total_mb || 0} MB`;
             } catch (error) {
                 console.error('Failed to fetch system stats:', error);
             }
