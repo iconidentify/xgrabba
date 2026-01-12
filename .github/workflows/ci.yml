@@ -28,7 +28,9 @@ jobs:
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        # Only attempt upload when a Codecov token is configured for the repo.
+        # Using a truthy check avoids edge-cases with empty-string comparisons.
+        if: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: ./coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
