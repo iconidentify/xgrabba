@@ -286,6 +286,12 @@ func (s *TweetService) storedTweetToTweet(stored *domain.StoredTweet, archivePat
 		status = domain.ArchiveStatus(stored.Status)
 	}
 
+	// Use stored CreatedAt if available, fallback to ArchivedAt for backwards compatibility
+	createdAt := stored.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = stored.ArchivedAt
+	}
+
 	tweet := &domain.Tweet{
 		ID:              domain.TweetID(stored.TweetID),
 		URL:             stored.URL,
@@ -306,7 +312,7 @@ func (s *TweetService) storedTweetToTweet(stored *domain.StoredTweet, archivePat
 		AITags:          stored.AITags,
 		AIContentType:   stored.AIContentType,
 		AITopics:        stored.AITopics,
-		CreatedAt:       stored.ArchivedAt,
+		CreatedAt:       createdAt,
 		ArchivedAt:      &stored.ArchivedAt,
 	}
 

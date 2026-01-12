@@ -122,7 +122,8 @@ type StoredTweet struct {
 	Author        Author       `json:"author"`
 	Text          string       `json:"text"`
 	PostedAt      time.Time    `json:"posted_at"`
-	ArchivedAt    time.Time    `json:"archived_at"`
+	CreatedAt     time.Time    `json:"created_at"`               // When archive was first requested
+	ArchivedAt    time.Time    `json:"archived_at"`              // When archive processing completed
 	Media         []Media      `json:"media"`
 	Metrics       TweetMetrics `json:"metrics"`
 	ReplyTo       string       `json:"reply_to,omitempty"`
@@ -157,6 +158,7 @@ func (t *Tweet) ToStoredTweet() StoredTweet {
 		Author:          t.Author,
 		Text:            t.Text,
 		PostedAt:        t.PostedAt,
+		CreatedAt:       t.CreatedAt,
 		ArchivedAt:      archivedAt,
 		Media:           t.Media,
 		Metrics:         t.Metrics,
