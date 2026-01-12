@@ -1630,6 +1630,129 @@
             border-radius: 8px;
         }
 
+        /* Info Panel - Author Section */
+        .info-author {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .info-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .info-avatar-placeholder {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .info-author-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .info-author-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .info-author-handle {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+        }
+
+        .info-author-handle:hover {
+            color: var(--brand-start);
+        }
+
+        /* Info Panel - Meta Grid */
+        .info-meta-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .info-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .info-meta-item svg {
+            width: 16px;
+            height: 16px;
+            opacity: 0.6;
+        }
+
+        /* Info Panel - Media Details */
+        .info-media-details {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .info-media-type {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .info-media-type.video {
+            background: rgba(249, 24, 128, 0.15);
+            color: #f91880;
+        }
+
+        .info-media-type.image {
+            background: rgba(29, 155, 240, 0.15);
+            color: #1d9bf0;
+        }
+
+        .info-media-count {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Autoplay Toggle */
+        .autoplay-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .autoplay-toggle:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .autoplay-toggle input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--brand-start);
+        }
+
+        .autoplay-toggle span {
+            font-size: 13px;
+            color: rgba(255,255,255,0.8);
+        }
+
         /* Gallery Mode - Browse All Media */
         .media-theater.gallery-mode .theater-header {
             opacity: 1;
@@ -3202,18 +3325,22 @@
 
                 <footer class="theater-footer">
                     <div class="theater-counter" id="theaterCounter"></div>
+                    <label class="autoplay-toggle" title="Auto-advance through all media">
+                        <input type="checkbox" id="autoplayCheckbox" onchange="toggleAutoplay()">
+                        <span>Autoplay</span>
+                    </label>
                 </footer>
             </div>
 
-            <!-- AI Notes Side Panel -->
+            <!-- Media Info Side Panel -->
             <aside class="theater-ai-panel" id="theaterAiPanel">
                 <div class="ai-panel-inner">
                     <div class="ai-panel-header">
                         <h3>
                             <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
                             </svg>
-                            AI Analysis
+                            Media Info
                         </h3>
                         <button class="theater-btn icon-only" onclick="toggleTheaterAI()" aria-label="Close panel">
                             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3222,7 +3349,7 @@
                         </button>
                     </div>
                     <div class="ai-panel-content" id="theaterAiContent">
-                        <!-- AI content inserted dynamically -->
+                        <!-- Media info inserted dynamically -->
                     </div>
                 </div>
             </aside>
@@ -4325,6 +4452,9 @@
         let theaterIndex = 0;
         let theaterTweet = null;
 
+        // Autoplay mode state
+        let autoplayEnabled = localStorage.getItem('xgrabba_autoplay') === 'true';
+
         function openTheater(tweetId, mediaIndex = 0) {
             const tweet = tweets.find(t => t.tweet_id === tweetId);
             if (!tweet || !tweet.media || tweet.media.length === 0) return;
@@ -4340,6 +4470,12 @@
             theater.classList.add('active');
             document.body.style.overflow = 'hidden';
 
+            // Auto-open info panel
+            document.getElementById('theaterAiPanel').classList.add('active');
+
+            // Initialize autoplay checkbox
+            document.getElementById('autoplayCheckbox').checked = autoplayEnabled;
+
             // Show controls briefly then hide
             theater.classList.add('controls-visible');
             setTimeout(() => theater.classList.remove('controls-visible'), 2000);
@@ -4348,6 +4484,12 @@
         function closeTheater() {
             const theater = document.getElementById('mediaTheater');
             const container = document.getElementById('theaterMediaContainer');
+
+            // Clear autoplay timer
+            if (autoplayTimer) {
+                clearTimeout(autoplayTimer);
+                autoplayTimer = null;
+            }
 
             // Pause any playing video
             const video = container.querySelector('video');
@@ -4376,11 +4518,19 @@
             updateTheaterInfo();
         }
 
+        let autoplayTimer = null;
+
         function renderTheaterMedia() {
             const container = document.getElementById('theaterMediaContainer');
             const media = theaterMedia[theaterIndex];
             const mediaUrl = addApiKey(media.url || '');
             const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+
+            // Clear any pending autoplay timer
+            if (autoplayTimer) {
+                clearTimeout(autoplayTimer);
+                autoplayTimer = null;
+            }
 
             if (isVideo) {
                 container.innerHTML = `
@@ -4392,8 +4542,15 @@
                         style="outline: none;"
                     ></video>
                 `;
+                // Add ended event for autoplay
+                const video = container.querySelector('video');
+                video.addEventListener('ended', handleMediaEnded);
             } else {
                 container.innerHTML = `<img src="${mediaUrl}" alt="Media">`;
+                // For images in autoplay mode, advance after 5 seconds
+                if (autoplayEnabled) {
+                    autoplayTimer = setTimeout(handleMediaEnded, 5000);
+                }
             }
 
             // Update counter
@@ -4402,6 +4559,37 @@
 
             // Update download link
             updateTheaterDownload();
+        }
+
+        function handleMediaEnded() {
+            if (!autoplayEnabled) return;
+
+            // Move to next media in current tweet
+            if (theaterIndex < theaterMedia.length - 1) {
+                navigateTheater(1);
+            } else {
+                // Move to next tweet with media
+                const currentIdx = tweets.findIndex(t => t.tweet_id === theaterTweet.tweet_id);
+                for (let i = currentIdx + 1; i < tweets.length; i++) {
+                    if (tweets[i].media && tweets[i].media.length > 0) {
+                        openTheater(tweets[i].tweet_id, 0);
+                        return;
+                    }
+                }
+                // Wrap to first tweet with media
+                for (let i = 0; i < currentIdx; i++) {
+                    if (tweets[i].media && tweets[i].media.length > 0) {
+                        openTheater(tweets[i].tweet_id, 0);
+                        return;
+                    }
+                }
+            }
+        }
+
+        function toggleAutoplay() {
+            autoplayEnabled = !autoplayEnabled;
+            localStorage.setItem('xgrabba_autoplay', autoplayEnabled);
+            document.getElementById('autoplayCheckbox').checked = autoplayEnabled;
         }
 
         function updateTheaterInfo() {
@@ -4451,11 +4639,86 @@
 
             let html = '';
 
-            // Tweet AI summary
+            // Author info
+            const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
+            const authorName = authorObj ? (authorObj.name || authorObj.username) : (tweet.author || 'Unknown');
+            const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
+            const avatarUrl = authorObj?.avatar_url ? addApiKey(authorObj.avatar_url) : null;
+
+            html += `
+                <div class="ai-panel-section author-section">
+                    <div class="info-author">
+                        ${avatarUrl ? `<img src="${avatarUrl}" class="info-avatar" alt="">` : '<div class="info-avatar-placeholder"></div>'}
+                        <div class="info-author-text">
+                            <div class="info-author-name">${escapeHtml(authorName)}</div>
+                            <a href="https://x.com/${authorUsername}" target="_blank" class="info-author-handle">@${escapeHtml(authorUsername)}</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Posted date & metrics
+            const postedAt = tweet.posted_at ? new Date(tweet.posted_at) : null;
+            const metrics = tweet.metrics || {};
+            html += `
+                <div class="ai-panel-section">
+                    <div class="info-meta-grid">
+                        ${postedAt ? `
+                            <div class="info-meta-item">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                                <span>${postedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${postedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                            </div>
+                        ` : ''}
+                        ${metrics.likes ? `
+                            <div class="info-meta-item">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                                <span>${formatNumber(metrics.likes)}</span>
+                            </div>
+                        ` : ''}
+                        ${metrics.retweets ? `
+                            <div class="info-meta-item">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                                <span>${formatNumber(metrics.retweets)}</span>
+                            </div>
+                        ` : ''}
+                        ${metrics.replies ? `
+                            <div class="info-meta-item">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"/></svg>
+                                <span>${formatNumber(metrics.replies)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Media details
+            const isVideo = media.type === 'video' || media.content_type?.startsWith('video/');
+            const mediaType = isVideo ? 'Video' : 'Image';
+            html += `
+                <div class="ai-panel-section">
+                    <div class="ai-panel-label">Media</div>
+                    <div class="info-media-details">
+                        <span class="info-media-type ${isVideo ? 'video' : 'image'}">${mediaType}</span>
+                        ${theaterMedia.length > 1 ? `<span class="info-media-count">${theaterIndex + 1} of ${theaterMedia.length}</span>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Tweet text
+            if (tweet.text) {
+                html += `
+                    <div class="ai-panel-section">
+                        <div class="ai-panel-label">Tweet</div>
+                        <div class="ai-panel-text">${escapeHtml(tweet.text)}</div>
+                    </div>
+                `;
+            }
+
+            // AI Summary
             if (tweet.ai_summary) {
                 html += `
                     <div class="ai-panel-section">
-                        <div class="ai-panel-label">Summary</div>
+                        <div class="ai-panel-label">AI Summary</div>
                         <div class="ai-panel-text">${escapeHtml(tweet.ai_summary)}</div>
                     </div>
                 `;
@@ -4465,7 +4728,7 @@
             if (media.ai_caption) {
                 html += `
                     <div class="ai-panel-section">
-                        <div class="ai-panel-label">Media Description</div>
+                        <div class="ai-panel-label">AI Description</div>
                         <div class="ai-panel-text">${escapeHtml(media.ai_caption)}</div>
                     </div>
                 `;
@@ -4494,11 +4757,14 @@
                 `;
             }
 
-            if (!html) {
-                html = '<div class="ai-panel-text" style="color: rgba(255,255,255,0.5);">No AI analysis available for this media.</div>';
-            }
-
             content.innerHTML = html;
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
         }
 
         // Toggle expanded tweet text
