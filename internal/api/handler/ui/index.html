@@ -1526,8 +1526,8 @@
         const scrollTopBtn = document.getElementById('scrollTop');
         const keyboardHint = document.getElementById('keyboardHint');
 
-        // Fetch tweets from API
-        async function fetchTweets() {
+        // Fetch tweets from API (data only)
+        async function fetchTweetsRaw() {
             try {
                 const response = await fetch('/api/v1/tweets?limit=100', {
                     headers: { 'X-API-Key': API_KEY }
@@ -1544,8 +1544,7 @@
 
                 const data = await response.json();
                 tweets = data.tweets || [];
-                renderTweets(tweets);
-                updateStats();
+                return true;
             } catch (error) {
                 console.error('Failed to fetch tweets:', error);
                 tweetList.innerHTML = `
@@ -1557,7 +1556,106 @@
                         <p>Failed to load tweets. Make sure the server is running.</p>
                     </div>
                 `;
+                return false;
             }
+        }
+
+        // Load + render tweets, preserving search & scroll by default.
+        async function loadTweets({ preserveScroll = true, keepSearch = true } = {}) {
+            const scrollY = preserveScroll ? window.scrollY : 0;
+            const query = keepSearch ? (searchInput.value || '').trim() : '';
+
+            const ok = await fetchTweetsRaw();
+            if (!ok) return;
+
+            if (query) {
+                performSearch(query);
+            } else {
+                renderTweets(tweets);
+                updateStats();
+            }
+
+            if (preserveScroll) {
+                window.scrollTo({ top: scrollY });
+            }
+
+            // Ensure polling keeps the list UI up to date.
+            startAIPolling();
+        }
+
+        // Backwards compatibility: existing code calls fetchTweets().
+        async function fetchTweets() {
+            await loadTweets({ preserveScroll: false, keepSearch: false });
+        }
+
+        // Poll AI status for items currently displayed so the list updates without reload.
+        let aiPollTimer = null;
+        const lastAIStatus = new Map(); // tweetId -> bool
+
+        function updateTweetCardAIStatus(tweetId, inProgress) {
+            const card = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"]`);
+            if (!card) return;
+            const dateEl = card.querySelector('.tweet-date');
+            if (!dateEl) return;
+
+            const existing = dateEl.querySelector('.ai-progress-badge');
+            if (inProgress) {
+                if (!existing) {
+                    dateEl.insertAdjacentHTML('afterbegin', `<span class="ai-progress-badge"><span class="ai-progress-spinner"></span> AI analyzing</span>`);
+                }
+            } else {
+                if (existing) existing.remove();
+            }
+        }
+
+        function startAIPolling() {
+            if (aiPollTimer) return;
+            aiPollTimer = setInterval(async () => {
+                try {
+                    // Only poll tweets currently visible in the list AND that we think are in progress.
+                    const visibleCards = Array.from(document.querySelectorAll('.tweet-card[data-tweet-id]'));
+                    if (visibleCards.length === 0) return;
+
+                    const idsToPoll = [];
+                    for (const c of visibleCards) {
+                        const id = c.getAttribute('data-tweet-id');
+                        if (!id) continue;
+                        const known = lastAIStatus.get(id);
+                        // If unknown, check if badge exists; otherwise skip.
+                        const hasBadge = !!c.querySelector('.ai-progress-badge');
+                        if (known === true || (known === undefined && hasBadge)) {
+                            idsToPoll.push(id);
+                        }
+                    }
+                    if (idsToPoll.length === 0) return;
+
+                    let anyCompleted = false;
+                    for (const id of idsToPoll) {
+                        const resp = await fetch(`/api/v1/tweets/${id}/ai-status`, { headers: { 'X-API-Key': API_KEY } });
+                        if (!resp.ok) continue;
+                        const data = await resp.json();
+                        const inProgress = !!data.in_progress;
+                        const prev = lastAIStatus.get(id);
+                        lastAIStatus.set(id, inProgress);
+                        updateTweetCardAIStatus(id, inProgress);
+
+                        if (prev === true && inProgress === false) {
+                            anyCompleted = true;
+                            // If the detail view is open for this tweet, refresh it so media overlays/transcripts appear.
+                            if (document.getElementById('tweetDetailModal').classList.contains('active') && currentTweetDetail && currentTweetDetail.tweet_id === id) {
+                                openTweetDetail(id);
+                            }
+                        }
+                    }
+
+                    if (anyCompleted) {
+                        // Refresh list to pull in new AI fields (titles/tags/media captions) after completion.
+                        await loadTweets({ preserveScroll: true, keepSearch: true });
+                    }
+                } catch (e) {
+                    // Don't spam console
+                }
+            }, 2500);
         }
 
         function updateStats() {
@@ -2310,7 +2408,7 @@
 
                     // Analysis finished - refresh the tweet details (and list) to show updated AI and transcripts.
                     // This is safe even if the user closed the modal; openTweetDetail will just re-open if needed.
-                    loadTweets();
+                    loadTweets({ preserveScroll: true, keepSearch: true });
                     if (document.getElementById('tweetDetailModal').classList.contains('active')) {
                         openTweetDetail(tweetId);
                     }
@@ -2632,6 +2730,9 @@
                 openTweetDetail(tweetParam);
             }
         });
+
+        // Keep the list responsive: update AI progress badges without requiring a full reload.
+        startAIPolling();
     </script>
 </body>
 </html>
