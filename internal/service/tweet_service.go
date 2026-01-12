@@ -43,6 +43,9 @@ type TweetService struct {
 	// Mutex to prevent duplicate AI analysis
 	aiAnalysisLock sync.Mutex
 	processingAI   map[domain.TweetID]bool // Track which tweets are currently being analyzed
+
+	// Semaphore to limit concurrent video processing
+	processingSem chan struct{}
 }
 
 // PipelineDiagnostics captures high-level runtime capabilities/config.
@@ -91,6 +94,7 @@ func NewTweetService(
 		logger:         logger,
 		tweets:         make(map[domain.TweetID]*domain.Tweet),
 		processingAI:   make(map[domain.TweetID]bool),
+		processingSem:  make(chan struct{}, 2), // Allow 2 concurrent video processes
 	}
 
 	// Load existing tweets from disk on startup
@@ -152,6 +156,56 @@ func (s *TweetService) LoadFromDisk() error {
 
 	s.logger.Info("loaded existing tweets", "count", count)
 	return err
+}
+
+// RecoverOrphanedArchives finds directories that have temp_processing but no tweet.json
+// (interrupted mid-processing) and re-queues them for archiving.
+func (s *TweetService) RecoverOrphanedArchives(ctx context.Context) {
+	s.logger.Info("scanning for orphaned archives", "path", s.cfg.BasePath)
+
+	var orphans []string
+
+	filepath.Walk(s.cfg.BasePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+
+		// Check if this looks like a tweet directory (has temp_processing but no tweet.json)
+		tempPath := filepath.Join(path, "temp_processing")
+		tweetJSONPath := filepath.Join(path, "tweet.json")
+
+		if _, err := os.Stat(tempPath); err == nil {
+			if _, err := os.Stat(tweetJSONPath); os.IsNotExist(err) {
+				// Extract tweet ID from directory name (format: username_date_tweetid)
+				base := filepath.Base(path)
+				parts := strings.Split(base, "_")
+				if len(parts) >= 3 {
+					tweetID := parts[len(parts)-1]
+					if len(tweetID) >= 15 { // Tweet IDs are long numbers
+						orphans = append(orphans, tweetID)
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	if len(orphans) == 0 {
+		s.logger.Info("no orphaned archives found")
+		return
+	}
+
+	s.logger.Info("found orphaned archives, re-queueing", "count", len(orphans))
+
+	for _, tweetID := range orphans {
+		url := fmt.Sprintf("https://x.com/x/status/%s", tweetID)
+		_, err := s.Archive(ctx, ArchiveRequest{TweetURL: url})
+		if err != nil {
+			s.logger.Warn("failed to re-queue orphaned archive", "tweet_id", tweetID, "error", err)
+			continue
+		}
+		s.logger.Info("orphaned archive re-queued", "tweet_id", tweetID)
+	}
 }
 
 // storedTweetToTweet converts a StoredTweet from disk back to a Tweet.
@@ -292,8 +346,12 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 	}
 	s.tweets[tweet.ID] = tweet
 
-	// Process asynchronously
-	go s.processTweet(context.Background(), tweet)
+	// Process asynchronously with concurrency limit
+	go func() {
+		s.processingSem <- struct{}{}        // Acquire semaphore
+		defer func() { <-s.processingSem }() // Release semaphore
+		s.processTweet(context.Background(), tweet)
+	}()
 
 	return &ArchiveResponse{
 		TweetID: tweet.ID,

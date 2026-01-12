@@ -114,6 +114,9 @@ func main() {
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
 	go tweetSvc.BackfillAIMetadata(backfillCtx)
 
+	// Recover orphaned archives (directories with temp_processing but no tweet.json)
+	go tweetSvc.RecoverOrphanedArchives(context.Background())
+
 	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
 	if cfg.Bookmarks.Enabled {
