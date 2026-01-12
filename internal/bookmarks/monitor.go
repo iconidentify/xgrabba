@@ -2,9 +2,13 @@ package bookmarks
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/config"
@@ -20,6 +24,11 @@ type archiver interface {
 	Archive(ctx context.Context, req service.ArchiveRequest) (*service.ArchiveResponse, error)
 }
 
+// rateLimitState persists rate limit info across restarts.
+type rateLimitState struct {
+	ResetAt time.Time `json:"reset_at"`
+}
+
 // Monitor polls X bookmarks and triggers archiving for new bookmark IDs.
 type Monitor struct {
 	cfg    config.BookmarksConfig
@@ -27,16 +36,24 @@ type Monitor struct {
 	arch   archiver
 	logger *slog.Logger
 
-	seen map[string]time.Time
+	seen          map[string]time.Time
+	rateLimitFile string
 }
 
 func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc archiver, logger *slog.Logger) *Monitor {
+	// Store rate limit state next to the OAuth file
+	rateLimitFile := ""
+	if cfg.OAuthStorePath != "" {
+		rateLimitFile = filepath.Join(filepath.Dir(cfg.OAuthStorePath), ".x_bookmarks_ratelimit.json")
+	}
+
 	return &Monitor{
-		cfg:    cfg,
-		client: client,
-		arch:   tweetSvc,
-		logger: logger,
-		seen:   make(map[string]time.Time),
+		cfg:           cfg,
+		client:        client,
+		arch:          tweetSvc,
+		logger:        logger,
+		seen:          make(map[string]time.Time),
+		rateLimitFile: rateLimitFile,
 	}
 }
 
@@ -51,8 +68,30 @@ func (m *Monitor) Start(ctx context.Context) {
 		"max_new_per_poll", m.cfg.MaxNewPerPoll,
 	)
 
-	// Run immediately, then on interval.
-	m.pollOnce(ctx)
+	// Check for persisted rate limit state from previous crash/restart
+	if resetAt := m.loadRateLimitState(); !resetAt.IsZero() {
+		if wait := time.Until(resetAt); wait > 0 {
+			m.logger.Info("respecting persisted rate limit from previous run", "wait", wait.Round(time.Second).String())
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+			m.clearRateLimitState()
+		}
+	}
+
+	// Add startup jitter (5-15 seconds) to avoid thundering herd on crash loops
+	jitter := time.Duration(5+rand.Intn(10)) * time.Second
+	m.logger.Info("startup delay before first poll", "delay", jitter.String())
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(jitter):
+	}
+
+	// Run first poll, then on interval
+	m.pollWithRetry(ctx)
 
 	t := time.NewTicker(m.cfg.PollInterval)
 	defer t.Stop()
@@ -63,15 +102,40 @@ func (m *Monitor) Start(ctx context.Context) {
 			m.logger.Info("bookmarks monitor stopped")
 			return
 		case <-t.C:
-			m.pollOnce(ctx)
+			m.pollWithRetry(ctx)
 		}
 	}
 }
 
-func (m *Monitor) pollOnce(ctx context.Context) {
+// pollWithRetry attempts to poll and retries after rate limit backoff.
+func (m *Monitor) pollWithRetry(ctx context.Context) {
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			m.logger.Info("retrying bookmark poll", "attempt", attempt+1)
+		}
+
+		success, rateLimited := m.pollOnce(ctx)
+		if success {
+			return
+		}
+		if !rateLimited {
+			// Non-rate-limit error, don't retry immediately
+			return
+		}
+		// Rate limited - pollOnce already waited, try again
+		if ctx.Err() != nil {
+			return
+		}
+	}
+	m.logger.Warn("bookmark poll failed after max retries", "retries", maxRetries)
+}
+
+// pollOnce attempts a single poll. Returns (success, wasRateLimited).
+func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 	if m.cfg.UserID == "" {
 		m.logger.Warn("bookmarks monitor missing user id; skipping")
-		return
+		return false, false
 	}
 
 	ids, _, err := m.client.ListBookmarks(ctx, m.cfg.UserID, m.cfg.MaxResults, "")
@@ -84,20 +148,28 @@ func (m *Monitor) pollOnce(ctx context.Context) {
 				if until > 0 {
 					sleepFor = until
 				}
+				// Persist the rate limit so we respect it across restarts
+				m.saveRateLimitState(rl.Reset.Add(2 * time.Second))
+			} else {
+				// No reset time provided, use exponential backoff style wait
+				// and persist a conservative estimate
+				m.saveRateLimitState(time.Now().Add(sleepFor))
 			}
-			m.logger.Warn("bookmarks rate limited; backing off", "sleep", sleepFor.String())
+
+			m.logger.Warn("bookmarks rate limited; backing off", "sleep", sleepFor.Round(time.Second).String())
 			timer := time.NewTimer(sleepFor)
 			defer timer.Stop()
 			select {
 			case <-ctx.Done():
-				return
+				return false, true
 			case <-timer.C:
 			}
-			return
+			m.clearRateLimitState()
+			return false, true // Was rate limited, caller can retry
 		}
 
 		m.logger.Warn("bookmarks poll failed", "error", err)
-		return
+		return false, false
 	}
 
 	now := time.Now()
@@ -125,7 +197,8 @@ func (m *Monitor) pollOnce(ctx context.Context) {
 	}
 
 	if len(newIDs) == 0 {
-		return
+		m.logger.Info("bookmark poll complete", "total_bookmarks", len(ids), "new", 0)
+		return true, false
 	}
 
 	m.logger.Info("new bookmarks detected", "count", len(newIDs))
@@ -139,6 +212,7 @@ func (m *Monitor) pollOnce(ctx context.Context) {
 		}
 		m.logger.Info("bookmark enqueued for archiving", "tweet_id", id)
 	}
+	return true, false
 }
 
 func (m *Monitor) pruneSeen(now time.Time) {
@@ -151,4 +225,38 @@ func (m *Monitor) pruneSeen(now time.Time) {
 			delete(m.seen, id)
 		}
 	}
+}
+
+func (m *Monitor) loadRateLimitState() time.Time {
+	if m.rateLimitFile == "" {
+		return time.Time{}
+	}
+	data, err := os.ReadFile(m.rateLimitFile)
+	if err != nil {
+		return time.Time{}
+	}
+	var state rateLimitState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return time.Time{}
+	}
+	return state.ResetAt
+}
+
+func (m *Monitor) saveRateLimitState(resetAt time.Time) {
+	if m.rateLimitFile == "" {
+		return
+	}
+	state := rateLimitState{ResetAt: resetAt}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(m.rateLimitFile, data, 0600)
+}
+
+func (m *Monitor) clearRateLimitState() {
+	if m.rateLimitFile == "" {
+		return
+	}
+	_ = os.Remove(m.rateLimitFile)
 }
