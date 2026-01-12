@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "xgrabba",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "Archive tweets and videos from X.com with one click. AI-powered organization and search.",
   "permissions": [
     "storage",

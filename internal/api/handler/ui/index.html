@@ -611,6 +611,35 @@
             color: var(--text-secondary);
         }
 
+        .btn-browse-media {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, var(--brand-start), var(--brand-end));
+            color: #fff;
+            font-weight: 600;
+            font-size: 13px;
+            border-radius: 20px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
+        }
+
+        .btn-browse-media:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
+        }
+
+        .btn-browse-media svg {
+            opacity: 0.9;
+        }
+
+        .btn-browse-media .btn-text-short {
+            display: none;
+        }
+
         /* Empty State - Minimal */
         .empty-state {
             text-align: center;
@@ -1389,6 +1418,7 @@
             justify-content: center;
             padding: 20px;
             overflow: hidden;
+            min-width: 0;
         }
 
         .theater-media-container {
@@ -1398,22 +1428,25 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .theater-media-container img {
-            max-width: 95vw;
+            max-width: 100%;
             max-height: calc(100vh - 140px);
             object-fit: contain;
             border-radius: 4px;
             box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .theater-media-container video {
-            max-width: 95vw;
+            max-width: 100%;
             max-height: calc(100vh - 140px);
             border-radius: 4px;
             box-shadow: 0 20px 80px rgba(0,0,0,0.6);
             background: #000;
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .theater-nav {
@@ -1453,7 +1486,10 @@
         }
 
         .theater-footer {
-            position: relative;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             z-index: 10;
             display: flex;
             align-items: center;
@@ -1477,26 +1513,42 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* AI Notes Panel */
+        /* AI Notes Panel - Sidebar Layout */
+        .theater-main {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .theater-stage {
+            flex: 1;
+            min-width: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         .theater-ai-panel {
-            position: absolute;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 380px;
-            max-width: 90vw;
-            background: rgba(15, 20, 25, 0.95);
+            width: 0;
+            min-width: 0;
+            background: rgba(15, 20, 25, 0.98);
             border-left: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(20px);
-            transform: translateX(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 20;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
         }
 
         .theater-ai-panel.active {
-            transform: translateX(0);
+            width: 380px;
+            min-width: 380px;
+        }
+
+        .ai-panel-inner {
+            width: 380px;
+            min-width: 380px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         .ai-panel-header {
@@ -1505,6 +1557,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-shrink: 0;
         }
 
         .ai-panel-header h3 {
@@ -1526,6 +1579,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 20px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .ai-panel-section {
@@ -1570,11 +1624,141 @@
             line-height: 1.7;
             color: rgba(255,255,255,0.8);
             white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
+            max-height: none;
             padding: 12px;
             background: rgba(0,0,0,0.3);
             border-radius: 8px;
+        }
+
+        /* Gallery Mode - Browse All Media */
+        .media-theater.gallery-mode .theater-header {
+            opacity: 1;
+            transform: none;
+            background: rgba(0,0,0,0.9);
+        }
+
+        .media-theater.gallery-mode .theater-footer {
+            opacity: 1;
+            transform: none;
+            background: rgba(0,0,0,0.9);
+        }
+
+        .gallery-nav-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+        }
+
+        .gallery-nav-info .nav-hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .gallery-nav-info kbd {
+            background: rgba(255,255,255,0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .theater-ai-panel {
+                position: fixed;
+                top: auto;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100% !important;
+                min-width: 100% !important;
+                max-height: 60vh;
+                border-left: none;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                border-radius: 16px 16px 0 0;
+                transform: translateY(100%);
+            }
+
+            .theater-ai-panel.active {
+                transform: translateY(0);
+            }
+
+            .ai-panel-inner {
+                width: 100%;
+                min-width: 100%;
+            }
+
+            .ai-panel-header {
+                padding: 16px 20px;
+            }
+
+            .ai-panel-header::before {
+                content: '';
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 40px;
+                height: 4px;
+                background: rgba(255,255,255,0.3);
+                border-radius: 2px;
+            }
+
+            .theater-nav {
+                width: 44px;
+                height: 44px;
+            }
+
+            .theater-nav.prev { left: 12px; }
+            .theater-nav.next { right: 12px; }
+
+            .theater-btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            .theater-btn svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            .theater-header {
+                padding: 12px 16px;
+            }
+
+            .theater-title {
+                font-size: 14px;
+            }
+
+            .theater-media-container video,
+            .theater-media-container img {
+                max-height: calc(100vh - 200px);
+            }
+
+            .media-theater.ai-panel-open .theater-media-container video,
+            .media-theater.ai-panel-open .theater-media-container img {
+                max-height: calc(40vh - 80px);
+            }
+        }
+
+        /* Touch-friendly hit areas */
+        @media (pointer: coarse) {
+            .theater-nav {
+                width: 60px;
+                height: 60px;
+            }
+
+            .theater-btn {
+                min-height: 44px;
+            }
+
+            .theater-btn.icon-only {
+                min-width: 44px;
+                min-height: 44px;
+            }
         }
 
         /* More button for tweets */
@@ -1703,6 +1887,19 @@
                 gap: 10px;
             }
 
+            .btn-browse-media {
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+
+            .btn-browse-media .btn-text-full {
+                display: none;
+            }
+
+            .btn-browse-media .btn-text-short {
+                display: inline;
+            }
+
             .container {
                 padding: 8px;
             }
@@ -1776,6 +1973,16 @@
             <div>Tweets: <span id="totalTweets">0</span></div>
             <div>Media: <span id="totalMedia">0</span></div>
         </div>
+        <button class="btn btn-browse-media" onclick="openGalleryMode()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            <span class="btn-text-full">Browse Media</span>
+            <span class="btn-text-short">Media</span>
+        </button>
         <div style="display:flex; gap:10px; align-items:center;">
             <button class="btn btn-ghost" id="connectBookmarksBtn" onclick="openBookmarksConnect(event)">Connect X Bookmarks</button>
             <button class="btn btn-ghost" id="disconnectBookmarksBtn" style="display:none;" onclick="disconnectBookmarks(event)">Disconnect</button>
@@ -1906,47 +2113,52 @@
             </div>
         </header>
 
-        <div class="theater-stage">
-            <button class="theater-nav prev" onclick="navigateTheater(-1)" aria-label="Previous">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
-                </svg>
-            </button>
-
-            <div class="theater-media-container" id="theaterMediaContainer">
-                <!-- Media (image or video) inserted here dynamically -->
-            </div>
-
-            <button class="theater-nav next" onclick="navigateTheater(1)" aria-label="Next">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-                </svg>
-            </button>
-        </div>
-
-        <footer class="theater-footer">
-            <div class="theater-counter" id="theaterCounter"></div>
-        </footer>
-
-        <!-- AI Notes Side Panel -->
-        <aside class="theater-ai-panel" id="theaterAiPanel">
-            <div class="ai-panel-header">
-                <h3>
+        <!-- Main content area with sidebar layout -->
+        <div class="theater-main">
+            <div class="theater-stage">
+                <button class="theater-nav prev" onclick="navigateTheater(-1)" aria-label="Previous">
                     <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    AI Analysis
-                </h3>
-                <button class="theater-btn icon-only" onclick="toggleTheaterAI()" aria-label="Close panel">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
                     </svg>
                 </button>
+
+                <div class="theater-media-container" id="theaterMediaContainer">
+                    <!-- Media (image or video) inserted here dynamically -->
+                </div>
+
+                <button class="theater-nav next" onclick="navigateTheater(1)" aria-label="Next">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                </button>
+
+                <footer class="theater-footer">
+                    <div class="theater-counter" id="theaterCounter"></div>
+                </footer>
             </div>
-            <div class="ai-panel-content" id="theaterAiContent">
-                <!-- AI content inserted dynamically -->
-            </div>
-        </aside>
+
+            <!-- AI Notes Side Panel -->
+            <aside class="theater-ai-panel" id="theaterAiPanel">
+                <div class="ai-panel-inner">
+                    <div class="ai-panel-header">
+                        <h3>
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            AI Analysis
+                        </h3>
+                        <button class="theater-btn icon-only" onclick="toggleTheaterAI()" aria-label="Close panel">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="ai-panel-content" id="theaterAiContent">
+                        <!-- AI content inserted dynamically -->
+                    </div>
+                </div>
+            </aside>
+        </div>
     </div>
 
     <!-- Scroll to top -->
@@ -3095,6 +3307,98 @@
             btn.textContent = isExpanded ? 'Less' : 'More';
         }
 
+        // Gallery Mode - Browse All Media
+        let galleryMode = false;
+        let allGalleryMedia = [];
+        let galleryTweetMap = new Map();
+
+        function openGalleryMode() {
+            // Collect all media from all tweets
+            allGalleryMedia = [];
+            galleryTweetMap = new Map();
+
+            tweets.forEach(tweet => {
+                if (tweet.media && tweet.media.length > 0) {
+                    tweet.media.forEach((media, idx) => {
+                        const globalIdx = allGalleryMedia.length;
+                        allGalleryMedia.push({
+                            ...media,
+                            tweetId: tweet.tweet_id,
+                            mediaIdx: idx
+                        });
+                        galleryTweetMap.set(globalIdx, tweet);
+                    });
+                }
+            });
+
+            if (allGalleryMedia.length === 0) {
+                alert('No media found in archive');
+                return;
+            }
+
+            // Set gallery mode flag and open theater
+            galleryMode = true;
+            theaterMedia = allGalleryMedia;
+            theaterIndex = 0;
+            theaterTweet = galleryTweetMap.get(0);
+
+            renderTheaterMedia();
+            updateTheaterInfo();
+            updateGalleryCounter();
+
+            const theater = document.getElementById('mediaTheater');
+            theater.classList.add('active', 'gallery-mode');
+            document.body.style.overflow = 'hidden';
+
+            // Open AI panel by default in gallery mode
+            document.getElementById('theaterAiPanel').classList.add('active');
+
+            // Show controls briefly then hide
+            theater.classList.add('controls-visible');
+            setTimeout(() => theater.classList.remove('controls-visible'), 2000);
+        }
+
+        function closeGalleryMode() {
+            galleryMode = false;
+            allGalleryMedia = [];
+            galleryTweetMap.clear();
+            const theater = document.getElementById('mediaTheater');
+            theater.classList.remove('gallery-mode');
+        }
+
+        function updateGalleryCounter() {
+            document.getElementById('theaterCounter').textContent =
+                `${theaterIndex + 1} / ${allGalleryMedia.length} media`;
+        }
+
+        // Override navigate to handle gallery mode
+        const originalNavigateTheater = navigateTheater;
+        navigateTheater = function(direction) {
+            if (galleryMode) {
+                // Pause current video if any
+                const container = document.getElementById('theaterMediaContainer');
+                const video = container.querySelector('video');
+                if (video) video.pause();
+
+                theaterIndex = (theaterIndex + direction + allGalleryMedia.length) % allGalleryMedia.length;
+                theaterTweet = galleryTweetMap.get(theaterIndex);
+                renderTheaterMedia();
+                updateTheaterInfo();
+                updateGalleryCounter();
+            } else {
+                originalNavigateTheater(direction);
+            }
+        };
+
+        // Override close to handle gallery mode
+        const originalCloseTheater = closeTheater;
+        closeTheater = function() {
+            if (galleryMode) {
+                closeGalleryMode();
+            }
+            originalCloseTheater();
+        };
+
         function closeTweetDetailModal() {
             // Pause all videos before closing to stop audio
             const modal = document.getElementById('tweetDetailModal');
@@ -3457,6 +3761,62 @@
                 if (e.key === 'ArrowRight') navigateLightbox(1);
             }
         });
+
+        // Touch gestures for theater
+        (function initTouchGestures() {
+            const theater = document.getElementById('mediaTheater');
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchStartTime = 0;
+
+            theater.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+            }, { passive: true });
+
+            theater.addEventListener('touchend', (e) => {
+                if (!theater.classList.contains('active')) return;
+
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const touchDuration = Date.now() - touchStartTime;
+
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = touchEndY - touchStartY;
+                const absX = Math.abs(deltaX);
+                const absY = Math.abs(deltaY);
+
+                // Minimum swipe distance and max time for swipe
+                const minSwipeDistance = 50;
+                const maxSwipeTime = 500;
+
+                // Horizontal swipe for navigation
+                if (absX > minSwipeDistance && absX > absY && touchDuration < maxSwipeTime) {
+                    if (deltaX > 0) {
+                        navigateTheater(-1); // Swipe right = previous
+                    } else {
+                        navigateTheater(1); // Swipe left = next
+                    }
+                }
+
+                // Vertical swipe down to close (only if not interacting with video controls)
+                if (absY > 100 && absY > absX * 2 && deltaY > 0 && touchDuration < maxSwipeTime) {
+                    const target = e.target;
+                    if (!target.closest('video') && !target.closest('.theater-ai-panel')) {
+                        closeTheater();
+                    }
+                }
+
+                // Tap to toggle controls (quick tap with minimal movement)
+                if (absX < 10 && absY < 10 && touchDuration < 200) {
+                    const target = e.target;
+                    if (!target.closest('button') && !target.closest('a') && !target.closest('video') && !target.closest('.theater-ai-panel')) {
+                        theater.classList.toggle('controls-visible');
+                    }
+                }
+            }, { passive: true });
+        })();
 
         // Scroll to top button
         window.addEventListener('scroll', () => {
