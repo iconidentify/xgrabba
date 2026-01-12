@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,6 +22,8 @@ import (
 	"github.com/iconidentify/xgrabba/pkg/twitter"
 	"github.com/iconidentify/xgrabba/pkg/whisper"
 )
+
+var ErrAIAlreadyInProgress = errors.New("AI analysis already in progress for this tweet")
 
 // TweetService orchestrates tweet archiving workflow.
 type TweetService struct {
@@ -345,6 +348,10 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 		}
 	}
 
+	// Step 4c: Run vision analysis now that media is available locally (images, video thumbnails, keyframes)
+	// This is intentionally AFTER downloads; otherwise we only have text and no local media paths.
+	s.runVisionAnalysis(ctx, tweet)
+
 	// Step 5: Save tweet metadata
 	logger.Info("saving tweet metadata")
 	if err := s.saveTweetMetadata(tweet); err != nil {
@@ -383,18 +390,95 @@ func (s *TweetService) generateAIMetadata(ctx context.Context, tweet *domain.Twe
 		title = grok.FallbackFilename(tweet.Author.Username, tweet.PostedAt, tweet.Text)
 	}
 
-	// Perform vision-based content analysis if we have media
-	// This extracts text from images, identifies objects, people, etc.
-	s.runVisionAnalysis(ctx, tweet)
-
 	return title, ""
+}
+
+func (s *TweetService) ensureVideoKeyframes(ctx context.Context, tweet *domain.Tweet) {
+	if tweet == nil || tweet.ArchivePath == "" || s.videoProcessor == nil {
+		return
+	}
+
+	for i := range tweet.Media {
+		m := &tweet.Media[i]
+		if m.LocalPath == "" {
+			continue
+		}
+		if m.Type != domain.MediaTypeVideo && m.Type != domain.MediaTypeGIF {
+			continue
+		}
+
+		keyframesDir := filepath.Join(tweet.ArchivePath, "media", "keyframes_"+m.ID)
+		if entries, err := os.ReadDir(keyframesDir); err == nil {
+			// If we already have frames, don't re-extract.
+			hasFrames := false
+			for _, e := range entries {
+				if e.IsDir() {
+					continue
+				}
+				ext := strings.ToLower(filepath.Ext(e.Name()))
+				if ext == ".jpg" || ext == ".jpeg" {
+					hasFrames = true
+					break
+				}
+			}
+			if hasFrames {
+				continue
+			}
+		}
+
+		logger := s.logger.With("tweet_id", tweet.ID, "media_id", m.ID)
+		logger.Info("extracting video keyframes for vision analysis")
+
+		tempDir := filepath.Join(tweet.ArchivePath, "temp_processing_keyframes_"+m.ID)
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			logger.Warn("failed to create temp directory for keyframes", "error", err)
+			continue
+		}
+		defer os.RemoveAll(tempDir)
+
+		framesDir := filepath.Join(tempDir, "frames")
+		frames, err := s.videoProcessor.ExtractKeyframes(ctx, m.LocalPath, ffmpeg.ExtractKeyframesConfig{
+			IntervalSeconds: 10,
+			MaxFrames:       10,
+			MaxWidth:        1280,
+			Quality:         5,
+			OutputDir:       framesDir,
+		})
+		if err != nil {
+			logger.Warn("failed to extract keyframes", "error", err)
+			continue
+		}
+
+		if err := os.MkdirAll(keyframesDir, 0755); err != nil {
+			logger.Warn("failed to create keyframes dir", "error", err)
+			continue
+		}
+
+		for i, framePath := range frames {
+			destPath := filepath.Join(keyframesDir, fmt.Sprintf("frame_%03d.jpg", i))
+			data, err := os.ReadFile(framePath)
+			if err != nil {
+				continue
+			}
+			if err := os.WriteFile(destPath, data, 0644); err != nil {
+				logger.Warn("failed to write keyframe", "dest_path", destPath, "error", err)
+			}
+		}
+
+		logger.Info("keyframes extracted", "count", len(frames), "dir", keyframesDir)
+	}
 }
 
 // runVisionAnalysis performs AI analysis on the tweet's media content.
 // If media files are available locally, it uses vision analysis for rich metadata extraction.
 func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Tweet) {
+	// Ensure we have keyframes for videos (independent of Whisper transcription).
+	// This ensures multi-frame context is available for vision analysis.
+	s.ensureVideoKeyframes(ctx, tweet)
+
 	// Collect local image paths, video thumbnails, and extracted keyframes
-	var imagePaths []string
+	var imagePaths []string // images + (optionally) keyframes
+	var keyframePaths []string
 	var videoThumbPath string
 
 	for _, m := range tweet.Media {
@@ -412,10 +496,14 @@ func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Twee
 			// Also include extracted keyframes if they exist
 			keyframesDir := filepath.Join(tweet.ArchivePath, "media", "keyframes_"+m.ID)
 			if entries, err := os.ReadDir(keyframesDir); err == nil {
+				// Stable ordering (frame_000.jpg, frame_001.jpg...)
+				sort.Slice(entries, func(i, j int) bool {
+					return entries[i].Name() < entries[j].Name()
+				})
 				for _, entry := range entries {
 					if !entry.IsDir() && (filepath.Ext(entry.Name()) == ".jpg" || filepath.Ext(entry.Name()) == ".jpeg") {
 						framePath := filepath.Join(keyframesDir, entry.Name())
-						imagePaths = append(imagePaths, framePath)
+						keyframePaths = append(keyframePaths, framePath)
 					}
 				}
 			}
@@ -423,18 +511,42 @@ func (s *TweetService) runVisionAnalysis(ctx context.Context, tweet *domain.Twee
 	}
 
 	// If we have images or video thumbnail, use vision analysis
-	if len(imagePaths) > 0 || videoThumbPath != "" {
+	if len(imagePaths) > 0 || len(keyframePaths) > 0 || videoThumbPath != "" {
+		// Prefer multiple keyframes over a single thumbnail: pass keyframes as ImagePaths
+		// and only include VideoThumbPath if we have no keyframes.
+		maxImages := 4
+		visionPaths := make([]string, 0, maxImages)
+		for _, p := range keyframePaths {
+			if len(visionPaths) >= maxImages {
+				break
+			}
+			visionPaths = append(visionPaths, p)
+		}
+		for _, p := range imagePaths {
+			if len(visionPaths) >= maxImages {
+				break
+			}
+			visionPaths = append(visionPaths, p)
+		}
+
+		thumb := videoThumbPath
+		if len(keyframePaths) > 0 {
+			thumb = "" // don't let thumbnail steal a slot when we have real multi-frame context
+		}
+
 		s.logger.Info("running vision analysis",
 			"tweet_id", tweet.ID,
+			"keyframes", len(keyframePaths),
 			"images", len(imagePaths),
-			"has_video_thumb", videoThumbPath != "",
+			"vision_images_used", len(visionPaths),
+			"using_thumbnail", thumb != "",
 		)
 
 		analysis, err := s.grokClient.AnalyzeContentWithVision(ctx, grok.VisionAnalysisRequest{
 			TweetText:      tweet.Text,
 			AuthorUsername: tweet.Author.Username,
-			ImagePaths:     imagePaths,
-			VideoThumbPath: videoThumbPath,
+			ImagePaths:     visionPaths,
+			VideoThumbPath: thumb,
 			HasVideo:       tweet.HasVideo(),
 			VideoDuration:  getTotalVideoDuration(tweet),
 		})
@@ -495,7 +607,7 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 	s.aiAnalysisLock.Lock()
 	if s.processingAI[tweetID] {
 		s.aiAnalysisLock.Unlock()
-		return fmt.Errorf("AI analysis already in progress for this tweet")
+		return ErrAIAlreadyInProgress
 	}
 	s.processingAI[tweetID] = true
 	s.aiAnalysisLock.Unlock()
@@ -507,6 +619,10 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 		s.aiAnalysisLock.Unlock()
 	}()
 
+	return s.regenerateAIMetadata(ctx, tweetID)
+}
+
+func (s *TweetService) regenerateAIMetadata(ctx context.Context, tweetID domain.TweetID) error {
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
 		return domain.ErrVideoNotFound
@@ -535,7 +651,7 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 		}
 	}
 
-	// Re-run vision analysis (this will also extract keyframes if needed)
+	// Re-run vision analysis (ensures keyframes)
 	s.runVisionAnalysis(ctx, tweet)
 
 	// Also regenerate the title
@@ -570,6 +686,40 @@ func (s *TweetService) IsAIAnalysisInProgress(tweetID domain.TweetID) bool {
 	s.aiAnalysisLock.Lock()
 	defer s.aiAnalysisLock.Unlock()
 	return s.processingAI[tweetID]
+}
+
+// StartRegenerateAIMetadata runs regeneration in the background so it is not cancelled when a client disconnects.
+func (s *TweetService) StartRegenerateAIMetadata(tweetID domain.TweetID) error {
+	// Check if already processing
+	s.aiAnalysisLock.Lock()
+	if s.processingAI[tweetID] {
+		s.aiAnalysisLock.Unlock()
+		return ErrAIAlreadyInProgress
+	}
+	// Ensure tweet exists before we start
+	if _, ok := s.tweets[tweetID]; !ok {
+		s.aiAnalysisLock.Unlock()
+		return domain.ErrVideoNotFound
+	}
+	s.processingAI[tweetID] = true
+	s.aiAnalysisLock.Unlock()
+
+	go func() {
+		defer func() {
+			s.aiAnalysisLock.Lock()
+			delete(s.processingAI, tweetID)
+			s.aiAnalysisLock.Unlock()
+		}()
+
+		s.logger.Info("starting background AI regeneration", "tweet_id", tweetID)
+		if err := s.regenerateAIMetadata(context.Background(), tweetID); err != nil {
+			s.logger.Warn("background AI regeneration failed", "tweet_id", tweetID, "error", err)
+			return
+		}
+		s.logger.Info("background AI regeneration completed", "tweet_id", tweetID)
+	}()
+
+	return nil
 }
 
 func buildTweetPrompt(tweet *domain.Tweet) string {

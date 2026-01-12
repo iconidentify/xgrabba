@@ -518,6 +518,29 @@
             background: transparent;
         }
 
+        .ai-progress-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+
+        .ai-progress-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
         .btn-ghost {
             background: transparent;
             color: var(--text-muted);
@@ -1671,7 +1694,10 @@
                                 <span class="tweet-author-username">@${escapeHtml(tweet.author || 'unknown')}</span>
                                 ${tweet.follower_count ? `<span class="tweet-author-followers">${formatNumber(tweet.follower_count)} followers</span>` : ''}
                             </div>
-                            <div class="tweet-date">${formatDate(tweet.created_at)}</div>
+                            <div class="tweet-date">
+                                ${tweet.ai_in_progress ? `<span class="ai-progress-badge"><span class="ai-progress-spinner"></span> AI analyzing</span>` : ''}
+                                ${formatDate(tweet.created_at)}
+                            </div>
                         </div>
                         <div class="tweet-text">${highlightText(tweet.text || '', searchQuery)}</div>
                         ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
@@ -2231,6 +2257,13 @@
                         </svg>
                         Regenerate AI
                     `;
+
+                    // Analysis finished - refresh the tweet details (and list) to show updated AI and transcripts.
+                    // This is safe even if the user closed the modal; openTweetDetail will just re-open if needed.
+                    loadTweets();
+                    if (document.getElementById('tweetDetailModal').classList.contains('active')) {
+                        openTweetDetail(tweetId);
+                    }
                 }
             }
         }
@@ -2275,60 +2308,8 @@
                     throw new Error('Failed to regenerate AI metadata');
                 }
 
-                const result = await response.json();
-
-                // Update the UI with new AI data
-                const summaryEl = document.querySelector('.ai-summary');
-                const tagsEl = document.querySelector('.ai-tags');
-                const analysisEl = document.querySelector('.ai-analysis');
-
-                if (result.ai_summary) {
-                    if (summaryEl) {
-                        summaryEl.textContent = result.ai_summary;
-                    } else if (analysisEl) {
-                        // Summary didn't exist before, add it
-                        analysisEl.innerHTML = `<div class="ai-summary">${escapeHtml(result.ai_summary)}</div>`;
-                    } else {
-                        // Create the analysis section
-                        const tweetBody = document.querySelector('.tweet-detail-body');
-                        const textEl = tweetBody.querySelector('.tweet-detail-text');
-                        if (textEl) {
-                            textEl.insertAdjacentHTML('afterend', `
-                                <div class="ai-analysis">
-                                    <div class="ai-summary">${escapeHtml(result.ai_summary)}</div>
-                                </div>
-                            `);
-                        }
-                    }
-                }
-
-                if (result.ai_tags && result.ai_tags.length > 0) {
-                    const tagsHtml = result.ai_tags.map(tag => `<span class="ai-tag">${escapeHtml(tag)}</span>`).join('');
-                    if (tagsEl) {
-                        tagsEl.innerHTML = tagsHtml;
-                    } else {
-                        // Create tags section after analysis
-                        const analysis = document.querySelector('.ai-analysis');
-                        if (analysis) {
-                            analysis.insertAdjacentHTML('afterend', `<div class="ai-tags">${tagsHtml}</div>`);
-                        }
-                    }
-                }
-
-                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Updated!';
-                btn.classList.add('btn-success');
-                btn.classList.remove('btn-secondary');
-
-                // Also refresh the tweet in the list
-                loadTweets();
-
-                // Reset button after delay
-                setTimeout(() => {
-                    btn.innerHTML = originalContent;
-                    btn.disabled = false;
-                    btn.classList.remove('btn-success');
-                    btn.classList.add('btn-secondary');
-                }, 2000);
+                // Accepted: regeneration runs asynchronously. Poll status until complete.
+                setTimeout(() => updateRegenerateButtonState(tweetId), 1500);
 
             } catch (error) {
                 console.error('Regenerate AI error:', error);

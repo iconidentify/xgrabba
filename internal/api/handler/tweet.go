@@ -73,6 +73,8 @@ type TweetResponse struct {
 	AITags        []string `json:"ai_tags,omitempty"`
 	AIContentType string   `json:"ai_content_type,omitempty"`
 	AITopics      []string `json:"ai_topics,omitempty"`
+	// True while Regenerate AI (and other AI backfills) are running
+	AIInProgress bool `json:"ai_in_progress,omitempty"`
 	// Video transcripts (combined from all video media)
 	Transcripts []string  `json:"transcripts,omitempty"`
 	ArchivePath string    `json:"archive_path,omitempty"`
@@ -232,6 +234,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			AITags:            t.AITags,
 			AIContentType:     t.AIContentType,
 			AITopics:          t.AITopics,
+			AIInProgress:      h.tweetSvc.IsAIAnalysisInProgress(t.ID),
 			Transcripts:       transcripts,
 			ArchivePath:       t.ArchivePath,
 			Error:             t.Error,
@@ -312,14 +315,15 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.tweetSvc.RegenerateAIMetadata(r.Context(), domain.TweetID(tweetID))
+	// Run in background so closing the UI / disconnecting the client does not cancel the work.
+	err := h.tweetSvc.StartRegenerateAIMetadata(domain.TweetID(tweetID))
 	if err != nil {
 		if errors.Is(err, domain.ErrVideoNotFound) {
 			h.writeError(w, http.StatusNotFound, "tweet not found")
 			return
 		}
 		// Check if already processing
-		if strings.Contains(err.Error(), "already in progress") {
+		if errors.Is(err, service.ErrAIAlreadyInProgress) || strings.Contains(err.Error(), "already in progress") {
 			h.writeJSON(w, http.StatusConflict, map[string]interface{}{
 				"success":     false,
 				"message":     "AI analysis already in progress for this tweet",
@@ -332,22 +336,11 @@ func (h *TweetHandler) RegenerateAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the updated tweet details
-	stored, err := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(tweetID))
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, "regeneration successful but failed to fetch updated data")
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":         true,
-		"message":         "AI metadata regenerated successfully",
-		"ai_title":        stored.AITitle,
-		"ai_summary":      stored.AISummary,
-		"ai_tags":         stored.AITags,
-		"ai_topics":       stored.AITopics,
-		"ai_content_type": stored.AIContentType,
-		"in_progress":     false,
+	// 202 Accepted: work is running asynchronously
+	h.writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"success":     true,
+		"message":     "AI regeneration started",
+		"in_progress": true,
 	})
 }
 
