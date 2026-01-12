@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -145,6 +146,49 @@ func (p *VideoProcessor) ExtractKeyframes(ctx context.Context, videoPath string,
 		return nil, fmt.Errorf("get video info: %w", err)
 	}
 
+	// If duration is unknown/zero, fall back to fps-based extraction so we still get frames.
+	// This avoids the "timestamp >= duration" early break that would otherwise yield 0 frames.
+	if info.Duration <= 0 {
+		if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
+			return nil, fmt.Errorf("create output dir: %w", err)
+		}
+
+		outputPattern := filepath.Join(cfg.OutputDir, "frame_%03d.jpg")
+		// Extract frames at a steady rate, capped by MaxFrames.
+		// fps=1/N extracts one frame every N seconds.
+		cmd := exec.CommandContext(ctx, p.ffmpegPath,
+			"-i", videoPath,
+			"-vf", fmt.Sprintf("fps=1/%d,scale='min(%d,iw)':-1", cfg.IntervalSeconds, cfg.MaxWidth),
+			"-q:v", strconv.Itoa(cfg.Quality),
+			"-frames:v", strconv.Itoa(cfg.MaxFrames),
+			"-y",
+			outputPattern,
+		)
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("extract keyframes (fps fallback): %w", err)
+		}
+
+		entries, err := os.ReadDir(cfg.OutputDir)
+		if err != nil {
+			return nil, fmt.Errorf("read frames dir: %w", err)
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+		var frames []string
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(e.Name()))
+			if ext == ".jpg" || ext == ".jpeg" {
+				frames = append(frames, filepath.Join(cfg.OutputDir, e.Name()))
+			}
+		}
+		if len(frames) == 0 {
+			return nil, fmt.Errorf("no frames extracted from video (fps fallback)")
+		}
+		return frames, nil
+	}
+
 	// Calculate how many frames we'll extract
 	numFrames := int(info.Duration) / cfg.IntervalSeconds
 	if numFrames > cfg.MaxFrames {
@@ -180,8 +224,9 @@ func (p *VideoProcessor) ExtractKeyframes(ctx context.Context, videoPath string,
 
 		// ffmpeg command to extract a single frame
 		cmd := exec.CommandContext(ctx, p.ffmpegPath,
-			"-ss", fmt.Sprintf("%.2f", timestamp),
 			"-i", videoPath,
+			// Seek after opening input for better compatibility with some container/codec combinations.
+			"-ss", fmt.Sprintf("%.2f", timestamp),
 			"-vframes", "1",
 			"-vf", fmt.Sprintf("scale='min(%d,iw)':-1", cfg.MaxWidth),
 			"-q:v", strconv.Itoa(cfg.Quality),

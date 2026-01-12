@@ -57,6 +57,7 @@ func NewRouter(
 		r.Delete("/tweets/{tweetID}", tweetHandler.Delete)
 		r.Post("/tweets/{tweetID}/regenerate-ai", tweetHandler.RegenerateAI)
 		r.Get("/tweets/{tweetID}/ai-status", tweetHandler.CheckAIAnalysisStatus)
+		r.Get("/tweets/{tweetID}/diagnostics", tweetHandler.GetDiagnostics)
 
 		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)

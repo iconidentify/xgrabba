@@ -2024,6 +2024,22 @@
                                 </div>
                             ` : ''}
                         </div>
+
+                        <div class="archive-metadata" style="margin-top: 12px;">
+                            <h4>
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/>
+                                </svg>
+                                Diagnostics
+                            </h4>
+                            <div id="tweetDiagnostics" class="metadata-value" style="font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; opacity: 0.9;">
+                                Loading diagnostics...
+                            </div>
+                            <div style="margin-top: 8px; display:flex; gap:8px;">
+                                <button class="btn btn-secondary" id="copyDiagnosticsBtn" onclick="event.stopPropagation(); copyDiagnostics()">Copy JSON</button>
+                                <button class="btn btn-ghost" onclick="event.stopPropagation(); loadDiagnostics('${tweet.tweet_id}')">Refresh</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="tweet-detail-actions">
@@ -2056,6 +2072,8 @@
 
                 // Check AI analysis status and update button
                 updateRegenerateButtonState(tweet.tweet_id);
+                // Load diagnostics panel
+                loadDiagnostics(tweet.tweet_id);
 
                 // Autoplay first video if present
                 setTimeout(() => {
@@ -2265,6 +2283,53 @@
                         openTweetDetail(tweetId);
                     }
                 }
+            }
+        }
+
+        let lastDiagnosticsJson = null;
+
+        async function loadDiagnostics(tweetId) {
+            const el = document.getElementById('tweetDiagnostics');
+            if (!el) return;
+            el.textContent = 'Loading diagnostics...';
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/diagnostics`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!response.ok) {
+                    throw new Error(`Diagnostics failed: ${response.status}`);
+                }
+                const data = await response.json();
+                lastDiagnosticsJson = data;
+
+                // Pretty print with a small summary up top
+                const summary = [
+                    `AI in progress: ${data.ai_in_progress}`,
+                    `Whisper enabled: ${data.pipeline?.whisper_enabled} (client init: ${data.pipeline?.whisper_client_initialized})`,
+                    `FFmpeg: ${data.pipeline?.ffmpeg_available ? 'available' : 'missing'} ${data.pipeline?.ffmpeg_version ? '(' + data.pipeline.ffmpeg_version + ')' : ''}`,
+                    `Video processor: ${data.pipeline?.video_processor_initialized}`,
+                    `Has video: ${data.has_video} | Has images: ${data.has_images}`,
+                    `Media items: ${data.media?.length || 0}`,
+                ].join('\n');
+
+                el.textContent = summary + '\n\n' + JSON.stringify(data, null, 2);
+            } catch (err) {
+                lastDiagnosticsJson = null;
+                el.textContent = `Failed to load diagnostics: ${err}`;
+            }
+        }
+
+        async function copyDiagnostics() {
+            if (!lastDiagnosticsJson) {
+                alert('No diagnostics loaded yet.');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(lastDiagnosticsJson, null, 2));
+            } catch {
+                // Fallback: prompt
+                prompt('Copy diagnostics JSON:', JSON.stringify(lastDiagnosticsJson, null, 2));
             }
         }
 

@@ -359,6 +359,137 @@ func (h *TweetHandler) CheckAIAnalysisStatus(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+type TweetDiagnosticsResponse struct {
+	TweetID string `json:"tweet_id"`
+
+	AIInProgress bool `json:"ai_in_progress"`
+
+	Pipeline service.PipelineDiagnostics `json:"pipeline"`
+
+	ArchivePath string `json:"archive_path,omitempty"`
+
+	HasVideo bool `json:"has_video"`
+	HasImages bool `json:"has_images"`
+
+	Media []struct {
+		ID                string `json:"id"`
+		Type              string `json:"type"`
+		LocalPath         string `json:"local_path,omitempty"`
+		HasThumbnail      bool   `json:"has_thumbnail"`
+		ThumbnailPath     string `json:"thumbnail_path,omitempty"`
+		KeyframesDir      string `json:"keyframes_dir,omitempty"`
+		KeyframesCount    int    `json:"keyframes_count"`
+		TranscriptLength  int    `json:"transcript_length"`
+		TranscriptLang    string `json:"transcript_language,omitempty"`
+	} `json:"media"`
+}
+
+// GetDiagnostics handles GET /api/v1/tweets/{tweetID}/diagnostics
+func (h *TweetHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	archivePath, err := h.tweetSvc.GetArchivePath(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("get diagnostics failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get diagnostics")
+		return
+	}
+
+	stored, err := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("get full tweet failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get tweet")
+		return
+	}
+
+	resp := TweetDiagnosticsResponse{
+		TweetID:       tweetID,
+		AIInProgress:  h.tweetSvc.IsAIAnalysisInProgress(domain.TweetID(tweetID)),
+		Pipeline:      h.tweetSvc.GetPipelineDiagnostics(),
+		ArchivePath:   archivePath,
+		HasVideo:      false,
+		HasImages:     false,
+		Media:         make([]struct {
+			ID                string `json:"id"`
+			Type              string `json:"type"`
+			LocalPath         string `json:"local_path,omitempty"`
+			HasThumbnail      bool   `json:"has_thumbnail"`
+			ThumbnailPath     string `json:"thumbnail_path,omitempty"`
+			KeyframesDir      string `json:"keyframes_dir,omitempty"`
+			KeyframesCount    int    `json:"keyframes_count"`
+			TranscriptLength  int    `json:"transcript_length"`
+			TranscriptLang    string `json:"transcript_language,omitempty"`
+		}, 0, len(stored.Media)),
+	}
+
+	for _, m := range stored.Media {
+		mt := string(m.Type)
+		if mt == "video" || mt == "gif" {
+			resp.HasVideo = true
+		}
+		if mt == "image" {
+			resp.HasImages = true
+		}
+
+		item := struct {
+			ID                string `json:"id"`
+			Type              string `json:"type"`
+			LocalPath         string `json:"local_path,omitempty"`
+			HasThumbnail      bool   `json:"has_thumbnail"`
+			ThumbnailPath     string `json:"thumbnail_path,omitempty"`
+			KeyframesDir      string `json:"keyframes_dir,omitempty"`
+			KeyframesCount    int    `json:"keyframes_count"`
+			TranscriptLength  int    `json:"transcript_length"`
+			TranscriptLang    string `json:"transcript_language,omitempty"`
+		}{
+			ID:               m.ID,
+			Type:             mt,
+			LocalPath:        m.LocalPath,
+			TranscriptLength: len(m.Transcript),
+			TranscriptLang:   m.TranscriptLanguage,
+		}
+
+		// Thumbnail
+		if (mt == "video" || mt == "gif") && m.PreviewURL != "" && filepath.IsAbs(m.PreviewURL) {
+			item.HasThumbnail = true
+			item.ThumbnailPath = m.PreviewURL
+		}
+
+		// Keyframes directory and count
+		if mt == "video" || mt == "gif" {
+			kd := filepath.Join(archivePath, "media", "keyframes_"+m.ID)
+			item.KeyframesDir = kd
+			if entries, err := os.ReadDir(kd); err == nil {
+				for _, e := range entries {
+					if e.IsDir() {
+						continue
+					}
+					ext := strings.ToLower(filepath.Ext(e.Name()))
+					if ext == ".jpg" || ext == ".jpeg" {
+						item.KeyframesCount++
+					}
+				}
+			}
+		}
+
+		resp.Media = append(resp.Media, item)
+	}
+
+	h.writeJSON(w, http.StatusOK, resp)
+}
+
 // MediaFileResponse represents a media file in the list response.
 type MediaFileResponse struct {
 	Filename           string `json:"filename"`

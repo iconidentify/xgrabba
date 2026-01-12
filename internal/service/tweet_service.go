@@ -44,6 +44,15 @@ type TweetService struct {
 	processingAI   map[domain.TweetID]bool // Track which tweets are currently being analyzed
 }
 
+// PipelineDiagnostics captures high-level runtime capabilities/config.
+type PipelineDiagnostics struct {
+	FFmpegAvailable    bool   `json:"ffmpeg_available"`
+	FFmpegVersion      string `json:"ffmpeg_version,omitempty"`
+	VideoProcessorInit bool   `json:"video_processor_initialized"`
+	WhisperEnabled     bool   `json:"whisper_enabled"`
+	WhisperClientInit  bool   `json:"whisper_client_initialized"`
+}
+
 // NewTweetService creates a new tweet service.
 func NewTweetService(
 	grokClient grok.Client,
@@ -87,6 +96,21 @@ func NewTweetService(
 	}
 
 	return svc
+}
+
+func (s *TweetService) GetPipelineDiagnostics() PipelineDiagnostics {
+	diag := PipelineDiagnostics{
+		FFmpegAvailable:    ffmpeg.IsAvailable(),
+		VideoProcessorInit: s.videoProcessor != nil,
+		WhisperEnabled:     s.whisperEnabled,
+		WhisperClientInit:  s.whisperClient != nil,
+	}
+	if diag.FFmpegAvailable {
+		if v, err := ffmpeg.GetVersion(); err == nil {
+			diag.FFmpegVersion = v
+		}
+	}
+	return diag
 }
 
 // LoadFromDisk scans the storage directory and loads existing archived tweets.
