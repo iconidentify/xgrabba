@@ -117,11 +117,29 @@ func main() {
 	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
 	if cfg.Bookmarks.Enabled {
+		ua := "xgrabba-bookmarks-monitor/" + Version
+		var tokens twitter.TokenSource
+		if cfg.Bookmarks.RefreshToken != "" && cfg.Bookmarks.OAuthClientID != "" {
+			tokens = twitter.NewOAuth2RefreshTokenSource(twitter.OAuth2RefreshTokenSourceConfig{
+				TokenURL:      cfg.Bookmarks.TokenURL,
+				ClientID:      cfg.Bookmarks.OAuthClientID,
+				ClientSecret:  cfg.Bookmarks.OAuthClientSecret,
+				RefreshToken:  cfg.Bookmarks.RefreshToken,
+				HTTPTimeout:   15 * time.Second,
+				UserAgent:     ua,
+				RefreshSkew:   30 * time.Second,
+			})
+			logger.Info("bookmarks auth: oauth2 refresh token enabled")
+		} else {
+			tokens = &twitter.StaticTokenSource{TokenValue: cfg.Bookmarks.BearerToken}
+			logger.Info("bookmarks auth: static bearer token enabled")
+		}
+
 		bmClient := twitter.NewBookmarksClient(twitter.BookmarksClientConfig{
-			BaseURL:     cfg.Bookmarks.BaseURL,
-			BearerToken: cfg.Bookmarks.BearerToken,
-			Timeout:     15 * time.Second,
-			UserAgent:   "xgrabba-bookmarks-monitor/" + Version,
+			BaseURL:   cfg.Bookmarks.BaseURL,
+			Tokens:    tokens,
+			Timeout:   15 * time.Second,
+			UserAgent: ua,
 		})
 		mon := bookmarks.NewMonitor(cfg.Bookmarks, bmClient, tweetSvc, logger)
 		go mon.Start(bookmarksCtx)

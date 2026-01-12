@@ -27,13 +27,13 @@ func (e *RateLimitError) Error() string {
 type BookmarksClient struct {
 	httpClient  *http.Client
 	baseURL     string
-	bearerToken string
+	tokens      TokenSource
 	userAgent   string
 }
 
 type BookmarksClientConfig struct {
 	BaseURL     string
-	BearerToken string
+	Tokens      TokenSource
 	Timeout     time.Duration
 	UserAgent   string
 }
@@ -55,7 +55,7 @@ func NewBookmarksClient(cfg BookmarksClientConfig) *BookmarksClient {
 			Timeout: cfg.Timeout,
 		},
 		baseURL:     strings.TrimRight(base, "/"),
-		bearerToken: cfg.BearerToken,
+		tokens:      cfg.Tokens,
 		userAgent:   ua,
 	}
 }
@@ -74,8 +74,8 @@ func (c *BookmarksClient) ListBookmarks(ctx context.Context, userID string, maxR
 	if userID == "" {
 		return nil, "", fmt.Errorf("userID is required")
 	}
-	if c.bearerToken == "" {
-		return nil, "", fmt.Errorf("bearer token is required")
+	if c.tokens == nil {
+		return nil, "", fmt.Errorf("token source is required")
 	}
 	if maxResults <= 0 {
 		maxResults = 100
@@ -100,7 +100,11 @@ func (c *BookmarksClient) ListBookmarks(ctx context.Context, userID string, maxR
 	if err != nil {
 		return nil, "", fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.bearerToken)
+	token, err := c.tokens.Token(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("User-Agent", c.userAgent)
 	req.Header.Set("Accept", "application/json")
 
@@ -109,6 +113,28 @@ func (c *BookmarksClient) ListBookmarks(ctx context.Context, userID string, maxR
 		return nil, "", fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Try one refresh then retry once.
+		_ = c.tokens.ForceRefresh(ctx)
+		token, err := c.tokens.Token(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		req2, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("create retry request: %w", err)
+		}
+		req2.Header.Set("Authorization", "Bearer "+token)
+		req2.Header.Set("User-Agent", c.userAgent)
+		req2.Header.Set("Accept", "application/json")
+		resp2, err := c.httpClient.Do(req2)
+		if err != nil {
+			return nil, "", fmt.Errorf("send retry request: %w", err)
+		}
+		defer resp2.Body.Close()
+		resp = resp2
+	}
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		rl := &RateLimitError{}

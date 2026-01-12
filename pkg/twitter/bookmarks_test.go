@@ -21,9 +21,9 @@ func TestBookmarksClient_ListBookmarks(t *testing.T) {
 	defer srv.Close()
 
 	c := NewBookmarksClient(BookmarksClientConfig{
-		BaseURL:     srv.URL,
-		BearerToken: "testtoken",
-		Timeout:     2 * time.Second,
+		BaseURL:   srv.URL,
+		Tokens:    &StaticTokenSource{TokenValue: "testtoken"},
+		Timeout:   2 * time.Second,
 	})
 
 	ids, next, err := c.ListBookmarks(context.Background(), "123", 100, "")
@@ -47,9 +47,9 @@ func TestBookmarksClient_RateLimited(t *testing.T) {
 	defer srv.Close()
 
 	c := NewBookmarksClient(BookmarksClientConfig{
-		BaseURL:     srv.URL,
-		BearerToken: "t",
-		Timeout:     2 * time.Second,
+		BaseURL:   srv.URL,
+		Tokens:    &StaticTokenSource{TokenValue: "t"},
+		Timeout:   2 * time.Second,
 	})
 	_, _, err := c.ListBookmarks(context.Background(), "1", 100, "")
 	if err == nil {
