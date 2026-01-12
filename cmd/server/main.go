@@ -13,12 +13,14 @@ import (
 
 	"github.com/iconidentify/xgrabba/internal/api"
 	"github.com/iconidentify/xgrabba/internal/api/handler"
+	"github.com/iconidentify/xgrabba/internal/bookmarks"
 	"github.com/iconidentify/xgrabba/internal/config"
 	"github.com/iconidentify/xgrabba/internal/downloader"
 	"github.com/iconidentify/xgrabba/internal/repository"
 	"github.com/iconidentify/xgrabba/internal/service"
 	"github.com/iconidentify/xgrabba/internal/worker"
 	"github.com/iconidentify/xgrabba/pkg/grok"
+	"github.com/iconidentify/xgrabba/pkg/twitter"
 	"github.com/iconidentify/xgrabba/pkg/whisper"
 )
 
@@ -112,6 +114,19 @@ func main() {
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
 	go tweetSvc.BackfillAIMetadata(backfillCtx)
 
+	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
+	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
+	if cfg.Bookmarks.Enabled {
+		bmClient := twitter.NewBookmarksClient(twitter.BookmarksClientConfig{
+			BaseURL:     cfg.Bookmarks.BaseURL,
+			BearerToken: cfg.Bookmarks.BearerToken,
+			Timeout:     15 * time.Second,
+			UserAgent:   "xgrabba-bookmarks-monitor/" + Version,
+		})
+		mon := bookmarks.NewMonitor(cfg.Bookmarks, bmClient, tweetSvc, logger)
+		go mon.Start(bookmarksCtx)
+	}
+
 	// Initialize handlers
 	videoHandler := handler.NewVideoHandler(videoSvc, logger)
 	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
@@ -161,6 +176,7 @@ func main() {
 
 	// Cancel background tasks
 	cancelBackfill()
+	cancelBookmarks()
 
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -82,10 +82,10 @@ func (p *VideoProcessor) GetVideoInfo(ctx context.Context, videoPath string) (*V
 		BitRate  string `json:"bit_rate"`
 	}
 	type ffprobeStream struct {
-		CodecType string `json:"codec_type"`
-		CodecName string `json:"codec_name"`
-		Width     int    `json:"width"`
-		Height    int    `json:"height"`
+		CodecType    string `json:"codec_type"`
+		CodecName    string `json:"codec_name"`
+		Width        int    `json:"width"`
+		Height       int    `json:"height"`
 		AvgFrameRate string `json:"avg_frame_rate"`
 	}
 	type ffprobeOutput struct {

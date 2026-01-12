@@ -23,6 +23,13 @@ data:
   WHISPER_TIMEOUT: {{ .Values.config.whisper.timeout | quote }}
   WHISPER_MODEL: {{ .Values.config.whisper.model | quote }}
   AI_REGENERATE_TIMEOUT: {{ .Values.config.ai.regenerateTimeout | quote }}
+  BOOKMARKS_ENABLED: {{ .Values.config.bookmarks.enabled | quote }}
+  BOOKMARKS_USER_ID: {{ .Values.config.bookmarks.userId | quote }}
+  BOOKMARKS_BASE_URL: {{ .Values.config.bookmarks.baseUrl | quote }}
+  BOOKMARKS_POLL_INTERVAL: {{ .Values.config.bookmarks.pollInterval | quote }}
+  BOOKMARKS_MAX_RESULTS: {{ .Values.config.bookmarks.maxResults | quote }}
+  BOOKMARKS_MAX_NEW_PER_POLL: {{ .Values.config.bookmarks.maxNewPerPoll | quote }}
+  BOOKMARKS_SEEN_TTL: {{ .Values.config.bookmarks.seenTtl | quote }}
   DOWNLOAD_TIMEOUT: {{ .Values.config.download.timeout | quote }}
   DOWNLOAD_RETRY_DELAY: {{ .Values.config.download.retryDelay | quote }}
   DOWNLOAD_MAX_RETRY_DELAY: {{ .Values.config.download.maxRetryDelay | quote }}
