@@ -84,18 +84,18 @@ type BookmarksConfig struct {
 	BearerToken string `yaml:"bearer_token" envconfig:"TWITTER_BEARER_TOKEN"`
 
 	// OAuth2 refresh-token mode (recommended for unattended operation)
-	OAuthClientID     string        `yaml:"oauth_client_id" envconfig:"TWITTER_OAUTH_CLIENT_ID"`
-	OAuthClientSecret string        `yaml:"oauth_client_secret" envconfig:"TWITTER_OAUTH_CLIENT_SECRET"`
-	RefreshToken      string        `yaml:"refresh_token" envconfig:"TWITTER_OAUTH_REFRESH_TOKEN"`
-	TokenURL          string        `yaml:"token_url" envconfig:"TWITTER_OAUTH_TOKEN_URL" default:"https://api.x.com/2/oauth2/token"`
-	OAuthStorePath    string        `yaml:"oauth_store_path" envconfig:"BOOKMARKS_OAUTH_STORE_PATH" default:"/data/videos/.x_bookmarks_oauth.json"`
-	BaseURL           string        `yaml:"base_url" envconfig:"BOOKMARKS_BASE_URL" default:"https://api.x.com/2"`
+	OAuthClientID     string `yaml:"oauth_client_id" envconfig:"TWITTER_OAUTH_CLIENT_ID"`
+	OAuthClientSecret string `yaml:"oauth_client_secret" envconfig:"TWITTER_OAUTH_CLIENT_SECRET"`
+	RefreshToken      string `yaml:"refresh_token" envconfig:"TWITTER_OAUTH_REFRESH_TOKEN"`
+	TokenURL          string `yaml:"token_url" envconfig:"TWITTER_OAUTH_TOKEN_URL" default:"https://api.x.com/2/oauth2/token"`
+	OAuthStorePath    string `yaml:"oauth_store_path" envconfig:"BOOKMARKS_OAUTH_STORE_PATH" default:"/data/videos/.x_bookmarks_oauth.json"`
+	BaseURL           string `yaml:"base_url" envconfig:"BOOKMARKS_BASE_URL" default:"https://api.x.com/2"`
 	// Default poll interval is conservative to avoid free-tier rate limits (often 1 req / 15 min).
-	PollInterval      time.Duration `yaml:"poll_interval" envconfig:"BOOKMARKS_POLL_INTERVAL" default:"20m"`
+	PollInterval time.Duration `yaml:"poll_interval" envconfig:"BOOKMARKS_POLL_INTERVAL" default:"20m"`
 	// Keep API response small; we only need recent IDs.
-	MaxResults        int           `yaml:"max_results" envconfig:"BOOKMARKS_MAX_RESULTS" default:"20"`
-	MaxNewPerPoll     int           `yaml:"max_new_per_poll" envconfig:"BOOKMARKS_MAX_NEW_PER_POLL" default:"5"`
-	SeenTTL           time.Duration `yaml:"seen_ttl" envconfig:"BOOKMARKS_SEEN_TTL" default:"720h"` // 30 days
+	MaxResults    int           `yaml:"max_results" envconfig:"BOOKMARKS_MAX_RESULTS" default:"20"`
+	MaxNewPerPoll int           `yaml:"max_new_per_poll" envconfig:"BOOKMARKS_MAX_NEW_PER_POLL" default:"5"`
+	SeenTTL       time.Duration `yaml:"seen_ttl" envconfig:"BOOKMARKS_SEEN_TTL" default:"720h"` // 30 days
 }
 
 // Load reads configuration from file and environment variables.

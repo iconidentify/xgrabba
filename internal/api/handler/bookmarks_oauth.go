@@ -35,6 +35,7 @@ type pkceState struct {
 	Verifier    string
 	RedirectURI string
 	UserID      string
+	AllowInfer  bool
 	CreatedAt   time.Time
 }
 
@@ -96,8 +97,9 @@ func (h *BookmarksOAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
-	if userID == "" {
-		h.writeError(w, http.StatusBadRequest, "missing user_id (numeric X user id required)")
+	allowInfer := r.URL.Query().Get("infer_user_id") == "1"
+	if userID == "" && !allowInfer {
+		h.writeError(w, http.StatusBadRequest, "missing user_id (numeric X user id required) or set infer_user_id=1")
 		return
 	}
 
@@ -107,7 +109,7 @@ func (h *BookmarksOAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	state := randomURLSafe(24)
 
 	h.mu.Lock()
-	h.states[state] = pkceState{Verifier: verifier, RedirectURI: redirectURI, UserID: userID, CreatedAt: time.Now()}
+	h.states[state] = pkceState{Verifier: verifier, RedirectURI: redirectURI, UserID: userID, AllowInfer: allowInfer, CreatedAt: time.Now()}
 	h.mu.Unlock()
 
 	authURL := "https://twitter.com/i/oauth2/authorize"
@@ -160,8 +162,24 @@ func (h *BookmarksOAuthHandler) Callback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	userID := ps.UserID
+	if userID == "" {
+		if !ps.AllowInfer {
+			h.writeError(w, http.StatusBadRequest, "missing user id; restart connect flow with user_id or infer_user_id=1")
+			return
+		}
+		// One-time user id lookup. This is ONLY used during connect when user didn't provide a numeric id.
+		inferred, err := fetchUserID(r.Context(), "https://api.x.com/2", tr.AccessToken)
+		if err != nil {
+			h.logger.Warn("fetch users/me failed", "error", err)
+			h.writeError(w, http.StatusBadGateway, "failed to infer user id")
+			return
+		}
+		userID = inferred
+	}
+
 	if err := bookmarks.SaveOAuthStore(h.cfg.OAuthStorePath, bookmarks.OAuthStore{
-		UserID:       ps.UserID,
+		UserID:       userID,
 		RefreshToken: tr.RefreshToken,
 	}); err != nil {
 		h.logger.Warn("failed to save oauth store", "error", err)
@@ -239,5 +257,35 @@ func exchangeAuthCode(ctx context.Context, tokenURL, clientID, clientSecret, cod
 		return nil, err
 	}
 	return &tr, nil
+}
+
+func fetchUserID(ctx context.Context, baseURL, accessToken string) (string, error) {
+	u := strings.TrimRight(baseURL, "/") + "/users/me"
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("users/me status: %s", resp.Status)
+	}
+	var parsed struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return "", err
+	}
+	if parsed.Data.ID == "" {
+		return "", fmt.Errorf("users/me missing id")
+	}
+	return parsed.Data.ID, nil
 }
 
