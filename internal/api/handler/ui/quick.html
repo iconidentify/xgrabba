@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#15202b">
-    <title>XGrabba - Quick Archive</title>
+    <title>xgrabba - Quick Archive</title>
     <style>
         * {
             margin: 0;
@@ -306,11 +306,20 @@
 <body>
     <div class="container">
         <header class="header">
-            <svg class="logo" viewBox="0 0 24 24" fill="#1d9bf0">
-                <path d="M12 3v10.586l3.293-3.293 1.414 1.414L12 16.414l-4.707-4.707 1.414-1.414L12 13.586V3h2z"/>
-                <path d="M5 17v4h14v-4h2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4h2z"/>
+            <svg class="logo" viewBox="0 0 128 128">
+                <defs>
+                    <linearGradient id="quick-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#14b8a6"/>
+                        <stop offset="100%" stop-color="#0891b2"/>
+                    </linearGradient>
+                </defs>
+                <path d="M20 8 L8 8 L8 40" stroke="url(#quick-grad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M108 8 L120 8 L120 40" stroke="url(#quick-grad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M20 120 L8 120 L8 88" stroke="url(#quick-grad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M108 120 L120 120 L120 88" stroke="url(#quick-grad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M40 40 L88 88 M88 40 L40 88" stroke="#e7e9ea" stroke-width="12" stroke-linecap="round"/>
             </svg>
-            <h1>Quick Archive</h1>
+            <h1 style="background: linear-gradient(135deg, #14b8a6, #0891b2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Quick Archive</h1>
             <p>Paste any X.com link to archive</p>
         </header>
 
