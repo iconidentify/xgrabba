@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,38 +76,97 @@ func (p *VideoProcessor) GetVideoInfo(ctx context.Context, videoPath string) (*V
 		FileSize: stat.Size(),
 	}
 
-	// Parse JSON output (simplified parsing)
-	outputStr := string(output)
+	// Parse ffprobe JSON (robust) and fall back to old string parsing if needed.
+	type ffprobeFormat struct {
+		Duration string `json:"duration"`
+		BitRate  string `json:"bit_rate"`
+	}
+	type ffprobeStream struct {
+		CodecType string `json:"codec_type"`
+		CodecName string `json:"codec_name"`
+		Width     int    `json:"width"`
+		Height    int    `json:"height"`
+		AvgFrameRate string `json:"avg_frame_rate"`
+	}
+	type ffprobeOutput struct {
+		Format  ffprobeFormat   `json:"format"`
+		Streams []ffprobeStream `json:"streams"`
+	}
 
-	// Extract duration
-	if idx := strings.Index(outputStr, `"duration"`); idx != -1 {
-		rest := outputStr[idx+11:]
-		if endIdx := strings.Index(rest, `"`); endIdx != -1 {
-			if dur, err := strconv.ParseFloat(rest[:endIdx], 64); err == nil {
+	var parsed ffprobeOutput
+	if err := json.Unmarshal(output, &parsed); err == nil {
+		if parsed.Format.Duration != "" {
+			if dur, err := strconv.ParseFloat(parsed.Format.Duration, 64); err == nil {
 				info.Duration = dur
 			}
 		}
-	}
 
-	// Check for audio stream
-	info.HasAudio = strings.Contains(outputStr, `"codec_type": "audio"`) ||
-		strings.Contains(outputStr, `"codec_type":"audio"`)
-
-	// Extract dimensions from video stream
-	if idx := strings.Index(outputStr, `"width"`); idx != -1 {
-		rest := outputStr[idx+8:]
-		if endIdx := strings.IndexAny(rest, ",}"); endIdx != -1 {
-			if w, err := strconv.Atoi(strings.TrimSpace(rest[:endIdx])); err == nil {
-				info.Width = w
+		if parsed.Format.BitRate != "" {
+			if br, err := strconv.ParseInt(parsed.Format.BitRate, 10, 64); err == nil {
+				info.Bitrate = br
 			}
 		}
-	}
 
-	if idx := strings.Index(outputStr, `"height"`); idx != -1 {
-		rest := outputStr[idx+9:]
-		if endIdx := strings.IndexAny(rest, ",}"); endIdx != -1 {
-			if h, err := strconv.Atoi(strings.TrimSpace(rest[:endIdx])); err == nil {
-				info.Height = h
+		for _, s := range parsed.Streams {
+			switch s.CodecType {
+			case "audio":
+				info.HasAudio = true
+				if info.AudioCodec == "" {
+					info.AudioCodec = s.CodecName
+				}
+			case "video":
+				if info.VideoCodec == "" {
+					info.VideoCodec = s.CodecName
+				}
+				if info.Width == 0 && s.Width > 0 {
+					info.Width = s.Width
+				}
+				if info.Height == 0 && s.Height > 0 {
+					info.Height = s.Height
+				}
+				if info.FrameRate == 0 && s.AvgFrameRate != "" && s.AvgFrameRate != "0/0" {
+					parts := strings.SplitN(s.AvgFrameRate, "/", 2)
+					if len(parts) == 2 {
+						num, err1 := strconv.ParseFloat(parts[0], 64)
+						den, err2 := strconv.ParseFloat(parts[1], 64)
+						if err1 == nil && err2 == nil && den != 0 {
+							info.FrameRate = num / den
+						}
+					}
+				}
+			}
+		}
+	} else {
+		// Legacy string parsing fallback
+		outputStr := string(output)
+
+		if idx := strings.Index(outputStr, `"duration"`); idx != -1 {
+			rest := outputStr[idx+11:]
+			if endIdx := strings.Index(rest, `"`); endIdx != -1 {
+				if dur, err := strconv.ParseFloat(rest[:endIdx], 64); err == nil {
+					info.Duration = dur
+				}
+			}
+		}
+
+		info.HasAudio = strings.Contains(outputStr, `"codec_type": "audio"`) ||
+			strings.Contains(outputStr, `"codec_type":"audio"`)
+
+		if idx := strings.Index(outputStr, `"width"`); idx != -1 {
+			rest := outputStr[idx+8:]
+			if endIdx := strings.IndexAny(rest, ",}"); endIdx != -1 {
+				if w, err := strconv.Atoi(strings.TrimSpace(rest[:endIdx])); err == nil {
+					info.Width = w
+				}
+			}
+		}
+
+		if idx := strings.Index(outputStr, `"height"`); idx != -1 {
+			rest := outputStr[idx+9:]
+			if endIdx := strings.IndexAny(rest, ",}"); endIdx != -1 {
+				if h, err := strconv.Atoi(strings.TrimSpace(rest[:endIdx])); err == nil {
+					info.Height = h
+				}
 			}
 		}
 	}
@@ -316,9 +376,16 @@ func (p *VideoProcessor) ExtractAudio(ctx context.Context, videoPath string, cfg
 		return "", 0, fmt.Errorf("extract audio: %w", err)
 	}
 
-	// Get duration of extracted audio
-	audioDuration := info.Duration
-	if cfg.MaxDurationSec > 0 && float64(cfg.MaxDurationSec) < audioDuration {
+	// Get duration of extracted audio by probing the OUTPUT audio file.
+	// This is more reliable than using the input container duration (which can be missing/0).
+	audioDuration := 0.0
+	if outInfo, err := p.GetVideoInfo(ctx, cfg.OutputPath); err == nil && outInfo.Duration > 0 {
+		audioDuration = outInfo.Duration
+	} else {
+		// Fallback: use input duration if we have it
+		audioDuration = info.Duration
+	}
+	if cfg.MaxDurationSec > 0 && audioDuration > 0 && float64(cfg.MaxDurationSec) < audioDuration {
 		audioDuration = float64(cfg.MaxDurationSec)
 	}
 

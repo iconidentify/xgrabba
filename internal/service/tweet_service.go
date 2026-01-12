@@ -1029,6 +1029,22 @@ func (s *TweetService) processVideoForTranscription(ctx context.Context, media *
 	logger := s.logger.With("media_id", media.ID)
 	logger.Info("processing video for transcription")
 
+	// Log ffprobe-derived input info up front (helps debug 0-duration / no-audio cases).
+	if inInfo, err := s.videoProcessor.GetVideoInfo(ctx, media.LocalPath); err != nil {
+		logger.Warn("ffprobe input failed", "error", err)
+	} else {
+		logger.Info("ffprobe input",
+			"duration_seconds", inInfo.Duration,
+			"has_audio", inInfo.HasAudio,
+			"audio_codec", inInfo.AudioCodec,
+			"video_codec", inInfo.VideoCodec,
+			"width", inInfo.Width,
+			"height", inInfo.Height,
+			"bitrate", inInfo.Bitrate,
+			"filesize_bytes", inInfo.FileSize,
+		)
+	}
+
 	// Create temp directory for processing
 	tempDir := filepath.Join(archivePath, "temp_processing")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
@@ -1079,15 +1095,24 @@ func (s *TweetService) processVideoForTranscription(ctx context.Context, media *
 		return
 	}
 
-	logger.Info("extracted audio", "duration_seconds", audioDuration)
-
-	// Check if audio needs to be chunked
+	// Audio stats + probe of extracted file
 	audioStat, err := os.Stat(audioPath)
 	if err != nil {
 		logger.Warn("failed to stat audio file", "error", err)
 		return
 	}
+	logger.Info("extracted audio",
+		"duration_seconds", audioDuration,
+		"filesize_bytes", audioStat.Size(),
+		"filesize_mb", float64(audioStat.Size())/(1024.0*1024.0),
+	)
+	if outInfo, err := s.videoProcessor.GetVideoInfo(ctx, audioPath); err != nil {
+		logger.Warn("ffprobe extracted audio failed", "error", err)
+	} else {
+		logger.Info("ffprobe extracted audio", "duration_seconds", outInfo.Duration, "has_audio", outInfo.HasAudio, "audio_codec", outInfo.AudioCodec, "bitrate", outInfo.Bitrate)
+	}
 
+	// Check if audio needs to be chunked
 	var transcription *whisper.TranscriptionResponse
 
 	if audioStat.Size() > 20*1024*1024 { // Over 20MB, needs chunking
@@ -1102,6 +1127,7 @@ func (s *TweetService) processVideoForTranscription(ctx context.Context, media *
 			logger.Warn("failed to chunk audio", "error", err)
 			return
 		}
+		logger.Info("audio chunking complete", "chunks", len(chunks))
 
 		transcription, err = s.whisperClient.TranscribeChunks(ctx, chunks, whisper.TranscriptionOptions{})
 		if err != nil {
