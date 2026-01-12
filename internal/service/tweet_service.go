@@ -216,7 +216,6 @@ func (s *TweetService) ResumeIncompleteArchives(ctx context.Context) {
 
 	var toResume []*domain.Tweet
 
-	s.mu.RLock()
 	for _, tweet := range s.tweets {
 		// Skip tweets in terminal states
 		if tweet.Status == domain.ArchiveStatusCompleted ||
@@ -231,7 +230,6 @@ func (s *TweetService) ResumeIncompleteArchives(ctx context.Context) {
 
 		toResume = append(toResume, tweet)
 	}
-	s.mu.RUnlock()
 
 	if len(toResume) == 0 {
 		s.logger.Info("no incomplete archives to resume")
@@ -251,8 +249,8 @@ func (s *TweetService) ResumeIncompleteArchives(ctx context.Context) {
 		// Determine which phase to resume from
 		go func(t *domain.Tweet) {
 			// Acquire semaphore for processing
-			s.sem <- struct{}{}
-			defer func() { <-s.sem }()
+			s.processingSem <- struct{}{}
+			defer func() { <-s.processingSem }()
 
 			switch t.Status {
 			case domain.ArchiveStatusPending, domain.ArchiveStatusFetching:
