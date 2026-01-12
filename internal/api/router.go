@@ -16,6 +16,7 @@ func NewRouter(
 	tweetHandler *handler.TweetHandler,
 	healthHandler *handler.HealthHandler,
 	uiHandler *handler.UIHandler,
+	bookmarksOAuthHandler *handler.BookmarksOAuthHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -41,9 +42,21 @@ func NewRouter(
 	r.Get("/quick", uiHandler.Quick) // Mobile-optimized quick archive
 	r.Get("/q", uiHandler.Quick)     // Short alias for mobile
 
+	// OAuth callback must be unauthenticated because it's a browser redirect from X.
+	if bookmarksOAuthHandler != nil {
+		r.Get("/bookmarks/oauth/start", bookmarksOAuthHandler.Start)
+		r.Get("/bookmarks/oauth/callback", bookmarksOAuthHandler.Callback)
+	}
+
 	// API v1 (authenticated)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.APIKeyAuth(apiKey))
+
+		// Bookmarks OAuth connect flow (optional; used to obtain refresh_token once via browser)
+		if bookmarksOAuthHandler != nil {
+			r.Get("/bookmarks/oauth/status", bookmarksOAuthHandler.Status)
+			r.Post("/bookmarks/oauth/disconnect", bookmarksOAuthHandler.Disconnect)
+		}
 
 		// Tweet operations (new - full tweet archival)
 		r.Post("/tweets", tweetHandler.Archive)

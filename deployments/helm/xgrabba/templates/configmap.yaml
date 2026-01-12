@@ -30,6 +30,7 @@ data:
   BOOKMARKS_MAX_RESULTS: {{ .Values.config.bookmarks.maxResults | quote }}
   BOOKMARKS_MAX_NEW_PER_POLL: {{ .Values.config.bookmarks.maxNewPerPoll | quote }}
   BOOKMARKS_SEEN_TTL: {{ .Values.config.bookmarks.seenTtl | quote }}
+  BOOKMARKS_OAUTH_STORE_PATH: {{ .Values.config.bookmarks.oauthStorePath | quote }}
   TWITTER_OAUTH_CLIENT_ID: {{ .Values.config.bookmarks.oauthClientId | quote }}
   TWITTER_OAUTH_TOKEN_URL: {{ .Values.config.bookmarks.tokenUrl | quote }}
   DOWNLOAD_TIMEOUT: {{ .Values.config.download.timeout | quote }}

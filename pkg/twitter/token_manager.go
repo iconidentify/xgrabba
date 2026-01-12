@@ -44,6 +44,8 @@ type OAuth2RefreshTokenSourceConfig struct {
 	UserAgent   string
 	// RefreshSkew is subtracted from expires_in when scheduling refresh.
 	RefreshSkew time.Duration
+	// OnRefreshToken is called when the token endpoint returns a rotated refresh token.
+	OnRefreshToken func(newRefreshToken string)
 }
 
 // OAuth2RefreshTokenSource refreshes access tokens via refresh_token grant.
@@ -167,6 +169,9 @@ func (s *OAuth2RefreshTokenSource) refresh(ctx context.Context) error {
 	s.accessToken = tr.AccessToken
 	if tr.RefreshToken != "" {
 		s.refreshToken = tr.RefreshToken
+		if s.cfg.OnRefreshToken != nil {
+			s.cfg.OnRefreshToken(tr.RefreshToken)
+		}
 	}
 	s.expiresAt = expAt
 	s.mu.Unlock()

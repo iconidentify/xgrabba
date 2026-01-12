@@ -78,21 +78,22 @@ type AIConfig struct {
 
 // BookmarksConfig controls polling X bookmarks to trigger archiving.
 type BookmarksConfig struct {
-	Enabled       bool          `yaml:"enabled" envconfig:"BOOKMARKS_ENABLED" default:"false"`
-	UserID        string        `yaml:"user_id" envconfig:"BOOKMARKS_USER_ID"`
+	Enabled bool   `yaml:"enabled" envconfig:"BOOKMARKS_ENABLED" default:"false"`
+	UserID  string `yaml:"user_id" envconfig:"BOOKMARKS_USER_ID"`
 	// Static bearer token mode (optional). If provided without refresh token settings, used directly.
 	BearerToken string `yaml:"bearer_token" envconfig:"TWITTER_BEARER_TOKEN"`
 
 	// OAuth2 refresh-token mode (recommended for unattended operation)
-	OAuthClientID     string `yaml:"oauth_client_id" envconfig:"TWITTER_OAUTH_CLIENT_ID"`
-	OAuthClientSecret string `yaml:"oauth_client_secret" envconfig:"TWITTER_OAUTH_CLIENT_SECRET"`
-	RefreshToken      string `yaml:"refresh_token" envconfig:"TWITTER_OAUTH_REFRESH_TOKEN"`
-	TokenURL          string `yaml:"token_url" envconfig:"TWITTER_OAUTH_TOKEN_URL" default:"https://api.x.com/2/oauth2/token"`
-	BaseURL       string        `yaml:"base_url" envconfig:"BOOKMARKS_BASE_URL" default:"https://api.x.com/2"`
-	PollInterval  time.Duration `yaml:"poll_interval" envconfig:"BOOKMARKS_POLL_INTERVAL" default:"60s"`
-	MaxResults    int           `yaml:"max_results" envconfig:"BOOKMARKS_MAX_RESULTS" default:"100"`
-	MaxNewPerPoll int           `yaml:"max_new_per_poll" envconfig:"BOOKMARKS_MAX_NEW_PER_POLL" default:"10"`
-	SeenTTL       time.Duration `yaml:"seen_ttl" envconfig:"BOOKMARKS_SEEN_TTL" default:"720h"` // 30 days
+	OAuthClientID     string        `yaml:"oauth_client_id" envconfig:"TWITTER_OAUTH_CLIENT_ID"`
+	OAuthClientSecret string        `yaml:"oauth_client_secret" envconfig:"TWITTER_OAUTH_CLIENT_SECRET"`
+	RefreshToken      string        `yaml:"refresh_token" envconfig:"TWITTER_OAUTH_REFRESH_TOKEN"`
+	TokenURL          string        `yaml:"token_url" envconfig:"TWITTER_OAUTH_TOKEN_URL" default:"https://api.x.com/2/oauth2/token"`
+	OAuthStorePath    string        `yaml:"oauth_store_path" envconfig:"BOOKMARKS_OAUTH_STORE_PATH" default:"/data/videos/.x_bookmarks_oauth.json"`
+	BaseURL           string        `yaml:"base_url" envconfig:"BOOKMARKS_BASE_URL" default:"https://api.x.com/2"`
+	PollInterval      time.Duration `yaml:"poll_interval" envconfig:"BOOKMARKS_POLL_INTERVAL" default:"60s"`
+	MaxResults        int           `yaml:"max_results" envconfig:"BOOKMARKS_MAX_RESULTS" default:"100"`
+	MaxNewPerPoll     int           `yaml:"max_new_per_poll" envconfig:"BOOKMARKS_MAX_NEW_PER_POLL" default:"10"`
+	SeenTTL           time.Duration `yaml:"seen_ttl" envconfig:"BOOKMARKS_SEEN_TTL" default:"720h"` // 30 days
 }
 
 // Load reads configuration from file and environment variables.
@@ -136,17 +137,20 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("STORAGE_PATH is required")
 	}
 	if c.Bookmarks.Enabled {
-		if c.Bookmarks.UserID == "" {
-			return fmt.Errorf("BOOKMARKS_USER_ID is required when BOOKMARKS_ENABLED=true")
+		// We can learn user_id from the OAuth connect flow (stored on disk), so only require it if we
+		// don't have OAuth client credentials available.
+		if c.Bookmarks.UserID == "" && c.Bookmarks.OAuthClientID == "" {
+			return fmt.Errorf("BOOKMARKS_USER_ID is required when BOOKMARKS_ENABLED=true (unless using OAuth connect flow)")
 		}
-		if c.Bookmarks.RefreshToken != "" || c.Bookmarks.OAuthClientID != "" {
-			if c.Bookmarks.OAuthClientID == "" || c.Bookmarks.RefreshToken == "" {
-				return fmt.Errorf("TWITTER_OAUTH_CLIENT_ID and TWITTER_OAUTH_REFRESH_TOKEN are required for refresh-token mode")
-			}
-		} else {
-			if c.Bookmarks.BearerToken == "" {
-				return fmt.Errorf("TWITTER_BEARER_TOKEN is required when BOOKMARKS_ENABLED=true (unless using refresh-token mode)")
-			}
+		// Auth can be:
+		// - static bearer token
+		// - refresh-token mode (client_id + refresh token)
+		// - OAuth connect flow (client_id present; refresh token stored on disk)
+		if c.Bookmarks.BearerToken == "" && c.Bookmarks.RefreshToken == "" && c.Bookmarks.OAuthClientID == "" {
+			return fmt.Errorf("bookmarks auth missing: set TWITTER_BEARER_TOKEN or TWITTER_OAUTH_REFRESH_TOKEN+TWITTER_OAUTH_CLIENT_ID (or TWITTER_OAUTH_CLIENT_ID for connect flow)")
+		}
+		if c.Bookmarks.RefreshToken != "" && c.Bookmarks.OAuthClientID == "" {
+			return fmt.Errorf("TWITTER_OAUTH_CLIENT_ID is required when TWITTER_OAUTH_REFRESH_TOKEN is set")
 		}
 		if c.Bookmarks.PollInterval < 10*time.Second {
 			return fmt.Errorf("BOOKMARKS_POLL_INTERVAL too small (min 10s)")

@@ -118,31 +118,67 @@ func main() {
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
 	if cfg.Bookmarks.Enabled {
 		ua := "xgrabba-bookmarks-monitor/" + Version
+
+		// Allow "configured forever" mode: if refresh token / user id are not provided via env/secret,
+		// load them from the on-disk OAuth store written by the connect flow.
+		var stored *bookmarks.OAuthStore
+		if cfg.Bookmarks.OAuthStorePath != "" {
+			if s, err := bookmarks.LoadOAuthStore(cfg.Bookmarks.OAuthStorePath); err == nil {
+				stored = s
+			} else {
+				logger.Info("bookmarks oauth store not present yet", "path", cfg.Bookmarks.OAuthStorePath)
+			}
+		}
+
+		bmCfg := cfg.Bookmarks
+		if bmCfg.UserID == "" && stored != nil && stored.UserID != "" {
+			bmCfg.UserID = stored.UserID
+		}
+		refreshToken := bmCfg.RefreshToken
+		if refreshToken == "" && stored != nil && stored.RefreshToken != "" {
+			refreshToken = stored.RefreshToken
+		}
+
 		var tokens twitter.TokenSource
-		if cfg.Bookmarks.RefreshToken != "" && cfg.Bookmarks.OAuthClientID != "" {
+		if refreshToken != "" && bmCfg.OAuthClientID != "" {
 			tokens = twitter.NewOAuth2RefreshTokenSource(twitter.OAuth2RefreshTokenSourceConfig{
-				TokenURL:      cfg.Bookmarks.TokenURL,
-				ClientID:      cfg.Bookmarks.OAuthClientID,
-				ClientSecret:  cfg.Bookmarks.OAuthClientSecret,
-				RefreshToken:  cfg.Bookmarks.RefreshToken,
+				TokenURL:      bmCfg.TokenURL,
+				ClientID:      bmCfg.OAuthClientID,
+				ClientSecret:  bmCfg.OAuthClientSecret,
+				RefreshToken:  refreshToken,
 				HTTPTimeout:   15 * time.Second,
 				UserAgent:     ua,
 				RefreshSkew:   30 * time.Second,
+				OnRefreshToken: func(newRT string) {
+					if bmCfg.OAuthStorePath == "" || bmCfg.UserID == "" {
+						return
+					}
+					_ = bookmarks.SaveOAuthStore(bmCfg.OAuthStorePath, bookmarks.OAuthStore{
+						UserID:       bmCfg.UserID,
+						RefreshToken: newRT,
+					})
+				},
 			})
 			logger.Info("bookmarks auth: oauth2 refresh token enabled")
-		} else {
-			tokens = &twitter.StaticTokenSource{TokenValue: cfg.Bookmarks.BearerToken}
+		} else if bmCfg.BearerToken != "" {
+			tokens = &twitter.StaticTokenSource{TokenValue: bmCfg.BearerToken}
 			logger.Info("bookmarks auth: static bearer token enabled")
+		} else {
+			// Enabled but not connected yet; user must complete connect flow.
+			logger.Warn("bookmarks enabled but no token available yet; complete /bookmarks/oauth/start flow", "store_path", bmCfg.OAuthStorePath)
+			tokens = nil
 		}
 
-		bmClient := twitter.NewBookmarksClient(twitter.BookmarksClientConfig{
-			BaseURL:   cfg.Bookmarks.BaseURL,
-			Tokens:    tokens,
-			Timeout:   15 * time.Second,
-			UserAgent: ua,
-		})
-		mon := bookmarks.NewMonitor(cfg.Bookmarks, bmClient, tweetSvc, logger)
-		go mon.Start(bookmarksCtx)
+		if tokens != nil && bmCfg.UserID != "" {
+			bmClient := twitter.NewBookmarksClient(twitter.BookmarksClientConfig{
+				BaseURL:   bmCfg.BaseURL,
+				Tokens:    tokens,
+				Timeout:   15 * time.Second,
+				UserAgent: ua,
+			})
+			mon := bookmarks.NewMonitor(bmCfg, bmClient, tweetSvc, logger)
+			go mon.Start(bookmarksCtx)
+		}
 	}
 
 	// Initialize handlers
@@ -151,8 +187,14 @@ func main() {
 	healthHandler := handler.NewHealthHandler(jobRepo)
 	uiHandler := handler.NewUIHandler()
 
+	// Bookmarks OAuth connect handler (optional). Lets you do a one-time browser auth to store refresh token on disk.
+	var bookmarksOAuthHandler *handler.BookmarksOAuthHandler
+	if cfg.Bookmarks.OAuthClientID != "" {
+		bookmarksOAuthHandler = handler.NewBookmarksOAuthHandler(cfg.Bookmarks, cfg.Server.APIKey, logger)
+	}
+
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, bookmarksOAuthHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

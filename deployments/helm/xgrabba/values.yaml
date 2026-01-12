@@ -95,6 +95,8 @@ config:
     # OAuth2 refresh-token mode (recommended for unattended operation)
     oauthClientId: ""
     tokenUrl: "https://api.x.com/2/oauth2/token"
+    # Where to persist the refresh token + user id after the one-time Connect flow
+    oauthStorePath: "/data/videos/.x_bookmarks_oauth.json"
     pollInterval: "60s"
     maxResults: "100"
     maxNewPerPoll: "10"
