@@ -716,7 +716,9 @@ func (s *TweetService) processVideoForTranscription(ctx context.Context, media *
 			for i, framePath := range frames {
 				destPath := filepath.Join(keyframesDir, fmt.Sprintf("frame_%03d.jpg", i))
 				if data, err := os.ReadFile(framePath); err == nil {
-					os.WriteFile(destPath, data, 0644)
+					if err := os.WriteFile(destPath, data, 0644); err != nil {
+						logger.Warn("failed to write keyframe", "dest_path", destPath, "error", err)
+					}
 				}
 			}
 		}

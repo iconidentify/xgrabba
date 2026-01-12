@@ -377,8 +377,12 @@ func extractBitrateFromURL(url string) int {
 	if len(matches) > 2 {
 		// Use width * height as a rough bitrate proxy
 		var w, h int
-		fmt.Sscanf(matches[1], "%d", &w)
-		fmt.Sscanf(matches[2], "%d", &h)
+		if _, err := fmt.Sscanf(matches[1], "%d", &w); err != nil {
+			return 0
+		}
+		if _, err := fmt.Sscanf(matches[2], "%d", &h); err != nil {
+			return 0
+		}
 		return w * h
 	}
 	return 0
