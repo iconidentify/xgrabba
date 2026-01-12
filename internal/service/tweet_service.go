@@ -208,25 +208,113 @@ func (s *TweetService) RecoverOrphanedArchives(ctx context.Context) {
 	}
 }
 
+// ResumeIncompleteArchives finds tweets that were interrupted mid-processing
+// and resumes their archival from the appropriate phase.
+// This handles tweets that have tweet.json but aren't in a terminal state.
+func (s *TweetService) ResumeIncompleteArchives(ctx context.Context) {
+	s.logger.Info("checking for incomplete archives to resume")
+
+	var toResume []*domain.Tweet
+
+	s.mu.RLock()
+	for _, tweet := range s.tweets {
+		// Skip tweets in terminal states
+		if tweet.Status == domain.ArchiveStatusCompleted ||
+			tweet.Status == domain.ArchiveStatusFailed {
+			continue
+		}
+
+		// Skip tweets that are empty/corrupted (no URL)
+		if tweet.URL == "" {
+			continue
+		}
+
+		toResume = append(toResume, tweet)
+	}
+	s.mu.RUnlock()
+
+	if len(toResume) == 0 {
+		s.logger.Info("no incomplete archives to resume")
+		return
+	}
+
+	s.logger.Info("resuming incomplete archives", "count", len(toResume))
+
+	for _, tweet := range toResume {
+		s.logger.Info("resuming archive",
+			"tweet_id", tweet.ID,
+			"status", tweet.Status,
+			"phase_fetched", tweet.FetchedAt != nil,
+			"phase_downloaded", tweet.DownloadedAt != nil,
+		)
+
+		// Determine which phase to resume from
+		go func(t *domain.Tweet) {
+			// Acquire semaphore for processing
+			s.sem <- struct{}{}
+			defer func() { <-s.sem }()
+
+			switch t.Status {
+			case domain.ArchiveStatusPending, domain.ArchiveStatusFetching:
+				// Need to start from Phase 1
+				s.processTweet(ctx, t)
+
+			case domain.ArchiveStatusFetched, domain.ArchiveStatusDownloading:
+				// Phase 1 complete, resume from Phase 2
+				if err := s.processPhase2Download(ctx, t); err != nil {
+					s.logger.Warn("phase 2 resume partial failure", "tweet_id", t.ID, "error", err)
+				}
+				// Then Phase 3
+				go s.processPhase3Analyze(context.Background(), t)
+
+			case domain.ArchiveStatusDownloaded, domain.ArchiveStatusAnalyzing, domain.ArchiveStatusProcessing:
+				// Phases 1 & 2 complete, resume Phase 3
+				go s.processPhase3Analyze(context.Background(), t)
+
+			default:
+				// Unknown status, try full reprocess
+				s.logger.Warn("unknown status, full reprocess", "tweet_id", t.ID, "status", t.Status)
+				s.processTweet(ctx, t)
+			}
+		}(tweet)
+	}
+}
+
 // storedTweetToTweet converts a StoredTweet from disk back to a Tweet.
 func (s *TweetService) storedTweetToTweet(stored *domain.StoredTweet, archivePath string) *domain.Tweet {
+	// Determine status - use stored status if available, otherwise infer from data
+	status := domain.ArchiveStatusCompleted
+	if stored.Status != "" {
+		status = domain.ArchiveStatus(stored.Status)
+	}
+
 	tweet := &domain.Tweet{
-		ID:            domain.TweetID(stored.TweetID),
-		URL:           stored.URL,
-		Author:        stored.Author,
-		Text:          stored.Text,
-		PostedAt:      stored.PostedAt,
-		Media:         stored.Media,
-		Metrics:       stored.Metrics,
-		Status:        domain.ArchiveStatusCompleted,
-		ArchivePath:   archivePath,
-		AITitle:       stored.AITitle,
-		AISummary:     stored.AISummary,
-		AITags:        stored.AITags,
-		AIContentType: stored.AIContentType,
-		AITopics:      stored.AITopics,
-		CreatedAt:     stored.ArchivedAt,
-		ArchivedAt:    &stored.ArchivedAt,
+		ID:              domain.TweetID(stored.TweetID),
+		URL:             stored.URL,
+		Author:          stored.Author,
+		Text:            stored.Text,
+		PostedAt:        stored.PostedAt,
+		Media:           stored.Media,
+		Metrics:         stored.Metrics,
+		Status:          status,
+		ArchivePath:     archivePath,
+		FetchedAt:       stored.FetchedAt,
+		DownloadedAt:    stored.DownloadedAt,
+		AnalyzedAt:      stored.AnalyzedAt,
+		MediaDownloaded: stored.MediaDownloaded,
+		MediaTotal:      stored.MediaTotal,
+		AITitle:         stored.AITitle,
+		AISummary:       stored.AISummary,
+		AITags:          stored.AITags,
+		AIContentType:   stored.AIContentType,
+		AITopics:        stored.AITopics,
+		CreatedAt:       stored.ArchivedAt,
+		ArchivedAt:      &stored.ArchivedAt,
+	}
+
+	// If MediaTotal wasn't stored, infer from media array
+	if tweet.MediaTotal == 0 {
+		tweet.MediaTotal = len(stored.Media)
 	}
 
 	if stored.ReplyTo != "" {
@@ -360,20 +448,47 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 	}, nil
 }
 
-// processTweet handles the full archive workflow.
+// processTweet handles the full archive workflow in 3 phases.
+// Phase 1: Fetch metadata (fast, UI shows card immediately)
+// Phase 2: Download media (variable, incremental saves)
+// Phase 3: AI analysis (async, runs in background)
 func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 	logger := s.logger.With("tweet_id", tweet.ID)
 
-	// Step 1: Fetch tweet data
-	logger.Info("fetching tweet data")
+	// Phase 1: Quick fetch - get metadata, generate AI title, save first checkpoint
+	if err := s.processPhase1Fetch(ctx, tweet); err != nil {
+		logger.Error("phase 1 failed", "error", err)
+		tweet.Status = domain.ArchiveStatusFailed
+		tweet.Error = err.Error()
+		s.saveTweetMetadata(tweet) // Save failure state
+		return
+	}
+
+	// Phase 2: Download media (saves after each download for incremental progress)
+	if err := s.processPhase2Download(ctx, tweet); err != nil {
+		logger.Warn("phase 2 partial failure", "error", err)
+		// Continue to phase 3 anyway - partial media is better than none
+	}
+
+	// Phase 3: AI analysis runs asynchronously
+	// Use separate goroutine so we don't block the processing semaphore
+	go func() {
+		s.processPhase3Analyze(context.Background(), tweet)
+	}()
+}
+
+// processPhase1Fetch retrieves tweet metadata from Twitter and creates the archive directory.
+// This is the fast path (~1-3 seconds) - UI can display the card after this completes.
+func (s *TweetService) processPhase1Fetch(ctx context.Context, tweet *domain.Tweet) error {
+	logger := s.logger.With("tweet_id", tweet.ID)
+	logger.Info("phase 1: fetching tweet metadata")
+
 	tweet.Status = domain.ArchiveStatusFetching
 
+	// Fetch from Twitter syndication API
 	fetchedTweet, err := s.twitterClient.FetchTweet(ctx, tweet.URL)
 	if err != nil {
-		logger.Error("failed to fetch tweet", "error", err)
-		tweet.Status = domain.ArchiveStatusFailed
-		tweet.Error = fmt.Sprintf("Failed to fetch tweet: %v", err)
-		return
+		return fmt.Errorf("fetch tweet: %w", err)
 	}
 
 	// Merge fetched data into our tweet record
@@ -384,51 +499,84 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 	tweet.Metrics = fetchedTweet.Metrics
 	tweet.ReplyTo = fetchedTweet.ReplyTo
 	tweet.QuotedTweet = fetchedTweet.QuotedTweet
+	tweet.MediaTotal = len(fetchedTweet.Media)
 
-	logger.Info("tweet fetched",
+	logger.Info("tweet metadata fetched",
 		"author", tweet.Author.Username,
 		"media_count", len(tweet.Media),
 		"has_video", tweet.HasVideo(),
 	)
 
-	// Step 2: Generate AI title
-	logger.Info("generating AI title")
-	tweet.Status = domain.ArchiveStatusProcessing
-
+	// Generate AI title (text-only, fast)
 	aiTitle, aiSummary := s.generateAIMetadata(ctx, tweet)
 	tweet.AITitle = aiTitle
 	tweet.AISummary = aiSummary
 
-	// Step 3: Create archive directory
+	// Create archive directory
 	archivePath := s.buildArchivePath(tweet)
 	tweet.ArchivePath = archivePath
 
 	if err := os.MkdirAll(filepath.Join(archivePath, "media"), 0755); err != nil {
-		logger.Error("failed to create archive directory", "error", err)
-		tweet.Status = domain.ArchiveStatusFailed
-		tweet.Error = fmt.Sprintf("Failed to create directory: %v", err)
-		return
+		return fmt.Errorf("create archive directory: %w", err)
 	}
 
-	// Step 4: Download all media
-	if len(tweet.Media) > 0 {
-		logger.Info("downloading media", "count", len(tweet.Media))
-		tweet.Status = domain.ArchiveStatusDownloading
+	// Mark phase 1 complete
+	now := time.Now()
+	tweet.FetchedAt = &now
+	tweet.Status = domain.ArchiveStatusFetched
 
-		for i := range tweet.Media {
-			if err := s.downloadMedia(ctx, tweet, &tweet.Media[i], archivePath); err != nil {
-				logger.Warn("failed to download media",
-					"media_id", tweet.Media[i].ID,
-					"error", err,
-				)
-				// Continue with other media
-			}
+	// CHECKPOINT 1: Save immediately so UI can show the card
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		return fmt.Errorf("save metadata: %w", err)
+	}
+
+	logger.Info("phase 1 complete - metadata saved", "ai_title", tweet.AITitle)
+	return nil
+}
+
+// processPhase2Download downloads all media files and avatar.
+// Saves progress after each media item for incremental UI updates.
+func (s *TweetService) processPhase2Download(ctx context.Context, tweet *domain.Tweet) error {
+	logger := s.logger.With("tweet_id", tweet.ID)
+
+	if len(tweet.Media) == 0 && tweet.Author.AvatarURL == "" {
+		// Nothing to download, skip to phase 3
+		now := time.Now()
+		tweet.DownloadedAt = &now
+		tweet.Status = domain.ArchiveStatusDownloaded
+		s.saveTweetMetadata(tweet)
+		logger.Info("phase 2 skipped - no media")
+		return nil
+	}
+
+	logger.Info("phase 2: downloading media", "count", len(tweet.Media))
+	tweet.Status = domain.ArchiveStatusDownloading
+	s.saveTweetMetadata(tweet)
+
+	var downloadErrors []string
+
+	// Download each media item with incremental saves
+	for i := range tweet.Media {
+		media := &tweet.Media[i]
+		if err := s.downloadMediaWithoutAnalysis(ctx, media, tweet.ArchivePath); err != nil {
+			logger.Warn("failed to download media", "media_id", media.ID, "error", err)
+			downloadErrors = append(downloadErrors, fmt.Sprintf("%s: %v", media.ID, err))
+			continue
 		}
+
+		tweet.MediaDownloaded++
+		logger.Info("media downloaded",
+			"media_id", media.ID,
+			"progress", fmt.Sprintf("%d/%d", tweet.MediaDownloaded, tweet.MediaTotal),
+		)
+
+		// Save after each successful download for incremental UI updates
+		s.saveTweetMetadata(tweet)
 	}
 
-	// Step 4b: Download author avatar
+	// Download author avatar
 	if tweet.Author.AvatarURL != "" {
-		avatarPath := filepath.Join(archivePath, "avatar.jpg")
+		avatarPath := filepath.Join(tweet.ArchivePath, "avatar.jpg")
 		if err := s.downloadThumbnail(ctx, tweet.Author.AvatarURL, avatarPath); err != nil {
 			logger.Warn("failed to download author avatar", "error", err)
 		} else {
@@ -436,30 +584,126 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 		}
 	}
 
-	// Step 4c: Run vision analysis now that media is available locally (images, video thumbnails, keyframes)
-	// This is intentionally AFTER downloads; otherwise we only have text and no local media paths.
-	// Also run per-media analysis so each image/video has its own caption/tags/topics.
-	s.runPerMediaAnalysis(ctx, tweet)
-	s.runVisionAnalysis(ctx, tweet)
+	// Mark phase 2 complete
+	now := time.Now()
+	tweet.DownloadedAt = &now
+	tweet.Status = domain.ArchiveStatusDownloaded
+	s.saveTweetMetadata(tweet)
 
-	// Step 5: Save tweet metadata
-	logger.Info("saving tweet metadata")
-	if err := s.saveTweetMetadata(tweet); err != nil {
-		logger.Error("failed to save metadata", "error", err)
-		tweet.Status = domain.ArchiveStatusFailed
-		tweet.Error = fmt.Sprintf("Failed to save metadata: %v", err)
-		return
+	logger.Info("phase 2 complete - media downloaded", "downloaded", tweet.MediaDownloaded, "total", tweet.MediaTotal)
+
+	if len(downloadErrors) > 0 {
+		return fmt.Errorf("some media failed to download: %v", downloadErrors)
+	}
+	return nil
+}
+
+// processPhase3Analyze runs AI analysis (transcription + vision).
+// This runs asynchronously and can take a while for videos with transcription.
+func (s *TweetService) processPhase3Analyze(ctx context.Context, tweet *domain.Tweet) {
+	logger := s.logger.With("tweet_id", tweet.ID)
+	logger.Info("phase 3: starting AI analysis")
+
+	// Mark analysis in progress
+	s.aiAnalysisLock.Lock()
+	s.processingAI[tweet.ID] = true
+	s.aiAnalysisLock.Unlock()
+
+	defer func() {
+		s.aiAnalysisLock.Lock()
+		delete(s.processingAI, tweet.ID)
+		s.aiAnalysisLock.Unlock()
+	}()
+
+	tweet.Status = domain.ArchiveStatusAnalyzing
+	s.saveTweetMetadata(tweet)
+
+	// Run Whisper transcription for videos (if enabled)
+	if s.whisperEnabled && tweet.HasVideo() {
+		for i := range tweet.Media {
+			media := &tweet.Media[i]
+			if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && media.LocalPath != "" {
+				s.processVideoForTranscription(ctx, media, tweet.ArchivePath)
+			}
+		}
 	}
 
-	// Done!
+	// Run per-media analysis (each media gets caption/tags)
+	s.runPerMediaAnalysis(ctx, tweet)
+
+	// Run tweet-level vision analysis
+	s.runVisionAnalysis(ctx, tweet)
+
+	// Mark complete
 	now := time.Now()
+	tweet.AnalyzedAt = &now
 	tweet.ArchivedAt = &now
 	tweet.Status = domain.ArchiveStatusCompleted
 
-	logger.Info("tweet archived successfully",
-		"path", archivePath,
+	// Final save
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		logger.Error("failed to save final metadata", "error", err)
+		return
+	}
+
+	logger.Info("phase 3 complete - archive finished",
 		"ai_title", tweet.AITitle,
+		"tags_count", len(tweet.AITags),
 	)
+}
+
+// downloadMediaWithoutAnalysis downloads a single media file without running per-media analysis.
+// Analysis is deferred to Phase 3 to avoid blocking the download pipeline.
+func (s *TweetService) downloadMediaWithoutAnalysis(ctx context.Context, media *domain.Media, archivePath string) error {
+	// Determine filename
+	var filename string
+	switch media.Type {
+	case domain.MediaTypeImage:
+		ext := ".jpg"
+		if strings.Contains(media.URL, ".png") {
+			ext = ".png"
+		} else if strings.Contains(media.URL, ".webp") {
+			ext = ".webp"
+		}
+		filename = fmt.Sprintf("%s%s", media.ID, ext)
+	case domain.MediaTypeVideo, domain.MediaTypeGIF:
+		filename = fmt.Sprintf("%s.mp4", media.ID)
+	}
+
+	localPath := filepath.Join(archivePath, "media", filename)
+
+	// Download main media file
+	content, _, err := s.downloader.Download(ctx, media.URL)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer content.Close()
+
+	// Save to file
+	f, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("create file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, content); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	media.LocalPath = localPath
+	media.Downloaded = true
+
+	// For videos, also download the thumbnail/preview image
+	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && media.PreviewURL != "" {
+		thumbPath := filepath.Join(archivePath, "media", fmt.Sprintf("%s_thumb.jpg", media.ID))
+		if err := s.downloadThumbnail(ctx, media.PreviewURL, thumbPath); err != nil {
+			s.logger.Warn("failed to download video thumbnail", "media_id", media.ID, "error", err)
+		} else {
+			media.PreviewURL = thumbPath
+		}
+	}
+
+	return nil
 }
 
 func (s *TweetService) runPerMediaAnalysis(ctx context.Context, tweet *domain.Tweet) {

@@ -117,6 +117,9 @@ func main() {
 	// Recover orphaned archives (directories with temp_processing but no tweet.json)
 	go tweetSvc.RecoverOrphanedArchives(context.Background())
 
+	// Resume incomplete archives (tweets saved mid-processing before restart)
+	go tweetSvc.ResumeIncompleteArchives(context.Background())
+
 	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
 	if cfg.Bookmarks.Enabled {

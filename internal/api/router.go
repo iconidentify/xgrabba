@@ -61,6 +61,7 @@ func NewRouter(
 		// Tweet operations (new - full tweet archival)
 		r.Post("/tweets", tweetHandler.Archive)
 		r.Get("/tweets", tweetHandler.List)
+		r.Post("/tweets/batch-status", tweetHandler.BatchStatus) // Batch status polling for UI
 		r.Get("/tweets/{tweetID}", tweetHandler.Get)
 		r.Get("/tweets/{tweetID}/status", tweetHandler.GetStatus)
 		r.Get("/tweets/{tweetID}/full", tweetHandler.GetFull)

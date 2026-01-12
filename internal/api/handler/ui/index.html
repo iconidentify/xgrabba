@@ -541,6 +541,58 @@
             animation: spin 0.7s linear infinite;
         }
 
+        /* Phase progress badges */
+        .phase-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-right: 8px;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .phase-badge.fetching {
+            background: rgba(29, 155, 240, 0.15);
+            color: #1d9bf0;
+        }
+
+        .phase-badge.downloading {
+            background: rgba(255, 180, 0, 0.15);
+            color: #ffb400;
+        }
+
+        .phase-badge.analyzing {
+            background: rgba(139, 92, 246, 0.15);
+            color: #8b5cf6;
+        }
+
+        .phase-badge.completed {
+            background: rgba(0, 186, 124, 0.15);
+            color: #00ba7c;
+        }
+
+        .phase-badge.failed {
+            background: rgba(244, 33, 46, 0.15);
+            color: #f4212e;
+        }
+
+        .phase-badge.fade-out {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        .phase-badge .phase-spinner {
+            width: 10px;
+            height: 10px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
         .btn-ghost {
             background: transparent;
             color: var(--text-muted);
@@ -1593,74 +1645,169 @@
             await loadTweets({ preserveScroll: false, keepSearch: false });
         }
 
-        // Poll AI status for items currently displayed so the list updates without reload.
-        let aiPollTimer = null;
-        const lastAIStatus = new Map(); // tweetId -> bool
+        // Smart polling for phased processing status
+        // Uses batch-status endpoint for efficient polling of multiple tweets
+        let statusPollTimer = null;
+        const activeTweets = new Map(); // tweetId -> { status, media_downloaded, media_total, ai_in_progress }
+        const TERMINAL_STATUSES = ['completed', 'failed'];
 
-        function updateTweetCardAIStatus(tweetId, inProgress) {
+        // Phase badge configuration
+        const phaseBadges = {
+            pending:     { text: 'Pending...', class: 'fetching', spinner: true },
+            fetching:    { text: 'Fetching...', class: 'fetching', spinner: true },
+            fetched:     { text: 'Fetched', class: 'fetching', spinner: false },
+            downloading: { text: 'Downloading', class: 'downloading', spinner: true }, // Will show percentage
+            downloaded:  { text: 'Downloaded', class: 'downloading', spinner: false },
+            analyzing:   { text: 'Analyzing...', class: 'analyzing', spinner: true },
+            completed:   { text: '', class: 'completed', spinner: false }, // Checkmark shows briefly
+            failed:      { text: 'Failed', class: 'failed', spinner: false }
+        };
+
+        function updateTweetCardStatus(tweetId, state) {
             const card = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"]`);
             if (!card) return;
             const dateEl = card.querySelector('.tweet-date');
             if (!dateEl) return;
 
-            const existing = dateEl.querySelector('.ai-progress-badge');
-            if (inProgress) {
-                if (!existing) {
-                    dateEl.insertAdjacentHTML('afterbegin', `<span class="ai-progress-badge"><span class="ai-progress-spinner"></span> AI analyzing</span>`);
-                }
-            } else {
-                if (existing) existing.remove();
+            // Remove any existing badges
+            const existingPhase = dateEl.querySelector('.phase-badge');
+            const existingAI = dateEl.querySelector('.ai-progress-badge');
+            if (existingPhase) existingPhase.remove();
+            if (existingAI) existingAI.remove();
+
+            const status = state.status;
+            const config = phaseBadges[status] || phaseBadges.pending;
+
+            // Don't show badge for completed tweets (just fade out)
+            if (status === 'completed') {
+                // Show brief checkmark then fade out
+                const badge = document.createElement('span');
+                badge.className = `phase-badge ${config.class}`;
+                badge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+                dateEl.insertBefore(badge, dateEl.firstChild);
+                setTimeout(() => badge.classList.add('fade-out'), 2000);
+                setTimeout(() => badge.remove(), 2300);
+                return;
             }
+
+            if (status === 'failed') {
+                return; // Failed status shown differently
+            }
+
+            // Build badge text
+            let text = config.text;
+            if (status === 'downloading' && state.media_total > 0) {
+                const pct = Math.round((state.media_downloaded / state.media_total) * 100);
+                text = `Downloading ${pct}%`;
+            }
+
+            const badge = document.createElement('span');
+            badge.className = `phase-badge ${config.class}`;
+            badge.innerHTML = config.spinner
+                ? `<span class="phase-spinner"></span> ${text}`
+                : text;
+            dateEl.insertBefore(badge, dateEl.firstChild);
         }
 
-        function startAIPolling() {
-            if (aiPollTimer) return;
-            aiPollTimer = setInterval(async () => {
-                try {
-                    // Only poll tweets currently visible in the list AND that we think are in progress.
-                    const visibleCards = Array.from(document.querySelectorAll('.tweet-card[data-tweet-id]'));
-                    if (visibleCards.length === 0) return;
+        async function pollBatchStatus() {
+            const ids = Array.from(activeTweets.keys());
+            if (ids.length === 0) return;
 
-                    const idsToPoll = [];
-                    for (const c of visibleCards) {
-                        const id = c.getAttribute('data-tweet-id');
-                        if (!id) continue;
-                        const known = lastAIStatus.get(id);
-                        // If unknown, check if badge exists; otherwise skip.
-                        const hasBadge = !!c.querySelector('.ai-progress-badge');
-                        if (known === true || (known === undefined && hasBadge)) {
-                            idsToPoll.push(id);
-                        }
+            try {
+                const resp = await fetch('/api/v1/tweets/batch-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({ tweet_ids: ids })
+                });
+
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const statuses = data.statuses || {};
+
+                let anyCompleted = false;
+                let anyProgressChanged = false;
+
+                for (const [id, state] of Object.entries(statuses)) {
+                    const oldState = activeTweets.get(id);
+                    const statusChanged = !oldState || oldState.status !== state.status;
+                    const progressChanged = oldState && (
+                        oldState.media_downloaded !== state.media_downloaded
+                    );
+
+                    if (statusChanged || progressChanged) {
+                        anyProgressChanged = true;
+                        updateTweetCardStatus(id, state);
                     }
-                    if (idsToPoll.length === 0) return;
 
-                    let anyCompleted = false;
-                    for (const id of idsToPoll) {
-                        const resp = await fetch(`/api/v1/tweets/${id}/ai-status`, { headers: { 'X-API-Key': API_KEY } });
-                        if (!resp.ok) continue;
-                        const data = await resp.json();
-                        const inProgress = !!data.in_progress;
-                        const prev = lastAIStatus.get(id);
-                        lastAIStatus.set(id, inProgress);
-                        updateTweetCardAIStatus(id, inProgress);
-
-                        if (prev === true && inProgress === false) {
+                    // Check if tweet completed or failed
+                    if (TERMINAL_STATUSES.includes(state.status)) {
+                        activeTweets.delete(id);
+                        if (state.status === 'completed' && oldState && !TERMINAL_STATUSES.includes(oldState.status)) {
                             anyCompleted = true;
-                            // If the detail view is open for this tweet, refresh it so media overlays/transcripts appear.
-                            if (document.getElementById('tweetDetailModal').classList.contains('active') && currentTweetDetail && currentTweetDetail.tweet_id === id) {
+                            // Refresh detail view if open for this tweet
+                            if (document.getElementById('tweetDetailModal').classList.contains('active') &&
+                                currentTweetDetail && currentTweetDetail.tweet_id === id) {
                                 openTweetDetail(id);
                             }
                         }
+                    } else {
+                        activeTweets.set(id, state);
                     }
-
-                    if (anyCompleted) {
-                        // Refresh list to pull in new AI fields (titles/tags/media captions) after completion.
-                        await loadTweets({ preserveScroll: true, keepSearch: true });
-                    }
-                } catch (e) {
-                    // Don't spam console
                 }
-            }, 2500);
+
+                // Refresh card content when phases advance (media appears, AI completes)
+                if (anyCompleted) {
+                    await loadTweets({ preserveScroll: true, keepSearch: true });
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        }
+
+        function startStatusPolling() {
+            if (statusPollTimer) return;
+
+            // Initial scan: find tweets that aren't completed
+            const cards = document.querySelectorAll('.tweet-card[data-tweet-id]');
+            for (const card of cards) {
+                const id = card.getAttribute('data-tweet-id');
+                // Check for existing badges (indicates in-progress)
+                const hasBadge = card.querySelector('.ai-progress-badge') || card.querySelector('.phase-badge');
+                if (hasBadge) {
+                    activeTweets.set(id, { status: 'unknown' });
+                }
+            }
+
+            // Also check tweets data for non-completed status
+            for (const tweet of tweets) {
+                if (tweet.status && !TERMINAL_STATUSES.includes(tweet.status)) {
+                    activeTweets.set(tweet.tweet_id, { status: tweet.status });
+                }
+                if (tweet.ai_in_progress) {
+                    activeTweets.set(tweet.tweet_id, { status: 'analyzing' });
+                }
+            }
+
+            // Poll every 2 seconds
+            statusPollTimer = setInterval(pollBatchStatus, 2000);
+            // Initial poll
+            pollBatchStatus();
+        }
+
+        // Backwards compat alias
+        function startAIPolling() {
+            startStatusPolling();
+        }
+
+        // Legacy function for AI-only status updates
+        function updateTweetCardAIStatus(tweetId, inProgress) {
+            if (inProgress) {
+                activeTweets.set(tweetId, { status: 'analyzing' });
+            }
+            updateTweetCardStatus(tweetId, { status: inProgress ? 'analyzing' : 'completed' });
         }
 
         function updateStats() {
@@ -1756,6 +1903,37 @@
             return bytes + ' B';
         }
 
+        // Render status badge for a tweet based on its processing phase
+        function renderStatusBadge(tweet) {
+            const status = tweet.status;
+
+            // Skip completed tweets - no badge needed
+            if (!status || status === 'completed') {
+                // But still show AI analyzing if that's in progress
+                if (tweet.ai_in_progress) {
+                    return `<span class="phase-badge analyzing"><span class="phase-spinner"></span> Analyzing...</span>`;
+                }
+                return '';
+            }
+
+            const badges = {
+                pending:     { text: 'Pending...', class: 'fetching', spinner: true },
+                fetching:    { text: 'Fetching...', class: 'fetching', spinner: true },
+                fetched:     { text: 'Fetched', class: 'fetching', spinner: false },
+                downloading: { text: 'Downloading...', class: 'downloading', spinner: true },
+                downloaded:  { text: 'Downloaded', class: 'downloading', spinner: false },
+                analyzing:   { text: 'Analyzing...', class: 'analyzing', spinner: true },
+                failed:      { text: 'Failed', class: 'failed', spinner: false }
+            };
+
+            const config = badges[status] || badges.pending;
+
+            if (config.spinner) {
+                return `<span class="phase-badge ${config.class}"><span class="phase-spinner"></span> ${config.text}</span>`;
+            }
+            return `<span class="phase-badge ${config.class}">${config.text}</span>`;
+        }
+
         // Render tweet list
         function renderTweets(tweetsToRender, searchQuery = '') {
             if (tweetsToRender.length === 0) {
@@ -1798,7 +1976,7 @@
                                 ${tweet.follower_count ? `<span class="tweet-author-followers">${formatNumber(tweet.follower_count)} followers</span>` : ''}
                             </div>
                             <div class="tweet-date">
-                                ${tweet.ai_in_progress ? `<span class="ai-progress-badge"><span class="ai-progress-spinner"></span> AI analyzing</span>` : ''}
+                                ${renderStatusBadge(tweet)}
                                 ${formatDate(tweet.created_at)}
                             </div>
                         </div>

@@ -373,6 +373,72 @@ func (h *TweetHandler) CheckAIAnalysisStatus(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// BatchStatusRequest is the request body for batch status queries.
+type BatchStatusRequest struct {
+	TweetIDs []string `json:"tweet_ids"`
+}
+
+// TweetStatusInfo contains status information for a single tweet.
+type TweetStatusInfo struct {
+	Status          string `json:"status"`
+	MediaDownloaded int    `json:"media_downloaded"`
+	MediaTotal      int    `json:"media_total"`
+	AIInProgress    bool   `json:"ai_in_progress"`
+}
+
+// BatchStatusResponse contains status information for multiple tweets.
+type BatchStatusResponse struct {
+	Statuses map[string]TweetStatusInfo `json:"statuses"`
+}
+
+// BatchStatus handles POST /api/v1/tweets/batch-status
+// Returns status information for multiple tweets in a single request.
+// This is optimized for UI polling to avoid N+1 API calls.
+func (h *TweetHandler) BatchStatus(w http.ResponseWriter, r *http.Request) {
+	var req BatchStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if len(req.TweetIDs) == 0 {
+		h.writeJSON(w, http.StatusOK, BatchStatusResponse{Statuses: map[string]TweetStatusInfo{}})
+		return
+	}
+
+	// Limit to prevent abuse
+	if len(req.TweetIDs) > 100 {
+		req.TweetIDs = req.TweetIDs[:100]
+	}
+
+	statuses := make(map[string]TweetStatusInfo)
+	for _, id := range req.TweetIDs {
+		status, err := h.tweetSvc.GetStatus(r.Context(), domain.TweetID(id))
+		if err != nil {
+			// Skip tweets that don't exist
+			continue
+		}
+
+		// Get additional progress info from the full tweet
+		fullTweet, _ := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(id))
+		mediaDownloaded := 0
+		mediaTotal := 0
+		if fullTweet != nil {
+			mediaDownloaded = fullTweet.MediaDownloaded
+			mediaTotal = fullTweet.MediaTotal
+		}
+
+		statuses[id] = TweetStatusInfo{
+			Status:          string(status.Status),
+			MediaDownloaded: mediaDownloaded,
+			MediaTotal:      mediaTotal,
+			AIInProgress:    h.tweetSvc.IsAIAnalysisInProgress(domain.TweetID(id)),
+		}
+	}
+
+	h.writeJSON(w, http.StatusOK, BatchStatusResponse{Statuses: statuses})
+}
+
 type TweetDiagnosticsResponse struct {
 	TweetID string `json:"tweet_id"`
 

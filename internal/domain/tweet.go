@@ -18,8 +18,11 @@ type ArchiveStatus string
 const (
 	ArchiveStatusPending     ArchiveStatus = "pending"
 	ArchiveStatusFetching    ArchiveStatus = "fetching"
+	ArchiveStatusFetched     ArchiveStatus = "fetched"     // Metadata retrieved, ready for download
 	ArchiveStatusDownloading ArchiveStatus = "downloading"
-	ArchiveStatusProcessing  ArchiveStatus = "processing"
+	ArchiveStatusDownloaded  ArchiveStatus = "downloaded"  // Media downloaded, ready for analysis
+	ArchiveStatusProcessing  ArchiveStatus = "processing"  // Legacy - kept for backward compat
+	ArchiveStatusAnalyzing   ArchiveStatus = "analyzing"   // AI analysis in progress
 	ArchiveStatusCompleted   ArchiveStatus = "completed"
 	ArchiveStatusFailed      ArchiveStatus = "failed"
 )
@@ -37,7 +40,16 @@ type Tweet struct {
 	QuotedTweet   *TweetID // If this quotes another tweet
 	Status        ArchiveStatus
 	Error         string
-	ArchivePath   string   // Base path where tweet is stored
+	ArchivePath   string // Base path where tweet is stored
+
+	// Phase completion timestamps for incremental processing
+	FetchedAt    *time.Time // When metadata was retrieved from Twitter
+	DownloadedAt *time.Time // When all media finished downloading
+	AnalyzedAt   *time.Time // When AI analysis completed
+
+	// Progress tracking for UI
+	MediaDownloaded int // Number of media items downloaded so far
+	MediaTotal      int // Total media items to download
 	AITitle       string   // AI-generated descriptive title
 	AISummary     string   // AI-generated summary
 	AITags        []string // AI-generated searchable tags
@@ -115,11 +127,21 @@ type StoredTweet struct {
 	Metrics       TweetMetrics `json:"metrics"`
 	ReplyTo       string       `json:"reply_to,omitempty"`
 	QuotedTweet   string       `json:"quoted_tweet,omitempty"`
-	AITitle       string       `json:"ai_title"`
-	AISummary     string       `json:"ai_summary,omitempty"`
-	AITags        []string     `json:"ai_tags,omitempty"`
-	AIContentType string       `json:"ai_content_type,omitempty"`
-	AITopics      []string     `json:"ai_topics,omitempty"`
+
+	// Processing status and phase tracking
+	Status          string     `json:"status"`
+	FetchedAt       *time.Time `json:"fetched_at,omitempty"`
+	DownloadedAt    *time.Time `json:"downloaded_at,omitempty"`
+	AnalyzedAt      *time.Time `json:"analyzed_at,omitempty"`
+	MediaDownloaded int        `json:"media_downloaded,omitempty"`
+	MediaTotal      int        `json:"media_total,omitempty"`
+
+	// AI-generated metadata
+	AITitle       string   `json:"ai_title"`
+	AISummary     string   `json:"ai_summary,omitempty"`
+	AITags        []string `json:"ai_tags,omitempty"`
+	AIContentType string   `json:"ai_content_type,omitempty"`
+	AITopics      []string `json:"ai_topics,omitempty"`
 }
 
 // ToStoredTweet converts a Tweet to StoredTweet for JSON serialization.
@@ -130,19 +152,25 @@ func (t *Tweet) ToStoredTweet() StoredTweet {
 	}
 
 	st := StoredTweet{
-		TweetID:       t.ID.String(),
-		URL:           t.URL,
-		Author:        t.Author,
-		Text:          t.Text,
-		PostedAt:      t.PostedAt,
-		ArchivedAt:    archivedAt,
-		Media:         t.Media,
-		Metrics:       t.Metrics,
-		AITitle:       t.AITitle,
-		AISummary:     t.AISummary,
-		AITags:        t.AITags,
-		AIContentType: t.AIContentType,
-		AITopics:      t.AITopics,
+		TweetID:         t.ID.String(),
+		URL:             t.URL,
+		Author:          t.Author,
+		Text:            t.Text,
+		PostedAt:        t.PostedAt,
+		ArchivedAt:      archivedAt,
+		Media:           t.Media,
+		Metrics:         t.Metrics,
+		Status:          string(t.Status),
+		FetchedAt:       t.FetchedAt,
+		DownloadedAt:    t.DownloadedAt,
+		AnalyzedAt:      t.AnalyzedAt,
+		MediaDownloaded: t.MediaDownloaded,
+		MediaTotal:      t.MediaTotal,
+		AITitle:         t.AITitle,
+		AISummary:       t.AISummary,
+		AITags:          t.AITags,
+		AIContentType:   t.AIContentType,
+		AITopics:        t.AITopics,
 	}
 
 	if t.ReplyTo != nil {
