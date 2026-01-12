@@ -164,8 +164,56 @@ func main() {
 			tokens = &twitter.StaticTokenSource{TokenValue: bmCfg.BearerToken}
 			logger.Info("bookmarks auth: static bearer token enabled")
 		} else {
-			// Enabled but not connected yet; user must complete connect flow.
+			// Enabled but not connected yet; user must complete connect flow. We'll start watching
+			// for the on-disk OAuth store and automatically start the monitor once it appears.
 			logger.Warn("bookmarks enabled but no token available yet; complete /bookmarks/oauth/start flow", "store_path", bmCfg.OAuthStorePath)
+			go func() {
+				ticker := time.NewTicker(10 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-bookmarksCtx.Done():
+						return
+					case <-ticker.C:
+						if bmCfg.OAuthStorePath == "" || bmCfg.OAuthClientID == "" {
+							return
+						}
+						st, err := bookmarks.LoadOAuthStore(bmCfg.OAuthStorePath)
+						if err != nil || st == nil || st.UserID == "" || st.RefreshToken == "" {
+							continue
+						}
+						logger.Info("bookmarks oauth store detected; starting monitor", "user_id", st.UserID)
+
+						rtTokens := twitter.NewOAuth2RefreshTokenSource(twitter.OAuth2RefreshTokenSourceConfig{
+							TokenURL:     bmCfg.TokenURL,
+							ClientID:     bmCfg.OAuthClientID,
+							ClientSecret: bmCfg.OAuthClientSecret,
+							RefreshToken: st.RefreshToken,
+							HTTPTimeout:  15 * time.Second,
+							UserAgent:    ua,
+							RefreshSkew:  30 * time.Second,
+							OnRefreshToken: func(newRT string) {
+								_ = bookmarks.SaveOAuthStore(bmCfg.OAuthStorePath, bookmarks.OAuthStore{
+									UserID:       st.UserID,
+									RefreshToken: newRT,
+								})
+							},
+						})
+
+						rtClient := twitter.NewBookmarksClient(twitter.BookmarksClientConfig{
+							BaseURL:   bmCfg.BaseURL,
+							Tokens:    rtTokens,
+							Timeout:   15 * time.Second,
+							UserAgent: ua,
+						})
+						startCfg := bmCfg
+						startCfg.UserID = st.UserID
+						mon := bookmarks.NewMonitor(startCfg, rtClient, tweetSvc, logger)
+						go mon.Start(bookmarksCtx)
+						return
+					}
+				}
+			}()
 			tokens = nil
 		}
 

@@ -171,7 +171,7 @@ func (h *BookmarksOAuthHandler) Callback(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(`<html><body><h3>Connected!</h3><p>You can close this window and return to XGrabba.</p></body></html>`))
+	_, _ = w.Write([]byte(`<html><body><h3>Connected!</h3><p>You can close this window and return to XGrabba.</p><p>If bookmarks monitoring is enabled, the service will start polling automatically within ~10 seconds.</p></body></html>`))
 }
 
 func (h *BookmarksOAuthHandler) callbackURLFromRequest(r *http.Request) string {
