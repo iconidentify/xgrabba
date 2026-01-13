@@ -388,15 +388,28 @@
 
         /* Inline video player styles */
         .tweet-media-preview .media-thumb.playing {
-            aspect-ratio: auto;
+            /* Keep original aspect-ratio to prevent layout shift */
+            /* Video will letterbox inside the container */
         }
 
         .tweet-media-preview .media-thumb.playing .video-indicator {
             opacity: 0;
+            pointer-events: none;
         }
 
         .tweet-media-preview .media-thumb.playing video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             pointer-events: auto;
+            background: #000;
+        }
+
+        .tweet-media-preview .media-thumb.playing img {
+            visibility: hidden;
         }
 
         .tweet-media-preview .expand-btn {
@@ -3661,10 +3674,15 @@
                 border-radius: 16px 16px 0 0;
                 transform: translateY(100%);
                 z-index: 460;
+                /* Override desktop transition - only animate transform on mobile */
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             .theater-ai-panel.active {
                 transform: translateY(0);
+                /* Ensure width stays 100% when active on mobile */
+                width: 100% !important;
+                min-width: 100% !important;
             }
 
             .ai-panel-inner {
@@ -5092,29 +5110,22 @@
                 video.autoplay = true;
                 video.playsInline = true;
                 video.setAttribute('playsinline', '');
-                video.style.width = '100%';
-                video.style.height = '100%';
-                video.style.objectFit = 'contain';
-                video.style.background = '#000';
+                // Styles now handled by CSS - no inline styles needed
+                // This prevents style conflicts and layout recalculations
 
-                // Hide the thumbnail image
-                const img = thumb.querySelector('img');
-                if (img) img.style.display = 'none';
+                thumb.appendChild(video);
 
-                thumb.insertBefore(video, thumb.firstChild);
+                // Handle video end - only attach once when video is created
+                video.addEventListener('ended', () => {
+                    thumb.classList.remove('playing');
+                });
             } else {
                 // Video exists, just play it
-                video.controls = true;
-                video.style.pointerEvents = 'auto';
                 video.play();
             }
 
+            // Add playing class after video is in DOM to trigger CSS transition
             thumb.classList.add('playing');
-
-            // Handle video end
-            video.addEventListener('ended', () => {
-                thumb.classList.remove('playing');
-            }, { once: true });
         }
 
         // Open tweet detail modal
@@ -5720,6 +5731,8 @@
 
             // Auto-open info panel only on desktop (not mobile)
             const isMobile = window.innerWidth <= 768;
+            // Sync resize tracker state when theater opens
+            lastWasMobile = isMobile;
             if (!isMobile) {
                 document.getElementById('theaterAiPanel').classList.add('active');
                 theater.classList.add('ai-panel-open');
@@ -5777,6 +5790,39 @@
             if (prevBtn) prevBtn.style.display = showNav ? '' : 'none';
             if (nextBtn) nextBtn.style.display = showNav ? '' : 'none';
         }
+
+        // Track last known viewport state to detect breakpoint crossing
+        let lastWasMobile = window.innerWidth <= 768;
+
+        // Handle viewport resize to sync panel state across mobile/desktop breakpoints
+        function handleTheaterResize() {
+            const theater = document.getElementById('mediaTheater');
+            if (!theater || !theater.classList.contains('active')) return;
+
+            const isMobile = window.innerWidth <= 768;
+            const panel = document.getElementById('theaterAiPanel');
+            const panelIsActive = panel && panel.classList.contains('active');
+
+            // Only act when crossing the 768px breakpoint
+            if (isMobile !== lastWasMobile) {
+                if (isMobile && panelIsActive) {
+                    // Crossing from desktop to mobile with panel open - close it
+                    // (mobile users should manually open via bottom bar)
+                    panel.classList.remove('active');
+                    theater.classList.remove('ai-panel-open');
+                }
+                // When crossing from mobile to desktop, leave panel state as-is
+                // (user preference should persist)
+                lastWasMobile = isMobile;
+            }
+        }
+
+        // Debounced resize handler to avoid excessive calls
+        let resizeTimeout = null;
+        window.addEventListener('resize', function() {
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(handleTheaterResize, 100);
+        });
 
         function navigateTheater(direction) {
             if (theaterMedia.length <= 1) return;
@@ -5990,7 +6036,9 @@
             const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
             const authorName = authorObj ? (authorObj.name || authorObj.username) : (tweet.author || 'Unknown');
             const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
-            const avatarUrl = authorObj?.avatar_url ? addApiKey(authorObj.avatar_url) : null;
+            // Get avatar URL with fallback to tweet.author_avatar for compatibility
+            const rawAvatarUrl = authorObj?.avatar_url || tweet.author_avatar;
+            const avatarUrl = rawAvatarUrl ? addApiKey(rawAvatarUrl) : null;
 
             html += `
                 <div class="ai-panel-section author-section">
@@ -6214,9 +6262,15 @@
 
             // Open info panel by default in gallery mode (desktop only)
             const isMobile = window.innerWidth <= 768;
+            // Sync resize tracker state when gallery opens
+            lastWasMobile = isMobile;
             if (!isMobile) {
                 document.getElementById('theaterAiPanel').classList.add('active');
                 theater.classList.add('ai-panel-open');
+            } else {
+                // Ensure AI panel is closed on mobile
+                document.getElementById('theaterAiPanel').classList.remove('active');
+                theater.classList.remove('ai-panel-open');
             }
 
             // Show controls briefly then hide
