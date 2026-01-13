@@ -10092,7 +10092,7 @@
         let selectedVolumePath = '';
 
         async function openExportModal() {
-            if (isOfflineMode) {
+            if (OFFLINE_MODE) {
                 alert('Export is not available in offline mode.');
                 return;
             }
