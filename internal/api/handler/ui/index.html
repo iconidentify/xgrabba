@@ -79,7 +79,7 @@
 
         /* Container - Tighter */
         .container {
-            max-width: 680px;
+            max-width: 540px;
             margin: 0 auto;
             padding: 12px;
         }
@@ -1822,19 +1822,18 @@
         }
 
         .theater-ai-panel {
-            width: 0;
-            min-width: 0;
+            width: 380px;
+            min-width: 380px;
             background: rgba(15, 20, 25, 0.98);
             border-left: 1px solid rgba(255,255,255,0.1);
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
+            margin-right: -380px;
+            transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .theater-ai-panel.active {
-            width: 380px;
-            min-width: 380px;
+            margin-right: 0;
         }
 
         .ai-panel-inner {
@@ -3675,6 +3674,7 @@
                 border-top: 1px solid rgba(255,255,255,0.1);
                 border-radius: 16px 16px 0 0;
                 transform: translateY(100%);
+                margin-right: 0;
                 z-index: 460;
                 /* Override desktop transition - only animate transform on mobile */
                 transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3682,9 +3682,6 @@
 
             .theater-ai-panel.active {
                 transform: translateY(0);
-                /* Ensure width stays 100% when active on mobile */
-                width: 100% !important;
-                min-width: 100% !important;
             }
 
             .ai-panel-inner {
