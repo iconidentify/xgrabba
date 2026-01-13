@@ -743,10 +743,31 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 		return "", fmt.Errorf("decode graphql response: %w", err)
 	}
 
-	// Check for "Query: Unspecified" error which indicates stale query ID
+	// X's GraphQL can return data AND errors simultaneously. Check for usable data first.
+	result := gqlResp.Data.TweetResult.Result
+	if result != nil {
+		// Prefer note_tweet.text for long-form content
+		if result.NoteTweet.NoteTweetResults.Result.Text != "" {
+			if len(gqlResp.Errors) > 0 {
+				c.logger.Debug("GraphQL returned data with non-fatal errors", "tweet_id", tweetID, "error", gqlResp.Errors[0].Message)
+			}
+			return result.NoteTweet.NoteTweetResults.Result.Text, nil
+		}
+
+		// Fall back to legacy full_text
+		if result.Legacy.FullText != "" {
+			if len(gqlResp.Errors) > 0 {
+				c.logger.Debug("GraphQL returned data with non-fatal errors", "tweet_id", tweetID, "error", gqlResp.Errors[0].Message)
+			}
+			return result.Legacy.FullText, nil
+		}
+	}
+
+	// No usable data - now check errors for actionable issues
 	if len(gqlResp.Errors) > 0 {
 		errMsg := gqlResp.Errors[0].Message
-		if strings.Contains(errMsg, "Query") && strings.Contains(errMsg, "Unspecified") && !isRetry {
+		// Check for stale query ID error (only if we didn't get data)
+		if strings.Contains(errMsg, "Query") && strings.Contains(errMsg, "Unspecified") && !isRetry && result == nil {
 			// Query ID is stale - try to refresh it
 			c.logger.Warn("GraphQL query ID appears stale, attempting auto-refresh", "error", errMsg, "old_query_id", queryID)
 			c.clearGraphQLQueryID() // Clear the cached ID first
@@ -761,21 +782,6 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 			return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, true)
 		}
 		return "", fmt.Errorf("graphql API error: %s", errMsg)
-	}
-
-	result := gqlResp.Data.TweetResult.Result
-	if result == nil {
-		return "", fmt.Errorf("no tweet result in graphql response")
-	}
-
-	// Prefer note_tweet.text for long-form content
-	if result.NoteTweet.NoteTweetResults.Result.Text != "" {
-		return result.NoteTweet.NoteTweetResults.Result.Text, nil
-	}
-
-	// Fall back to legacy full_text
-	if result.Legacy.FullText != "" {
-		return result.Legacy.FullText, nil
 	}
 
 	return "", fmt.Errorf("no text found in graphql response")
