@@ -1214,11 +1214,17 @@ func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error
 	oldTextLen := len(tweet.Text)
 	newTextLen := len(fetchedTweet.Text)
 
-	// Update tweet data
+	// Update tweet data, preserving local-only fields
 	tweet.Text = fetchedTweet.Text
-	tweet.Author = fetchedTweet.Author
 	tweet.PostedAt = fetchedTweet.PostedAt
 	tweet.Metrics = fetchedTweet.Metrics
+
+	// Update author but preserve LocalAvatarURL (local copy of downloaded avatar)
+	existingLocalAvatar := tweet.Author.LocalAvatarURL
+	tweet.Author = fetchedTweet.Author
+	if existingLocalAvatar != "" {
+		tweet.Author.LocalAvatarURL = existingLocalAvatar
+	}
 
 	// Don't overwrite media if already downloaded - just update metadata
 	if len(tweet.Media) == 0 && len(fetchedTweet.Media) > 0 {
