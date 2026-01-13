@@ -22,8 +22,9 @@ import (
 const bearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 
 // GraphQL query IDs - these may change periodically as X updates their API
+// To find current IDs: curl -s "https://x.com" | extract main.js URL, then search for operationName
 const (
-	tweetResultByRestIDQueryID = "Xl5pC_lBk_gcO2ItU39DQw"
+	defaultTweetResultByRestIDQueryID = "geNbknbFuVk6S2dpb8lr2Q"
 )
 
 // Client fetches tweet data from X.com.
@@ -36,6 +37,11 @@ type Client struct {
 	guestToken       string
 	guestTokenExpiry time.Time
 	guestTokenMu     sync.Mutex
+
+	// Dynamic GraphQL query ID (auto-refreshes when stale)
+	graphQLQueryID       string
+	graphQLQueryIDExpiry time.Time
+	graphQLQueryIDMu     sync.Mutex
 }
 
 // NewClient creates a new Twitter client.
@@ -49,6 +55,93 @@ func NewClient(logger *slog.Logger) *Client {
 	}
 }
 
+// getGraphQLQueryID returns the current TweetResultByRestId query ID.
+// Uses cached value if valid, otherwise returns default.
+func (c *Client) getGraphQLQueryID() string {
+	c.graphQLQueryIDMu.Lock()
+	defer c.graphQLQueryIDMu.Unlock()
+
+	if c.graphQLQueryID != "" && time.Now().Before(c.graphQLQueryIDExpiry) {
+		return c.graphQLQueryID
+	}
+	return defaultTweetResultByRestIDQueryID
+}
+
+// refreshGraphQLQueryID fetches the current query ID from X's main.js.
+// This is called when we detect a stale query ID (e.g., "Query: Unspecified" error).
+func (c *Client) refreshGraphQLQueryID(ctx context.Context) (string, error) {
+	c.logger.Info("attempting to refresh GraphQL query ID from X.com")
+
+	// First, fetch X.com's homepage to find the main.js URL
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://x.com", nil)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch x.com: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+
+	// Find main.js URL (format: https://abs.twimg.com/responsive-web/client-web/main.HASH.js)
+	mainJSRegex := regexp.MustCompile(`https://abs\.twimg\.com/responsive-web/client-web[^"]*main\.[a-zA-Z0-9]+\.js`)
+	mainJSMatch := mainJSRegex.FindString(string(body))
+	if mainJSMatch == "" {
+		return "", fmt.Errorf("could not find main.js URL in X.com response")
+	}
+
+	// Fetch main.js
+	req, err = http.NewRequestWithContext(ctx, "GET", mainJSMatch, nil)
+	if err != nil {
+		return "", fmt.Errorf("create main.js request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err = c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch main.js: %w", err)
+	}
+	defer resp.Body.Close()
+
+	jsBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read main.js: %w", err)
+	}
+
+	// Find TweetResultByRestId query ID (format: queryId:"XXXXX",operationName:"TweetResultByRestId")
+	queryIDRegex := regexp.MustCompile(`queryId:"([a-zA-Z0-9_-]+)",operationName:"TweetResultByRestId"`)
+	queryIDMatch := queryIDRegex.FindSubmatch(jsBody)
+	if queryIDMatch == nil {
+		return "", fmt.Errorf("could not find TweetResultByRestId query ID in main.js")
+	}
+
+	newQueryID := string(queryIDMatch[1])
+	c.logger.Info("found new GraphQL query ID", "query_id", newQueryID)
+
+	// Cache the new query ID for 24 hours
+	c.graphQLQueryIDMu.Lock()
+	c.graphQLQueryID = newQueryID
+	c.graphQLQueryIDExpiry = time.Now().Add(24 * time.Hour)
+	c.graphQLQueryIDMu.Unlock()
+
+	return newQueryID, nil
+}
+
+// clearGraphQLQueryID invalidates the cached query ID so next call uses default or refreshes.
+func (c *Client) clearGraphQLQueryID() {
+	c.graphQLQueryIDMu.Lock()
+	c.graphQLQueryID = ""
+	c.graphQLQueryIDExpiry = time.Time{}
+	c.graphQLQueryIDMu.Unlock()
+}
+
 // FetchTweet retrieves tweet data from X.com.
 func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet, error) {
 	tweetID := ExtractTweetID(tweetURL)
@@ -57,21 +150,34 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	}
 
 	// Try syndication API first (works for public tweets, fast, no auth)
-	tweet, err := c.fetchFromSyndication(ctx, tweetID)
+	result, err := c.fetchFromSyndication(ctx, tweetID)
 	if err == nil {
+		tweet := result.Tweet
 		tweet.URL = tweetURL
 
-		// Always check GraphQL for full text - syndication often truncates long tweets.
-		// If GraphQL returns longer text, use it. No heuristics needed.
-		if fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID); gqlErr == nil && fullText != "" {
+		// For note tweets (long-form), syndication text is definitely truncated.
+		// We MUST fetch full text via GraphQL. For regular tweets, try GraphQL but don't require it.
+		fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID)
+
+		if gqlErr == nil && fullText != "" {
 			if len(fullText) > len(tweet.Text) {
-				c.logger.Info("GraphQL returned longer text, using it", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText))
+				c.logger.Info("GraphQL returned longer text, using it", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText), "is_note_tweet", result.IsNoteTweet)
 				tweet.Text = fullText
 			} else {
 				c.logger.Debug("GraphQL text not longer", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText))
 			}
 		} else if gqlErr != nil {
-			c.logger.Warn("GraphQL fetch failed", "tweet_id", tweetID, "error", gqlErr)
+			if result.IsNoteTweet {
+				// This is a note tweet but GraphQL failed - this is a serious issue.
+				// The stored text will be truncated. Log loudly.
+				c.logger.Error("GraphQL failed for note tweet - text will be truncated!",
+					"tweet_id", tweetID,
+					"error", gqlErr,
+					"truncated_len", len(tweet.Text),
+					"hint", "The GraphQL query ID may be outdated - check X's main.js for TweetResultByRestId")
+			} else {
+				c.logger.Warn("GraphQL fetch failed", "tweet_id", tweetID, "error", gqlErr)
+			}
 		}
 
 		return tweet, nil
@@ -115,8 +221,14 @@ func (c *Client) isTextTruncated(text string) bool {
 	return false
 }
 
+// syndicationResult wraps the tweet and metadata from syndication API.
+type syndicationResult struct {
+	Tweet      *domain.Tweet
+	IsNoteTweet bool // True if this is a long-form tweet (note_tweet field present)
+}
+
 // fetchFromSyndication uses Twitter's public syndication API.
-func (c *Client) fetchFromSyndication(ctx context.Context, tweetID string) (*domain.Tweet, error) {
+func (c *Client) fetchFromSyndication(ctx context.Context, tweetID string) (*syndicationResult, error) {
 	url := fmt.Sprintf("https://cdn.syndication.twimg.com/tweet-result?id=%s&token=0", tweetID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -143,7 +255,15 @@ func (c *Client) fetchFromSyndication(ctx context.Context, tweetID string) (*dom
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	return c.parseSyndicationResponse(tweetID, &syndicationResp)
+	tweet, err := c.parseSyndicationResponse(tweetID, &syndicationResp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &syndicationResult{
+		Tweet:       tweet,
+		IsNoteTweet: syndicationResp.NoteTweet != nil && syndicationResp.NoteTweet.ID != "",
+	}, nil
 }
 
 // syndicationResponse is the response from the syndication API.
@@ -232,6 +352,11 @@ type syndicationResponse struct {
 			} `json:"variants"`
 		} `json:"video_info"`
 	} `json:"mediaDetails"`
+	// NoteTweet is present when this is a long-form tweet (X Premium feature, up to 25k chars).
+	// If this field has an ID, the text field is truncated and we MUST fetch via GraphQL.
+	NoteTweet *struct {
+		ID string `json:"id"`
+	} `json:"note_tweet,omitempty"`
 }
 
 func (c *Client) parseSyndicationResponse(tweetID string, resp *syndicationResponse) (*domain.Tweet, error) {
@@ -561,18 +686,25 @@ type graphQLTweetResult struct {
 
 // fetchFullTextFromGraphQL fetches just the full text for a tweet using GraphQL.
 // This is used as a fallback when syndication API returns truncated text.
+// Automatically refreshes the query ID if it detects a stale ID error.
 func (c *Client) fetchFullTextFromGraphQL(ctx context.Context, tweetID string) (string, error) {
+	return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, false)
+}
+
+func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID string, isRetry bool) (string, error) {
 	guestToken, err := c.getGuestToken(ctx)
 	if err != nil {
 		return "", fmt.Errorf("get guest token: %w", err)
 	}
+
+	queryID := c.getGraphQLQueryID()
 
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
 	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false,"tweetypie_unmention_optimization_enabled":true}`
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
-		tweetResultByRestIDQueryID,
+		queryID,
 		url.QueryEscape(variables),
 		url.QueryEscape(features))
 
@@ -611,8 +743,24 @@ func (c *Client) fetchFullTextFromGraphQL(ctx context.Context, tweetID string) (
 		return "", fmt.Errorf("decode graphql response: %w", err)
 	}
 
+	// Check for "Query: Unspecified" error which indicates stale query ID
 	if len(gqlResp.Errors) > 0 {
-		return "", fmt.Errorf("graphql API error: %s", gqlResp.Errors[0].Message)
+		errMsg := gqlResp.Errors[0].Message
+		if strings.Contains(errMsg, "Query") && strings.Contains(errMsg, "Unspecified") && !isRetry {
+			// Query ID is stale - try to refresh it
+			c.logger.Warn("GraphQL query ID appears stale, attempting auto-refresh", "error", errMsg, "old_query_id", queryID)
+			c.clearGraphQLQueryID() // Clear the cached ID first
+
+			newQueryID, refreshErr := c.refreshGraphQLQueryID(ctx)
+			if refreshErr != nil {
+				c.logger.Error("failed to refresh GraphQL query ID", "error", refreshErr)
+				return "", fmt.Errorf("graphql API error (stale query ID, refresh failed: %v): %s", refreshErr, errMsg)
+			}
+
+			c.logger.Info("retrying GraphQL request with new query ID", "new_query_id", newQueryID)
+			return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, true)
+		}
+		return "", fmt.Errorf("graphql API error: %s", errMsg)
 	}
 
 	result := gqlResp.Data.TweetResult.Result
@@ -641,12 +789,14 @@ func (c *Client) fetchFromGraphQL(ctx context.Context, tweetID string) (*domain.
 		return nil, fmt.Errorf("get guest token: %w", err)
 	}
 
+	queryID := c.getGraphQLQueryID()
+
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
 	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false,"tweetypie_unmention_optimization_enabled":true}`
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
-		tweetResultByRestIDQueryID,
+		queryID,
 		url.QueryEscape(variables),
 		url.QueryEscape(features))
 
