@@ -4941,11 +4941,19 @@
             cursor: pointer;
             padding: 4px 0;
             margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .tweet-more-btn:hover {
             color: var(--brand-end);
             text-decoration: underline;
+        }
+
+        .tweet-more-btn svg {
+            width: 12px;
+            height: 12px;
         }
 
         .tweet-text.expanded {
@@ -4962,6 +4970,54 @@
         .tweet-more-btn:disabled {
             opacity: 0.6;
             cursor: wait;
+        }
+
+        /* Transcript button on video thumbnails */
+        .media-thumb .transcript-btn {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.75);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.15s;
+            z-index: 5;
+        }
+
+        .media-thumb:hover .transcript-btn {
+            opacity: 1;
+        }
+
+        .media-thumb .transcript-btn:hover {
+            background: var(--brand-start);
+            transform: scale(1.1);
+        }
+
+        .media-thumb .transcript-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .media-thumb .transcript-btn.no-transcript {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .media-thumb:hover .transcript-btn.no-transcript {
+            opacity: 0.4;
+        }
+
+        .media-thumb .transcript-btn.no-transcript:hover {
+            background: rgba(0, 0, 0, 0.75);
+            transform: none;
         }
 
         /* Loading States */
@@ -6275,7 +6331,10 @@
                             </div>
                         </div>
                         <div class="tweet-text">${highlightText(tweet.text || '', searchQuery)}</div>
-                        ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand('${tweet.tweet_id}', this)">More</button>` : ''}
+                        ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand('${tweet.tweet_id}', this)">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
+                            <span>Show more</span>
+                        </button>` : ''}
                         ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
                             <div class="tweet-tags">
                                 ${tweet.ai_tags.slice(0, 5).map(tag => `<span class="tweet-tag">${escapeHtml(tag)}</span>`).join('')}
@@ -6362,6 +6421,11 @@
                                     <div class="video-indicator">
                                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                     </div>
+                                    ${media.transcript ? `
+                                        <button class="transcript-btn" onclick="event.stopPropagation(); openTranscriptModal(${JSON.stringify(media.transcript)}, '${media.transcript_language || ''}', ${(media.transcript || '').split(/\\s+/).length})" title="View transcript">
+                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
+                                        </button>
+                                    ` : ''}
                                     <button class="expand-btn" onclick="event.stopPropagation(); openTheater('${tweet.tweet_id}', ${idx})" title="Fullscreen">
                                         <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                                     </button>
@@ -7566,13 +7630,13 @@
             if (isCurrentlyExpanded) {
                 // Collapse - just toggle CSS, keep full text in DOM
                 textEl.classList.remove('expanded');
-                btn.textContent = 'More';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg><span>Show more</span>';
                 return;
             }
 
             // Expand - fetch full text if not cached
             if (!fullTextCache.has(tweetId)) {
-                btn.textContent = 'Loading...';
+                btn.innerHTML = '<span>Loading...</span>';
                 btn.disabled = true;
 
                 try {
@@ -7606,7 +7670,7 @@
             }
 
             textEl.classList.add('expanded');
-            btn.textContent = 'Less';
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6 1.41-1.41L12 13.17l4.59-4.58L18 10z"/></svg><span>Show less</span>';
         }
 
         // Gallery Mode - Browse All Media
