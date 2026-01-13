@@ -87,9 +87,11 @@ type TweetResponse struct {
 
 // MediaPreview represents a media item in list responses for thumbnails.
 type MediaPreview struct {
-	Type         string `json:"type"`
-	ThumbnailURL string `json:"thumbnail_url,omitempty"`
-	URL          string `json:"url,omitempty"`
+	Type               string `json:"type"`
+	ThumbnailURL       string `json:"thumbnail_url,omitempty"`
+	URL                string `json:"url,omitempty"`
+	Transcript         string `json:"transcript,omitempty"`
+	TranscriptLanguage string `json:"transcript_language,omitempty"`
 }
 
 // TweetListResponse contains paginated tweet list.
@@ -179,8 +181,10 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			mediaURL := fmt.Sprintf("/api/v1/tweets/%s/media/%s", t.ID, filename)
 
 			mp := MediaPreview{
-				Type: string(m.Type),
-				URL:  mediaURL,
+				Type:               string(m.Type),
+				URL:                mediaURL,
+				Transcript:         m.Transcript,
+				TranscriptLanguage: m.TranscriptLanguage,
 			}
 			// For videos, use locally downloaded thumbnail; for images, use the image itself
 			if m.Type == domain.MediaTypeVideo || m.Type == domain.MediaTypeGIF {
