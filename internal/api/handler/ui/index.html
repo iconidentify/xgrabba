@@ -965,6 +965,40 @@
             font-size: 12px;
         }
 
+        /* Infinite scroll loading indicator */
+        .load-more-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .load-more-indicator .loading-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--brand-start);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .load-more-indicator .load-more-hint {
+            color: var(--text-muted);
+            opacity: 0.6;
+        }
+
+        .load-more-indicator .load-more-end {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
         /* Modal Base - Clean */
         .modal-overlay {
             display: none;
@@ -5827,6 +5861,16 @@
         let newEntriesPollTimer = null;
         let noteSaveTimeout = null; // For debouncing note saves
 
+        // Pagination state for infinite scroll
+        let paginationState = {
+            offset: 0,
+            limit: 50,
+            total: 0,
+            hasMore: true,
+            isLoading: false,
+            searchQuery: ''
+        };
+
         // Video handoff state for seamless playback between views
         let videoHandoff = {
             tweetId: null,
@@ -5846,10 +5890,17 @@
         const scrollTopBtn = document.getElementById('scrollTop');
         const keyboardHint = document.getElementById('keyboardHint');
 
-        // Fetch tweets from API (data only)
-        async function fetchTweetsRaw() {
+        // Fetch tweets from API with pagination and optional search
+        async function fetchTweetsPage(offset = 0, limit = 50, searchQuery = '') {
             try {
-                const response = await fetch('/api/v1/tweets?limit=100', {
+                let url;
+                if (searchQuery) {
+                    url = `/api/v1/tweets/search?q=${encodeURIComponent(searchQuery)}&limit=${limit}&offset=${offset}`;
+                } else {
+                    url = `/api/v1/tweets?limit=${limit}&offset=${offset}`;
+                }
+
+                const response = await fetch(url, {
                     headers: { 'X-API-Key': API_KEY }
                 });
 
@@ -5859,14 +5910,58 @@
                         localStorage.setItem('xgrabba_api_key', key);
                         location.reload();
                     }
-                    return;
+                    return null;
                 }
 
                 const data = await response.json();
-                tweets = data.tweets || [];
-                return true;
+                return {
+                    tweets: data.tweets || [],
+                    total: data.total || 0,
+                    hasMore: data.has_more || false
+                };
             } catch (error) {
                 console.error('Failed to fetch tweets:', error);
+                return null;
+            }
+        }
+
+        // Legacy function for backwards compatibility
+        async function fetchTweetsRaw() {
+            const result = await fetchTweetsPage(0, 100, '');
+            if (result) {
+                tweets = result.tweets;
+                paginationState.total = result.total;
+                paginationState.hasMore = result.hasMore;
+                return true;
+            }
+            tweetList.innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                    <h3>Connection Error</h3>
+                    <p>Failed to load tweets. Make sure the server is running.</p>
+                </div>
+            `;
+            return false;
+        }
+
+        // Load tweets with infinite scroll support
+        async function loadTweets({ preserveScroll = true, keepSearch = true, reset = false } = {}) {
+            const scrollY = preserveScroll ? window.scrollY : 0;
+            const query = keepSearch ? (searchInput.value || '').trim() : '';
+
+            // Reset pagination state for fresh load
+            if (reset || !keepSearch) {
+                paginationState.offset = 0;
+                paginationState.searchQuery = query;
+            }
+
+            paginationState.isLoading = true;
+
+            const result = await fetchTweetsPage(0, paginationState.limit, query);
+            if (!result) {
+                paginationState.isLoading = false;
                 tweetList.innerHTML = `
                     <div class="empty-state">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -5876,24 +5971,19 @@
                         <p>Failed to load tweets. Make sure the server is running.</p>
                     </div>
                 `;
-                return false;
+                return;
             }
-        }
 
-        // Load + render tweets, preserving search & scroll by default.
-        async function loadTweets({ preserveScroll = true, keepSearch = true } = {}) {
-            const scrollY = preserveScroll ? window.scrollY : 0;
-            const query = keepSearch ? (searchInput.value || '').trim() : '';
+            tweets = result.tweets;
+            paginationState.total = result.total;
+            paginationState.hasMore = result.hasMore;
+            paginationState.offset = tweets.length;
+            paginationState.isLoading = false;
+            paginationState.searchQuery = query;
 
-            const ok = await fetchTweetsRaw();
-            if (!ok) return;
-
-            if (query) {
-                performSearch(query);
-            } else {
-                renderTweets(tweets);
-                updateStats();
-            }
+            renderTweets(tweets, query);
+            updateStats();
+            updateLoadMoreIndicator();
 
             if (preserveScroll) {
                 window.scrollTo({ top: scrollY });
@@ -5903,9 +5993,64 @@
             startAIPolling();
         }
 
+        // Load more tweets (infinite scroll)
+        async function loadMoreTweets() {
+            if (paginationState.isLoading || !paginationState.hasMore) return;
+
+            paginationState.isLoading = true;
+            updateLoadMoreIndicator();
+
+            const result = await fetchTweetsPage(
+                paginationState.offset,
+                paginationState.limit,
+                paginationState.searchQuery
+            );
+
+            if (!result) {
+                paginationState.isLoading = false;
+                updateLoadMoreIndicator();
+                return;
+            }
+
+            // Append new tweets
+            tweets = [...tweets, ...result.tweets];
+            paginationState.total = result.total;
+            paginationState.hasMore = result.hasMore;
+            paginationState.offset = tweets.length;
+            paginationState.isLoading = false;
+
+            // Append to DOM instead of replacing
+            appendTweets(result.tweets, paginationState.searchQuery);
+            updateLoadMoreIndicator();
+        }
+
+        // Update loading indicator
+        function updateLoadMoreIndicator() {
+            let indicator = document.getElementById('loadMoreIndicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'loadMoreIndicator';
+                indicator.className = 'load-more-indicator';
+                tweetList.parentElement.appendChild(indicator);
+            }
+
+            if (paginationState.isLoading) {
+                indicator.innerHTML = '<div class="loading-spinner"></div><span>Loading more...</span>';
+                indicator.style.display = 'flex';
+            } else if (paginationState.hasMore) {
+                indicator.innerHTML = '<span class="load-more-hint">Scroll for more</span>';
+                indicator.style.display = 'flex';
+            } else if (tweets.length > 0) {
+                indicator.innerHTML = `<span class="load-more-end">All ${paginationState.total} tweets loaded</span>`;
+                indicator.style.display = 'flex';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+
         // Backwards compatibility: existing code calls fetchTweets().
         async function fetchTweets() {
-            await loadTweets({ preserveScroll: false, keepSearch: false });
+            await loadTweets({ preserveScroll: false, keepSearch: false, reset: true });
         }
 
         // Smart polling for phased processing status
@@ -6415,6 +6560,121 @@
                     </div>
                 `;
             }).join('');
+
+            // Setup infinite scroll observer after rendering
+            setupInfiniteScroll();
+        }
+
+        // Append additional tweets to the DOM (for infinite scroll)
+        function appendTweets(newTweets, searchQuery = '') {
+            if (newTweets.length === 0) return;
+
+            const html = newTweets.map(tweet => {
+                const mediaPreview = renderMediaPreview(tweet);
+                const displayName = tweet.author_display_name || tweet.author || 'Unknown';
+
+                return `
+                    <div class="tweet-card" data-tweet-id="${tweet.tweet_id}" onclick="openTweetDetail('${tweet.tweet_id}')">
+                        <div class="tweet-header">
+                            <div class="tweet-avatar">
+                                ${tweet.author_avatar
+                                    ? `<img src="${addApiKey(tweet.author_avatar)}" alt="${escapeHtml(displayName)}" onerror="this.parentElement.innerHTML='${getInitials(tweet.author)}'">`
+                                    : getInitials(tweet.author)
+                                }
+                            </div>
+                            <div class="tweet-author">
+                                <div class="tweet-author-name">
+                                    ${escapeHtml(displayName)}
+                                    ${tweet.verified ? `
+                                        <svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>
+                                        </svg>
+                                    ` : ''}
+                                </div>
+                                <span class="tweet-author-username">@${escapeHtml(tweet.author || 'unknown')}</span>
+                                ${tweet.follower_count ? `<span class="tweet-author-followers">${formatNumber(tweet.follower_count)} followers</span>` : ''}
+                            </div>
+                            <div class="tweet-date">
+                                ${renderStatusBadge(tweet)}
+                                ${formatDate(tweet.created_at)}
+                            </div>
+                        </div>
+                        <div class="tweet-text" data-full-text="${escapeAttr(tweet.text || '')}">${highlightText((tweet.text || '').length > 200 ? (tweet.text || '').substring(0, 200) + '...' : (tweet.text || ''), searchQuery)}</div>
+                        ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand(this)">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
+                            <span>Show more</span>
+                        </button>` : ''}
+                        ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
+                            <div class="tweet-tags">
+                                ${tweet.ai_tags.slice(0, 5).map(tag => `<span class="tweet-tag">${escapeHtml(tag)}</span>`).join('')}
+                                ${tweet.ai_tags.length > 5 ? `<span class="tweet-tag-more">+${tweet.ai_tags.length - 5}</span>` : ''}
+                            </div>
+                        ` : ''}
+                        ${mediaPreview}
+                        <div class="tweet-footer">
+                            <div class="tweet-metrics">
+                                ${tweet.like_count !== undefined ? `
+                                    <span class="metric likes">
+                                        <svg viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"/>
+                                        </svg>
+                                        ${formatNumber(tweet.like_count)}
+                                    </span>
+                                ` : ''}
+                                ${tweet.view_count ? `
+                                    <span class="metric views">
+                                        <svg viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 4C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                        </svg>
+                                        ${formatNumber(tweet.view_count)}
+                                    </span>
+                                ` : ''}
+                                <span class="media-badge">
+                                    <svg viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M3 5.5C3 4.119 4.119 3 5.5 3h13C19.881 3 21 4.119 21 5.5v13c0 1.381-1.119 2.5-2.5 2.5h-13C4.119 21 3 19.881 3 18.5v-13zM5.5 5c-.276 0-.5.224-.5.5v9.086l3-3 3 3 5-5 3 3V5.5c0-.276-.224-.5-.5-.5h-13zM19 15.414l-3-3-5 5-3-3-3 3V18.5c0 .276.224.5.5.5h13c.276 0 .5-.224.5-.5v-3.086zM9.75 7C8.784 7 8 7.784 8 8.75s.784 1.75 1.75 1.75 1.75-.784 1.75-1.75S10.716 7 9.75 7z"/>
+                                    </svg>
+                                    ${tweet.media_count || 0}
+                                </span>
+                            </div>
+                            <div class="tweet-actions">
+                                <button class="btn btn-secondary" onclick="event.stopPropagation(); openTweetDetail('${tweet.tweet_id}')">View</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            tweetList.insertAdjacentHTML('beforeend', html);
+        }
+
+        // Infinite scroll observer
+        let infiniteScrollObserver = null;
+        function setupInfiniteScroll() {
+            // Cleanup old observer
+            if (infiniteScrollObserver) {
+                infiniteScrollObserver.disconnect();
+            }
+
+            // Create sentinel element if it doesn't exist
+            let sentinel = document.getElementById('infiniteScrollSentinel');
+            if (!sentinel) {
+                sentinel = document.createElement('div');
+                sentinel.id = 'infiniteScrollSentinel';
+                sentinel.style.height = '1px';
+                tweetList.parentElement.appendChild(sentinel);
+            }
+
+            // Create observer
+            infiniteScrollObserver = new IntersectionObserver((entries) => {
+                const entry = entries[0];
+                if (entry.isIntersecting && paginationState.hasMore && !paginationState.isLoading) {
+                    loadMoreTweets();
+                }
+            }, {
+                rootMargin: '200px' // Start loading 200px before reaching the end
+            });
+
+            infiniteScrollObserver.observe(sentinel);
         }
 
         function renderMediaPreview(tweet) {
@@ -8641,48 +8901,41 @@
             renderTweets(tweets);
         });
 
-        function performSearch(query) {
+        // Server-side search with infinite scroll support
+        async function performSearch(query) {
             if (!query) {
                 searchResultsInfo.classList.remove('visible');
-                renderTweets(tweets);
+                // Reset to browsing all tweets
+                paginationState.searchQuery = '';
+                await loadTweets({ preserveScroll: false, keepSearch: false, reset: true });
                 return;
             }
 
-            const lowerQuery = query.toLowerCase();
-            const filtered = tweets.filter(t => {
-                // Search through basic fields
-                if (t.author && t.author.toLowerCase().includes(lowerQuery)) return true;
-                if (t.author_display_name && t.author_display_name.toLowerCase().includes(lowerQuery)) return true;
-                if (t.text && t.text.toLowerCase().includes(lowerQuery)) return true;
-                if (t.ai_title && t.ai_title.toLowerCase().includes(lowerQuery)) return true;
+            // Reset pagination for new search
+            paginationState.offset = 0;
+            paginationState.searchQuery = query;
+            paginationState.isLoading = true;
 
-                // Search through AI metadata
-                if (t.ai_summary && t.ai_summary.toLowerCase().includes(lowerQuery)) return true;
-                if (t.ai_content_type && t.ai_content_type.toLowerCase().includes(lowerQuery)) return true;
+            const result = await fetchTweetsPage(0, paginationState.limit, query);
 
-                // Search through AI tags array
-                if (t.ai_tags && t.ai_tags.some(tag => tag.toLowerCase().includes(lowerQuery))) return true;
+            if (!result) {
+                paginationState.isLoading = false;
+                return;
+            }
 
-                // Search through AI topics array
-                if (t.ai_topics && t.ai_topics.some(topic => topic.toLowerCase().includes(lowerQuery))) return true;
+            tweets = result.tweets;
+            paginationState.total = result.total;
+            paginationState.hasMore = result.hasMore;
+            paginationState.offset = tweets.length;
+            paginationState.isLoading = false;
 
-                // Search through video transcripts array
-                if (t.transcripts && t.transcripts.some(transcript => transcript.toLowerCase().includes(lowerQuery))) return true;
-
-                // Search through per-media AI tags (aggregated server-side)
-                if (t.media_tags && t.media_tags.some(tag => tag.toLowerCase().includes(lowerQuery))) return true;
-
-                // Search through per-media AI captions (aggregated server-side)
-                if (t.media_captions && t.media_captions.some(caption => caption.toLowerCase().includes(lowerQuery))) return true;
-
-                return false;
-            });
-
-            searchResultCount.textContent = filtered.length;
+            // Update search results info
+            searchResultCount.textContent = result.total;
             searchQuerySpan.textContent = query;
             searchResultsInfo.classList.add('visible');
 
-            renderTweets(filtered, query);
+            renderTweets(tweets, query);
+            updateLoadMoreIndicator();
         }
 
         // Close modals on overlay click

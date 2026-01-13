@@ -71,6 +71,7 @@ func NewRouter(
 		r.Post("/tweets", tweetHandler.Archive)
 		r.Get("/tweets", tweetHandler.List)
 		r.Post("/tweets/batch-status", tweetHandler.BatchStatus)           // Batch status polling for UI
+		r.Get("/tweets/search", tweetHandler.Search)                       // Search tweets with pagination
 		r.Get("/tweets/truncated", tweetHandler.ListTruncated)             // List tweets with truncated text
 		r.Post("/tweets/backfill-truncated", tweetHandler.BackfillTruncated) // Backfill all truncated tweets
 		r.Get("/tweets/{tweetID}", tweetHandler.Get)

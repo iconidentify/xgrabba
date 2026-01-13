@@ -97,10 +97,11 @@ type MediaPreview struct {
 
 // TweetListResponse contains paginated tweet list.
 type TweetListResponse struct {
-	Tweets []TweetResponse `json:"tweets"`
-	Total  int             `json:"total"`
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
+	Tweets  []TweetResponse `json:"tweets"`
+	Total   int             `json:"total"`
+	Limit   int             `json:"limit"`
+	Offset  int             `json:"offset"`
+	HasMore bool            `json:"has_more"`
 }
 
 // Archive handles POST /api/v1/tweets
@@ -142,8 +143,39 @@ func (h *TweetHandler) Archive(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /api/v1/tweets
 func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
-	limit := 50
-	offset := 0
+	limit, offset := h.parsePagination(r)
+
+	tweets, total, err := h.tweetSvc.List(r.Context(), limit, offset)
+	if err != nil {
+		h.logger.Error("list failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to list tweets")
+		return
+	}
+
+	response := h.buildTweetListResponse(tweets, total, limit, offset)
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// Search handles GET /api/v1/tweets/search?q=query
+func (h *TweetHandler) Search(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	limit, offset := h.parsePagination(r)
+
+	tweets, total, err := h.tweetSvc.Search(r.Context(), query, limit, offset)
+	if err != nil {
+		h.logger.Error("search failed", "error", err, "query", query)
+		h.writeError(w, http.StatusInternalServerError, "failed to search tweets")
+		return
+	}
+
+	response := h.buildTweetListResponse(tweets, total, limit, offset)
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// parsePagination extracts limit and offset from query params.
+func (h *TweetHandler) parsePagination(r *http.Request) (limit, offset int) {
+	limit = 50
+	offset = 0
 
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
@@ -157,18 +189,17 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tweets, total, err := h.tweetSvc.List(r.Context(), limit, offset)
-	if err != nil {
-		h.logger.Error("list failed", "error", err)
-		h.writeError(w, http.StatusInternalServerError, "failed to list tweets")
-		return
-	}
+	return limit, offset
+}
 
+// buildTweetListResponse converts domain tweets to API response.
+func (h *TweetHandler) buildTweetListResponse(tweets []*domain.Tweet, total, limit, offset int) TweetListResponse {
 	response := TweetListResponse{
-		Tweets: make([]TweetResponse, 0, len(tweets)),
-		Total:  total,
-		Limit:  limit,
-		Offset: offset,
+		Tweets:  make([]TweetResponse, 0, len(tweets)),
+		Total:   total,
+		Limit:   limit,
+		Offset:  offset,
+		HasMore: offset+len(tweets) < total,
 	}
 
 	for _, t := range tweets {
@@ -263,7 +294,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.Tweets = append(response.Tweets, tr)
 	}
 
-	h.writeJSON(w, http.StatusOK, response)
+	return response
 }
 
 // Get handles GET /api/v1/tweets/{tweetID}

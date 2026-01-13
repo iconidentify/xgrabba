@@ -1722,6 +1722,98 @@ func (s *TweetService) List(ctx context.Context, limit, offset int) ([]*domain.T
 	return result, total, nil
 }
 
+// Search returns tweets matching the query, sorted by date (newest first).
+// Searches across: text, author, ai_title, ai_summary, ai_tags, ai_topics, transcripts, media tags/captions.
+func (s *TweetService) Search(ctx context.Context, query string, limit, offset int) ([]*domain.Tweet, int, error) {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return s.List(ctx, limit, offset)
+	}
+
+	var matched []*domain.Tweet
+	for _, tweet := range s.tweets {
+		if s.tweetMatchesQuery(tweet, query) {
+			matched = append(matched, tweet)
+		}
+	}
+
+	// Sort by CreatedAt descending (newest first)
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt.After(matched[j].CreatedAt)
+	})
+
+	total := len(matched)
+
+	// Apply pagination
+	if offset >= len(matched) {
+		return []*domain.Tweet{}, total, nil
+	}
+	matched = matched[offset:]
+	if limit > 0 && len(matched) > limit {
+		matched = matched[:limit]
+	}
+
+	return matched, total, nil
+}
+
+// tweetMatchesQuery checks if a tweet matches the search query.
+func (s *TweetService) tweetMatchesQuery(t *domain.Tweet, query string) bool {
+	// Author
+	if strings.Contains(strings.ToLower(t.Author.Username), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(t.Author.DisplayName), query) {
+		return true
+	}
+
+	// Tweet text
+	if strings.Contains(strings.ToLower(t.Text), query) {
+		return true
+	}
+
+	// AI metadata
+	if strings.Contains(strings.ToLower(t.AITitle), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(t.AISummary), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(t.AIContentType), query) {
+		return true
+	}
+
+	// AI tags
+	for _, tag := range t.AITags {
+		if strings.Contains(strings.ToLower(tag), query) {
+			return true
+		}
+	}
+
+	// AI topics
+	for _, topic := range t.AITopics {
+		if strings.Contains(strings.ToLower(topic), query) {
+			return true
+		}
+	}
+
+	// Media: transcripts, tags, captions
+	for _, m := range t.Media {
+		if strings.Contains(strings.ToLower(m.Transcript), query) {
+			return true
+		}
+		if strings.Contains(strings.ToLower(m.AICaption), query) {
+			return true
+		}
+		for _, tag := range m.AITags {
+			if strings.Contains(strings.ToLower(tag), query) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // Delete removes a tweet archive including all files.
 func (s *TweetService) Delete(ctx context.Context, tweetID domain.TweetID) error {
 	tweet, ok := s.tweets[tweetID]
