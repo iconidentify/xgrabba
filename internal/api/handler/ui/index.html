@@ -6330,8 +6330,8 @@
                                 ${formatDate(tweet.created_at)}
                             </div>
                         </div>
-                        <div class="tweet-text">${highlightText(tweet.text || '', searchQuery)}</div>
-                        ${tweet.text_truncated ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand('${tweet.tweet_id}', this)">
+                        <div class="tweet-text" data-full-text="${escapeHtml(tweet.text || '')}">${highlightText((tweet.text || '').length > 200 ? (tweet.text || '').substring(0, 200) + '...' : (tweet.text || ''), searchQuery)}</div>
+                        ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand(this)">
                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
                             <span>Show more</span>
                         </button>` : ''}
@@ -7621,56 +7621,24 @@
         // Cache for full tweet text
         const fullTextCache = new Map();
 
-        // Toggle expanded tweet text - fetches full text on first expand
-        async function toggleTweetExpand(tweetId, btn) {
-            const card = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"]`);
+        // Toggle expanded tweet text - pure client-side, no API call needed
+        function toggleTweetExpand(btn) {
+            const card = btn.closest('.tweet-card');
             const textEl = card.querySelector('.tweet-text');
-            const isCurrentlyExpanded = textEl.classList.contains('expanded');
+            const fullText = textEl.dataset.fullText || '';
+            const isExpanded = textEl.classList.contains('expanded');
 
-            if (isCurrentlyExpanded) {
-                // Collapse - just toggle CSS, keep full text in DOM
+            if (isExpanded) {
+                // Collapse - show truncated
+                textEl.textContent = fullText.substring(0, 200) + '...';
                 textEl.classList.remove('expanded');
                 btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg><span>Show more</span>';
-                return;
-            }
-
-            // Expand - fetch full text if not cached
-            if (!fullTextCache.has(tweetId)) {
-                btn.innerHTML = '<span>Loading...</span>';
-                btn.disabled = true;
-
-                try {
-                    const response = await fetch(`/api/v1/tweets/${tweetId}/full`, {
-                        headers: { 'X-API-Key': API_KEY }
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        fullTextCache.set(tweetId, data.text || '');
-                    } else {
-                        // Fallback to current text
-                        fullTextCache.set(tweetId, textEl.textContent);
-                    }
-                } catch (error) {
-                    console.error('Failed to fetch full text:', error);
-                    fullTextCache.set(tweetId, textEl.textContent);
-                }
-
-                btn.disabled = false;
-            }
-
-            // Update text content with full text (preserves line breaks via CSS white-space: pre-wrap)
-            const fullText = fullTextCache.get(tweetId);
-            if (fullText && fullText !== textEl.textContent) {
-                // Store original truncated text for potential future use
-                if (!textEl.dataset.truncatedText) {
-                    textEl.dataset.truncatedText = textEl.textContent;
-                }
+            } else {
+                // Expand - show full text
                 textEl.textContent = fullText;
+                textEl.classList.add('expanded');
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6 1.41-1.41L12 13.17l4.59-4.58L18 10z"/></svg><span>Show less</span>';
             }
-
-            textEl.classList.add('expanded');
-            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6 1.41-1.41L12 13.17l4.59-4.58L18 10z"/></svg><span>Show less</span>';
         }
 
         // Gallery Mode - Browse All Media
