@@ -243,7 +243,29 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	destPath = strings.ReplaceAll(destPath, "\\(", "(")
 	destPath = strings.ReplaceAll(destPath, "\\)", ")")
 	destPath = strings.ReplaceAll(destPath, "\\'", "'")
+	// Clean path: remove trailing slashes and normalize
+	destPath = filepath.Clean(destPath)
 	opts.DestPath = destPath
+
+	s.logger.Info("export destination", "path", opts.DestPath)
+
+	// Check if parent directory exists and is writable
+	parentDir := filepath.Dir(opts.DestPath)
+	if info, err := os.Stat(parentDir); err != nil {
+		s.setExportError(fmt.Sprintf("parent directory does not exist: %s", parentDir))
+		return
+	} else if !info.IsDir() {
+		s.setExportError(fmt.Sprintf("parent path is not a directory: %s", parentDir))
+		return
+	}
+
+	// Test write access to parent directory
+	testFile := filepath.Join(parentDir, ".xgrabba_write_test")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		s.setExportError(fmt.Sprintf("no write permission on %s: %v", parentDir, err))
+		return
+	}
+	os.Remove(testFile)
 
 	// Create destination directory
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
@@ -536,6 +558,8 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\(", "(")
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\)", ")")
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\'", "'")
+	// Clean path: remove trailing slashes and normalize
+	opts.DestPath = filepath.Clean(opts.DestPath)
 
 	s.logger.Info("starting export",
 		"dest", opts.DestPath,
@@ -546,6 +570,21 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 	if opts.DestPath == "" {
 		return nil, fmt.Errorf("destination path is required")
 	}
+
+	// Check if parent directory exists and is writable
+	parentDir := filepath.Dir(opts.DestPath)
+	if info, err := os.Stat(parentDir); err != nil {
+		return nil, fmt.Errorf("parent directory does not exist: %s", parentDir)
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("parent path is not a directory: %s", parentDir)
+	}
+
+	// Test write access to parent directory
+	testFile := filepath.Join(parentDir, ".xgrabba_write_test")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		return nil, fmt.Errorf("no write permission on %s: %v", parentDir, err)
+	}
+	os.Remove(testFile)
 
 	// Create destination directory
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
