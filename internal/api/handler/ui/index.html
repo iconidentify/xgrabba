@@ -5775,7 +5775,7 @@
             <span class="btn-text-short">Media</span>
         </button>
         <!-- Export Button -->
-        <button class="export-btn" id="exportBtn" onclick="openExportModal()" title="Export to USB">
+        <button class="export-btn" id="exportBtn" onclick="openExportModal()" title="Export Archive">
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
             </svg>
@@ -6019,14 +6019,18 @@
                         </div>
                     </div>
 
-                    <div class="export-section-title">Select Destination</div>
-                    <div class="export-volume-list" id="exportVolumeList">
-                        <div class="export-no-volumes">Detecting volumes...</div>
+                    <div class="export-path-input">
+                        <label for="exportDestPath">Destination Folder</label>
+                        <input type="text" id="exportDestPath" placeholder="Enter or select a folder path..." />
                     </div>
 
-                    <div class="export-path-input">
-                        <label for="exportDestPath">Export Path</label>
-                        <input type="text" id="exportDestPath" placeholder="/Volumes/USB/xgrabba-export" />
+                    <div class="export-section-title">Quick Select</div>
+                    <div class="export-volume-list" id="exportQuickPaths">
+                        <!-- Populated by JS with common paths -->
+                    </div>
+
+                    <div class="export-section-title" id="exportVolumesTitle" style="display:none;">External Drives</div>
+                    <div class="export-volume-list" id="exportVolumeList" style="display:none;">
                     </div>
 
                     <label class="export-checkbox">
@@ -10115,35 +10119,64 @@
                 document.getElementById('exportMediaCount').textContent = data.media_count.toLocaleString();
                 document.getElementById('exportSize').textContent = formatExportBytes(data.estimated_size_bytes);
 
-                // Populate volumes
+                // Populate quick paths (common destinations)
+                const quickPaths = [
+                    { name: 'Desktop', path: '~/Desktop/xgrabba-export', icon: 'M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z' },
+                    { name: 'Documents', path: '~/Documents/xgrabba-export', icon: 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
+                    { name: 'Downloads', path: '~/Downloads/xgrabba-export', icon: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z' },
+                ];
+                const quickPathsList = document.getElementById('exportQuickPaths');
+                quickPathsList.innerHTML = quickPaths.map((p, idx) => `
+                    <div class="export-volume-item" data-quick-idx="${idx}">
+                        <div class="export-volume-name">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="${p.icon}"/>
+                            </svg>
+                            ${escapeHtml(p.name)}
+                        </div>
+                        <div class="export-volume-space">${escapeHtml(p.path)}</div>
+                    </div>
+                `).join('');
+                window._exportQuickPaths = quickPaths;
+                quickPathsList.querySelectorAll('.export-volume-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const idx = parseInt(this.dataset.quickIdx);
+                        const qp = window._exportQuickPaths[idx];
+                        if (qp) selectExportPath(qp.path, this);
+                    });
+                });
+
+                // Populate external volumes (if any)
                 const volumeList = document.getElementById('exportVolumeList');
+                const volumesTitle = document.getElementById('exportVolumesTitle');
                 if (data.volumes && data.volumes.length > 0) {
+                    volumesTitle.style.display = 'block';
+                    volumeList.style.display = 'flex';
                     volumeList.innerHTML = data.volumes.map((v, idx) => `
                         <div class="export-volume-item" data-volume-idx="${idx}">
                             <div class="export-volume-name">
                                 <svg viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.1.9 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95 0 1.22.99 2.2 2.2 2.2 1.21 0 2.2-.98 2.2-2.2 0-.85-.49-1.58-1.2-1.95V15h3c1.1 0 2-.9 2-2v-2h1V7h-4z"/>
-                                </svg>
+                            </svg>
                                 ${escapeHtml(v.name)}
                             </div>
                             <div class="export-volume-space">${formatExportBytes(v.free_bytes)} free</div>
                         </div>
                     `).join('');
-                    // Store volumes data and add click handlers
                     window._exportVolumes = data.volumes;
                     volumeList.querySelectorAll('.export-volume-item').forEach(item => {
                         item.addEventListener('click', function() {
                             const idx = parseInt(this.dataset.volumeIdx);
                             const vol = window._exportVolumes[idx];
-                            if (vol) selectExportVolume(vol.path, this);
+                            if (vol) selectExportPath(vol.path + '/xgrabba-export', this);
                         });
                     });
                 } else {
-                    volumeList.innerHTML = '<div class="export-no-volumes">No external volumes detected. Enter path manually below.</div>';
+                    volumesTitle.style.display = 'none';
+                    volumeList.style.display = 'none';
                 }
             } catch (err) {
                 console.error('Export estimate error:', err);
-                document.getElementById('exportVolumeList').innerHTML = '<div class="export-no-volumes">Failed to load volumes. Enter path manually.</div>';
             }
 
             // Check if there's already an export in progress
@@ -10173,11 +10206,11 @@
             stopExportPolling();
         }
 
-        function selectExportVolume(path, el) {
+        function selectExportPath(path, el) {
             selectedVolumePath = path;
-            document.getElementById('exportDestPath').value = path + '/xgrabba-export';
+            document.getElementById('exportDestPath').value = path;
 
-            // Update selection UI
+            // Update selection UI - clear all selections then select clicked one
             document.querySelectorAll('.export-volume-item').forEach(item => {
                 item.classList.remove('selected');
             });
@@ -10345,7 +10378,7 @@
             } else {
                 btn.classList.remove('exporting');
                 btn.removeAttribute('data-progress');
-                btn.title = 'Export to USB';
+                btn.title = 'Export Archive';
             }
         }
 

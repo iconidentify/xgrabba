@@ -243,6 +243,15 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	destPath = strings.ReplaceAll(destPath, "\\(", "(")
 	destPath = strings.ReplaceAll(destPath, "\\)", ")")
 	destPath = strings.ReplaceAll(destPath, "\\'", "'")
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(destPath, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			destPath = filepath.Join(home, destPath[2:])
+		}
+	}
+
 	// Clean path: remove trailing slashes and normalize
 	destPath = filepath.Clean(destPath)
 	opts.DestPath = destPath
@@ -558,6 +567,14 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\(", "(")
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\)", ")")
 	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\'", "'")
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(opts.DestPath, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			opts.DestPath = filepath.Join(home, opts.DestPath[2:])
+		}
+	}
+
 	// Clean path: remove trailing slashes and normalize
 	opts.DestPath = filepath.Clean(opts.DestPath)
 
