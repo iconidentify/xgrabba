@@ -16,6 +16,7 @@ func NewRouter(
 	tweetHandler *handler.TweetHandler,
 	healthHandler *handler.HealthHandler,
 	uiHandler *handler.UIHandler,
+	exportHandler *handler.ExportHandler,
 	bookmarksOAuthHandler *handler.BookmarksOAuthHandler,
 	apiKey string,
 ) *chi.Mux {
@@ -91,6 +92,14 @@ func NewRouter(
 		r.Get("/videos", videoHandler.List)
 		r.Get("/videos/{videoID}", videoHandler.Get)
 		r.Get("/videos/{videoID}/status", videoHandler.GetStatus)
+
+		// Export operations
+		if exportHandler != nil {
+			r.Get("/export/estimate", exportHandler.Estimate)
+			r.Post("/export/start", exportHandler.Start)
+			r.Get("/export/status", exportHandler.Status)
+			r.Post("/export/cancel", exportHandler.Cancel)
+		}
 	})
 
 	return r

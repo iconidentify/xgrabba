@@ -110,6 +110,9 @@ func main() {
 		logger,
 	)
 
+	// Initialize export service
+	exportSvc := service.NewExportService(tweetSvc, logger)
+
 	// Start AI metadata backfill in background for legacy tweets
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
 	go tweetSvc.BackfillAIMetadata(backfillCtx)
@@ -248,6 +251,7 @@ func main() {
 	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
 	healthHandler := handler.NewHealthHandler(jobRepo)
 	uiHandler := handler.NewUIHandler()
+	exportHandler := handler.NewExportHandler(exportSvc, logger)
 
 	// Bookmarks OAuth connect handler (optional). Lets you do a one-time browser auth to store refresh token on disk.
 	if cfg.Bookmarks.OAuthClientID != "" {
@@ -259,7 +263,7 @@ func main() {
 	}
 
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, bookmarksOAuthHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

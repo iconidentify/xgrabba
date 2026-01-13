@@ -4367,6 +4367,493 @@
             transition: width 0.3s ease;
         }
 
+        /* =============================================
+           EXPORT MODAL
+           ============================================= */
+        .export-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            margin-right: 8px;
+        }
+
+        .export-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .export-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .export-btn.exporting {
+            border-color: var(--brand-start);
+            color: var(--brand-start);
+        }
+
+        .export-btn.exporting::after {
+            content: attr(data-progress);
+            position: absolute;
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--brand-start);
+            margin-top: 30px;
+        }
+
+        .export-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 250;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .export-modal-overlay.active {
+            display: flex;
+        }
+
+        .export-modal {
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            animation: exportSlideIn 0.2s ease-out;
+        }
+
+        @keyframes exportSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .export-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .export-modal-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .export-modal-header h3 svg {
+            width: 20px;
+            height: 20px;
+            color: var(--brand-start);
+        }
+
+        .export-modal-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .export-modal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .export-modal-close svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .export-modal-body {
+            padding: 20px;
+        }
+
+        .export-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .export-stat-item {
+            text-align: center;
+            padding: 14px 10px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+        }
+
+        .export-stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .export-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .export-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .export-volume-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .export-volume-item {
+            padding: 12px 14px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .export-volume-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .export-volume-item.selected {
+            border-color: var(--brand-start);
+            background: rgba(20, 184, 166, 0.08);
+        }
+
+        .export-volume-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .export-volume-name svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+        }
+
+        .export-volume-space {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            margin-left: 24px;
+        }
+
+        .export-path-input {
+            margin-bottom: 16px;
+        }
+
+        .export-path-input label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .export-path-input input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: monospace;
+        }
+
+        .export-path-input input:focus {
+            outline: none;
+            border-color: var(--brand-start);
+        }
+
+        .export-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 16px;
+        }
+
+        .export-checkbox input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--brand-start);
+        }
+
+        .export-checkbox-label {
+            flex: 1;
+        }
+
+        .export-checkbox-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .export-checkbox-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .export-modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .export-btn-secondary {
+            padding: 10px 18px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .export-btn-secondary:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .export-btn-primary {
+            padding: 10px 20px;
+            background: var(--brand-gradient);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s;
+        }
+
+        .export-btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .export-btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .export-btn-primary svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Progress view */
+        .export-progress-container {
+            margin-bottom: 16px;
+        }
+
+        .export-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .export-progress-phase {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .export-progress-percent {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--brand-start);
+        }
+
+        .export-progress-bar-container {
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .export-progress-bar {
+            height: 100%;
+            background: var(--brand-gradient);
+            border-radius: 4px;
+            transition: width 0.3s ease-out;
+        }
+
+        .export-progress-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .export-progress-stat {
+            padding: 12px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+        }
+
+        .export-progress-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .export-progress-stat-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 4px;
+        }
+
+        .export-current-file {
+            margin-top: 16px;
+            padding: 10px 14px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .export-current-file strong {
+            color: var(--text-secondary);
+        }
+
+        /* Completed view */
+        .export-completed {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .export-completed-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: rgba(0, 186, 124, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .export-completed-icon svg {
+            width: 32px;
+            height: 32px;
+            color: var(--success);
+        }
+
+        .export-completed h4 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .export-completed p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* Error view */
+        .export-error {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .export-error-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: rgba(244, 33, 46, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .export-error-icon svg {
+            width: 32px;
+            height: 32px;
+            color: var(--danger);
+        }
+
+        .export-error h4 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .export-error p {
+            font-size: 13px;
+            color: var(--text-muted);
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .export-no-volumes {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
         .stats-modal-cpu-sparkline {
             width: 100%;
             height: 40px;
@@ -5287,6 +5774,12 @@
             <span class="btn-text-full">Browse Media</span>
             <span class="btn-text-short">Media</span>
         </button>
+        <!-- Export Button -->
+        <button class="export-btn" id="exportBtn" onclick="openExportModal()" title="Export to USB">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+            </svg>
+        </button>
         <!-- X Bookmarks Button -->
         <button class="bookmarks-btn" id="bookmarksBtn" onclick="openBookmarksModal()" title="X Bookmarks">
             <svg class="x-logo" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
@@ -5487,6 +5980,125 @@
                         <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
                     </svg>
                     Start Backfill
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="export-modal-overlay" id="exportModalOverlay" onclick="if(event.target===this && !exportInProgress)closeExportModal()" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+        <div class="export-modal">
+            <div class="export-modal-header">
+                <h3 id="exportModalTitle">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                    Export Archive
+                </h3>
+                <button class="export-modal-close" onclick="closeExportModal()" aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="export-modal-body">
+                <!-- Estimate View -->
+                <div id="exportEstimateView">
+                    <div class="export-stat-grid">
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportTweetCount">--</div>
+                            <div class="export-stat-label">Tweets</div>
+                        </div>
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportMediaCount">--</div>
+                            <div class="export-stat-label">Media Files</div>
+                        </div>
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportSize">--</div>
+                            <div class="export-stat-label">Est. Size</div>
+                        </div>
+                    </div>
+
+                    <div class="export-section-title">Select Destination</div>
+                    <div class="export-volume-list" id="exportVolumeList">
+                        <div class="export-no-volumes">Detecting volumes...</div>
+                    </div>
+
+                    <div class="export-path-input">
+                        <label for="exportDestPath">Export Path</label>
+                        <input type="text" id="exportDestPath" placeholder="/Volumes/USB/xgrabba-export" />
+                    </div>
+
+                    <label class="export-checkbox">
+                        <input type="checkbox" id="exportIncludeViewers" checked />
+                        <div class="export-checkbox-label">
+                            <div class="export-checkbox-title">Include Viewer Applications</div>
+                            <div class="export-checkbox-desc">Add Mac/Win/Linux apps to browse the archive offline</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Progress View -->
+                <div id="exportProgressView" style="display: none;">
+                    <div class="export-progress-container" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <div class="export-progress-header">
+                            <span class="export-progress-phase" id="exportPhase">Preparing...</span>
+                            <span class="export-progress-percent" id="exportPercent">0%</span>
+                        </div>
+                        <div class="export-progress-bar-container">
+                            <div class="export-progress-bar" id="exportProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="export-progress-stats">
+                        <div class="export-progress-stat">
+                            <div class="export-progress-stat-label">Tweets</div>
+                            <div class="export-progress-stat-value" id="exportedTweets">0 / 0</div>
+                        </div>
+                        <div class="export-progress-stat">
+                            <div class="export-progress-stat-label">Data Written</div>
+                            <div class="export-progress-stat-value" id="exportBytesWritten">0 B</div>
+                        </div>
+                    </div>
+
+                    <div class="export-current-file" id="exportCurrentFile" style="display: none;">
+                        <strong>Current:</strong> <span id="exportCurrentFileName">--</span>
+                    </div>
+                </div>
+
+                <!-- Completed View -->
+                <div id="exportCompletedView" style="display: none;">
+                    <div class="export-completed">
+                        <div class="export-completed-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                        </div>
+                        <h4>Export Complete</h4>
+                        <p id="exportCompletedSummary">Your archive has been exported successfully.</p>
+                    </div>
+                </div>
+
+                <!-- Error View -->
+                <div id="exportErrorView" style="display: none;">
+                    <div class="export-error">
+                        <div class="export-error-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                        </div>
+                        <h4>Export Failed</h4>
+                        <p id="exportErrorMessage">An error occurred during export.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="export-modal-footer" id="exportModalFooter">
+                <button class="export-btn-secondary" onclick="closeExportModal()">Cancel</button>
+                <button class="export-btn-primary" id="exportStartBtn" onclick="startExport()">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                    Start Export
                 </button>
             </div>
         </div>
@@ -5839,12 +6451,17 @@
     </div>
 
     <script>
-        // Get API key from URL params first, then localStorage
-        const params = new URLSearchParams(window.location.search);
-        let API_KEY = params.get('key') || localStorage.getItem('xgrabba_api_key') || '';
+        // Offline mode detection - OFFLINE_DATA is set by exported archives
+        // When present, the UI operates without API calls using embedded data
+        const OFFLINE_MODE = typeof window.OFFLINE_DATA !== 'undefined';
+        let OFFLINE_TWEETS = OFFLINE_MODE ? (window.OFFLINE_DATA.tweets || []) : [];
 
-        // Store API key if provided in URL
-        if (params.get('key')) {
+        // Get API key from URL params first, then localStorage (only needed in online mode)
+        const params = new URLSearchParams(window.location.search);
+        let API_KEY = OFFLINE_MODE ? '' : (params.get('key') || localStorage.getItem('xgrabba_api_key') || '');
+
+        // Store API key if provided in URL (skip in offline mode)
+        if (!OFFLINE_MODE && params.get('key')) {
             localStorage.setItem('xgrabba_api_key', params.get('key'));
             window.history.replaceState({}, '', window.location.pathname);
         }
@@ -5892,6 +6509,11 @@
 
         // Fetch tweets from API with pagination and optional search
         async function fetchTweetsPage(offset = 0, limit = 50, searchQuery = '') {
+            // Offline mode: use embedded data with client-side search
+            if (OFFLINE_MODE) {
+                return fetchOfflinePage(offset, limit, searchQuery);
+            }
+
             try {
                 let url;
                 if (searchQuery) {
@@ -5923,6 +6545,78 @@
                 console.error('Failed to fetch tweets:', error);
                 return null;
             }
+        }
+
+        // Offline mode: fetch from embedded data with client-side filtering
+        function fetchOfflinePage(offset, limit, searchQuery) {
+            let results = OFFLINE_TWEETS;
+
+            // Client-side search
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                results = results.filter(tweet => {
+                    if ((tweet.text || '').toLowerCase().includes(query)) return true;
+                    if ((tweet.author?.username || '').toLowerCase().includes(query)) return true;
+                    if ((tweet.author?.display_name || '').toLowerCase().includes(query)) return true;
+                    if ((tweet.ai_title || '').toLowerCase().includes(query)) return true;
+                    if ((tweet.ai_summary || '').toLowerCase().includes(query)) return true;
+                    if ((tweet.ai_tags || []).some(t => t.toLowerCase().includes(query))) return true;
+                    if ((tweet.ai_topics || []).some(t => t.toLowerCase().includes(query))) return true;
+                    // Search media transcripts and captions
+                    for (const media of (tweet.media || [])) {
+                        if ((media.transcript || '').toLowerCase().includes(query)) return true;
+                        if ((media.ai_caption || '').toLowerCase().includes(query)) return true;
+                        if ((media.ai_tags || []).some(t => t.toLowerCase().includes(query))) return true;
+                    }
+                    return false;
+                });
+            }
+
+            const total = results.length;
+            const page = results.slice(offset, offset + limit);
+
+            // Convert offline format to API response format
+            const convertedTweets = page.map(t => convertOfflineTweetToApiFormat(t));
+
+            return {
+                tweets: convertedTweets,
+                total: total,
+                hasMore: offset + limit < total
+            };
+        }
+
+        // Convert offline tweet format to match API response format
+        function convertOfflineTweetToApiFormat(t) {
+            return {
+                tweet_id: t.tweet_id,
+                url: t.url,
+                author: t.author?.username || '',
+                author_display_name: t.author?.display_name || '',
+                author_avatar: t.author?.avatar_path ? t.author.avatar_path : null,
+                author_verified: t.author?.verified || false,
+                text: t.text,
+                posted_at: t.posted_at,
+                archived_at: t.archived_at,
+                media: (t.media || []).map(m => ({
+                    id: m.id,
+                    type: m.type,
+                    url: m.local_path || '',
+                    thumbnail_url: m.thumbnail_path || (m.type === 'image' ? m.local_path : null),
+                    duration: m.duration_seconds || 0,
+                    transcript: m.transcript || '',
+                    transcript_language: m.transcript_language || '',
+                    ai_caption: m.ai_caption || '',
+                    ai_tags: m.ai_tags || []
+                })),
+                metrics: t.metrics || { likes: 0, retweets: 0, replies: 0 },
+                ai_title: t.ai_title || '',
+                ai_summary: t.ai_summary || '',
+                ai_tags: t.ai_tags || [],
+                ai_content_type: t.ai_content_type || '',
+                ai_topics: t.ai_topics || [],
+                status: 'completed',
+                archive_path: t.archive_path || ''
+            };
         }
 
         // Legacy function for backwards compatibility
@@ -6740,9 +7434,12 @@
             `;
         }
 
-        // Helper to add API key to URLs
+        // Helper to add API key to URLs (offline mode: return URL as-is)
         function addApiKey(url) {
-            if (!url || !API_KEY) return url;
+            if (!url) return url;
+            // In offline mode, URLs are already relative paths - no API key needed
+            if (OFFLINE_MODE) return url;
+            if (!API_KEY) return url;
             const separator = url.includes('?') ? '&' : '?';
             return url + separator + 'key=' + encodeURIComponent(API_KEY);
         }
@@ -9079,18 +9776,52 @@
                 openTweetDetail(tweetParam);
             }
 
-            // Check for truncated tweets after initial load
-            checkTruncatedTweets();
+            // Online mode only features
+            if (!OFFLINE_MODE) {
+                // Check for truncated tweets after initial load
+                checkTruncatedTweets();
 
-            // Start polling for new entries
-            startNewEntriesPolling();
+                // Start polling for new entries
+                startNewEntriesPolling();
+            }
         });
 
-        // Keep the list responsive: update AI progress badges without requiring a full reload.
-        startAIPolling();
+        // Online mode only: polling and stats
+        if (!OFFLINE_MODE) {
+            // Keep the list responsive: update AI progress badges without requiring a full reload.
+            startAIPolling();
 
-        // Start system stats polling
-        startSystemStatsPolling();
+            // Start system stats polling
+            startSystemStatsPolling();
+        }
+
+        // Hide server-only features in offline mode
+        if (OFFLINE_MODE) {
+            // Hide action buttons that require server
+            const serverOnlyElements = [
+                'detailRegenAI',      // Regenerate AI button
+                'detailResync',       // Resync button
+                'deleteModal',        // Delete modal
+                'backfillModal',      // Backfill truncated tweets modal
+                'bookmarksBtn',       // Bookmarks button in header
+                'bookmarksModal',     // Bookmarks modal
+            ];
+            serverOnlyElements.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+
+            // Hide stats pills that show server metrics
+            document.querySelectorAll('.stat-pill.archive-stat').forEach(el => {
+                if (el.textContent.includes('CPU') || el.textContent.includes('Disk') ||
+                    el.textContent.includes('Running') || el.textContent.includes('Analyzing')) {
+                    el.style.display = 'none';
+                }
+            });
+
+            // Update title to indicate offline mode
+            document.title = 'XGrabba Archive (Offline)';
+        }
 
         // Bookmarks state
         let bookmarksState = {
@@ -9352,6 +10083,285 @@
                 closeBookmarksModal();
             }
         });
+
+        // =============================================
+        // EXPORT FUNCTIONS
+        // =============================================
+        let exportPollInterval = null;
+        let exportInProgress = false;
+        let selectedVolumePath = '';
+
+        async function openExportModal() {
+            if (isOfflineMode) {
+                alert('Export is not available in offline mode.');
+                return;
+            }
+
+            const overlay = document.getElementById('exportModalOverlay');
+            overlay.classList.add('active');
+
+            // Reset to estimate view
+            showExportView('estimate');
+
+            // Fetch estimate
+            try {
+                const resp = await fetch('/api/v1/export/estimate', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) throw new Error('Failed to fetch estimate');
+                const data = await resp.json();
+
+                document.getElementById('exportTweetCount').textContent = data.tweet_count.toLocaleString();
+                document.getElementById('exportMediaCount').textContent = data.media_count.toLocaleString();
+                document.getElementById('exportSize').textContent = formatExportBytes(data.estimated_size_bytes);
+
+                // Populate volumes
+                const volumeList = document.getElementById('exportVolumeList');
+                if (data.volumes && data.volumes.length > 0) {
+                    volumeList.innerHTML = data.volumes.map(v => `
+                        <div class="export-volume-item" onclick="selectExportVolume('${escapeHtml(v.path)}', this)">
+                            <div class="export-volume-name">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.1.9 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95 0 1.22.99 2.2 2.2 2.2 1.21 0 2.2-.98 2.2-2.2 0-.85-.49-1.58-1.2-1.95V15h3c1.1 0 2-.9 2-2v-2h1V7h-4z"/>
+                                </svg>
+                                ${escapeHtml(v.name)}
+                            </div>
+                            <div class="export-volume-space">${formatExportBytes(v.free_bytes)} free</div>
+                        </div>
+                    `).join('');
+                } else {
+                    volumeList.innerHTML = '<div class="export-no-volumes">No external volumes detected. Enter path manually below.</div>';
+                }
+            } catch (err) {
+                console.error('Export estimate error:', err);
+                document.getElementById('exportVolumeList').innerHTML = '<div class="export-no-volumes">Failed to load volumes. Enter path manually.</div>';
+            }
+
+            // Check if there's already an export in progress
+            try {
+                const statusResp = await fetch('/api/v1/export/status', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (statusResp.ok) {
+                    const status = await statusResp.json();
+                    if (status.active) {
+                        exportInProgress = true;
+                        showExportView('progress');
+                        updateExportProgress(status);
+                        startExportPolling();
+                    }
+                }
+            } catch {}
+        }
+
+        function closeExportModal() {
+            if (exportInProgress) {
+                if (!confirm('Export is in progress. Are you sure you want to close? The export will continue in the background.')) {
+                    return;
+                }
+            }
+            document.getElementById('exportModalOverlay').classList.remove('active');
+            stopExportPolling();
+        }
+
+        function selectExportVolume(path, el) {
+            selectedVolumePath = path;
+            document.getElementById('exportDestPath').value = path + '/xgrabba-export';
+
+            // Update selection UI
+            document.querySelectorAll('.export-volume-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            if (el) el.classList.add('selected');
+        }
+
+        function showExportView(view) {
+            document.getElementById('exportEstimateView').style.display = view === 'estimate' ? 'block' : 'none';
+            document.getElementById('exportProgressView').style.display = view === 'progress' ? 'block' : 'none';
+            document.getElementById('exportCompletedView').style.display = view === 'completed' ? 'block' : 'none';
+            document.getElementById('exportErrorView').style.display = view === 'error' ? 'block' : 'none';
+
+            const footer = document.getElementById('exportModalFooter');
+            const startBtn = document.getElementById('exportStartBtn');
+
+            if (view === 'estimate') {
+                footer.style.display = 'flex';
+                startBtn.style.display = 'flex';
+                startBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                    Start Export
+                `;
+                startBtn.onclick = startExport;
+            } else if (view === 'progress') {
+                footer.style.display = 'flex';
+                startBtn.style.display = 'flex';
+                startBtn.innerHTML = 'Cancel Export';
+                startBtn.onclick = cancelExport;
+            } else if (view === 'completed' || view === 'error') {
+                footer.style.display = 'flex';
+                startBtn.style.display = 'none';
+            }
+        }
+
+        async function startExport() {
+            const destPath = document.getElementById('exportDestPath').value.trim();
+            if (!destPath) {
+                alert('Please enter a destination path.');
+                return;
+            }
+
+            const includeViewers = document.getElementById('exportIncludeViewers').checked;
+
+            try {
+                const resp = await fetch('/api/v1/export/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        dest_path: destPath,
+                        include_viewers: includeViewers
+                    })
+                });
+
+                if (resp.status === 409) {
+                    alert('An export is already in progress.');
+                    return;
+                }
+
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.error || 'Failed to start export');
+                }
+
+                exportInProgress = true;
+                showExportView('progress');
+                updateExportBtn(true);
+                startExportPolling();
+            } catch (err) {
+                console.error('Start export error:', err);
+                document.getElementById('exportErrorMessage').textContent = err.message;
+                showExportView('error');
+            }
+        }
+
+        function startExportPolling() {
+            if (exportPollInterval) return;
+            exportPollInterval = setInterval(pollExportStatus, 500);
+        }
+
+        function stopExportPolling() {
+            if (exportPollInterval) {
+                clearInterval(exportPollInterval);
+                exportPollInterval = null;
+            }
+        }
+
+        async function pollExportStatus() {
+            try {
+                const resp = await fetch('/api/v1/export/status', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) return;
+
+                const status = await resp.json();
+                updateExportProgress(status);
+
+                if (!status.active) {
+                    stopExportPolling();
+                    exportInProgress = false;
+                    updateExportBtn(false);
+
+                    if (status.phase === 'completed') {
+                        document.getElementById('exportCompletedSummary').textContent =
+                            `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) to ${status.dest_path}`;
+                        showExportView('completed');
+                    } else if (status.phase === 'failed') {
+                        document.getElementById('exportErrorMessage').textContent = status.error || 'Export failed';
+                        showExportView('error');
+                    } else if (status.phase === 'cancelled') {
+                        document.getElementById('exportErrorMessage').textContent = 'Export was cancelled.';
+                        showExportView('error');
+                    }
+                }
+            } catch (err) {
+                console.error('Poll export status error:', err);
+            }
+        }
+
+        function updateExportProgress(status) {
+            const percent = status.total_tweets > 0
+                ? Math.round((status.exported_tweets / status.total_tweets) * 100)
+                : 0;
+
+            const phaseLabels = {
+                preparing: 'Preparing...',
+                exporting: 'Exporting...',
+                finalizing: 'Finalizing...'
+            };
+
+            document.getElementById('exportPhase').textContent = phaseLabels[status.phase] || status.phase;
+            document.getElementById('exportPercent').textContent = percent + '%';
+            document.getElementById('exportProgressBar').style.width = percent + '%';
+            document.getElementById('exportedTweets').textContent = `${status.exported_tweets} / ${status.total_tweets}`;
+            document.getElementById('exportBytesWritten').textContent = formatExportBytes(status.bytes_written);
+
+            const progressContainer = document.querySelector('.export-progress-container');
+            if (progressContainer) {
+                progressContainer.setAttribute('aria-valuenow', percent);
+            }
+
+            const currentFileEl = document.getElementById('exportCurrentFile');
+            const currentFileNameEl = document.getElementById('exportCurrentFileName');
+            if (status.current_file) {
+                currentFileEl.style.display = 'block';
+                currentFileNameEl.textContent = status.current_file;
+            } else {
+                currentFileEl.style.display = 'none';
+            }
+
+            // Update header button
+            updateExportBtn(true, percent);
+        }
+
+        function updateExportBtn(exporting, percent = 0) {
+            const btn = document.getElementById('exportBtn');
+            if (exporting) {
+                btn.classList.add('exporting');
+                btn.setAttribute('data-progress', percent + '%');
+                btn.title = `Exporting: ${percent}%`;
+            } else {
+                btn.classList.remove('exporting');
+                btn.removeAttribute('data-progress');
+                btn.title = 'Export to USB';
+            }
+        }
+
+        async function cancelExport() {
+            if (!confirm('Are you sure you want to cancel the export?')) {
+                return;
+            }
+
+            try {
+                await fetch('/api/v1/export/cancel', {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+            } catch (err) {
+                console.error('Cancel export error:', err);
+            }
+        }
+
+        function formatExportBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
 
         // Initial bookmarks status
         refreshBookmarksStatus();
