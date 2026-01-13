@@ -260,25 +260,34 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 
 	s.logger.Info("export destination", "path", opts.DestPath)
 
-	// Check if parent directory exists and is writable
-	parentDir := filepath.Dir(opts.DestPath)
-	if info, err := os.Stat(parentDir); err != nil {
-		s.setExportError(fmt.Sprintf("parent directory does not exist: %s", parentDir))
-		return
-	} else if !info.IsDir() {
-		s.setExportError(fmt.Sprintf("parent path is not a directory: %s", parentDir))
-		return
+	// Check if destination exists - if so, test write access directly on it
+	// If not, check parent directory
+	var writeTestDir string
+	if info, err := os.Stat(opts.DestPath); err == nil && info.IsDir() {
+		// Destination exists and is a directory (e.g., USB mount point)
+		writeTestDir = opts.DestPath
+	} else {
+		// Destination doesn't exist, check parent
+		parentDir := filepath.Dir(opts.DestPath)
+		if info, err := os.Stat(parentDir); err != nil {
+			s.setExportError(fmt.Sprintf("parent directory does not exist: %s", parentDir))
+			return
+		} else if !info.IsDir() {
+			s.setExportError(fmt.Sprintf("parent path is not a directory: %s", parentDir))
+			return
+		}
+		writeTestDir = parentDir
 	}
 
-	// Test write access to parent directory
-	testFile := filepath.Join(parentDir, ".xgrabba_write_test")
+	// Test write access
+	testFile := filepath.Join(writeTestDir, ".xgrabba_write_test")
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		s.setExportError(fmt.Sprintf("no write permission on %s: %v", parentDir, err))
+		s.setExportError(fmt.Sprintf("no write permission on %s: %v", writeTestDir, err))
 		return
 	}
 	os.Remove(testFile)
 
-	// Create destination directory
+	// Create destination directory (no-op if already exists)
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
 		s.setExportError(fmt.Sprintf("create destination directory: %v, path: %s", err, opts.DestPath))
 		return
@@ -862,22 +871,31 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 		return nil, fmt.Errorf("destination path is required")
 	}
 
-	// Check if parent directory exists and is writable
-	parentDir := filepath.Dir(opts.DestPath)
-	if info, err := os.Stat(parentDir); err != nil {
-		return nil, fmt.Errorf("parent directory does not exist: %s", parentDir)
-	} else if !info.IsDir() {
-		return nil, fmt.Errorf("parent path is not a directory: %s", parentDir)
+	// Check if destination exists - if so, test write access directly on it
+	// If not, check parent directory
+	var writeTestDir string
+	if info, err := os.Stat(opts.DestPath); err == nil && info.IsDir() {
+		// Destination exists and is a directory (e.g., USB mount point)
+		writeTestDir = opts.DestPath
+	} else {
+		// Destination doesn't exist, check parent
+		parentDir := filepath.Dir(opts.DestPath)
+		if info, err := os.Stat(parentDir); err != nil {
+			return nil, fmt.Errorf("parent directory does not exist: %s", parentDir)
+		} else if !info.IsDir() {
+			return nil, fmt.Errorf("parent path is not a directory: %s", parentDir)
+		}
+		writeTestDir = parentDir
 	}
 
-	// Test write access to parent directory
-	testFile := filepath.Join(parentDir, ".xgrabba_write_test")
+	// Test write access
+	testFile := filepath.Join(writeTestDir, ".xgrabba_write_test")
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		return nil, fmt.Errorf("no write permission on %s: %v", parentDir, err)
+		return nil, fmt.Errorf("no write permission on %s: %v", writeTestDir, err)
 	}
 	os.Remove(testFile)
 
-	// Create destination directory
+	// Create destination directory (no-op if already exists)
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
 		return nil, fmt.Errorf("create destination directory: %w", err)
 	}
