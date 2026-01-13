@@ -237,9 +237,17 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		return
 	}
 
+	// Sanitize path: remove shell-style backslash escapes (e.g., "\ " -> " ")
+	// Users may copy-paste paths from terminal with escapes
+	destPath := strings.ReplaceAll(opts.DestPath, "\\ ", " ")
+	destPath = strings.ReplaceAll(destPath, "\\(", "(")
+	destPath = strings.ReplaceAll(destPath, "\\)", ")")
+	destPath = strings.ReplaceAll(destPath, "\\'", "'")
+	opts.DestPath = destPath
+
 	// Create destination directory
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
-		s.setExportError(fmt.Sprintf("create destination directory: %v", err))
+		s.setExportError(fmt.Sprintf("create destination directory: %v, path: %s", err, opts.DestPath))
 		return
 	}
 
@@ -523,6 +531,12 @@ type ExportedMedia struct {
 
 // ExportToUSB exports the archive to a USB drive or directory.
 func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
+	// Sanitize path: remove shell-style backslash escapes (e.g., "\ " -> " ")
+	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\ ", " ")
+	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\(", "(")
+	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\)", ")")
+	opts.DestPath = strings.ReplaceAll(opts.DestPath, "\\'", "'")
+
 	s.logger.Info("starting export",
 		"dest", opts.DestPath,
 		"include_viewers", opts.IncludeViewers,
