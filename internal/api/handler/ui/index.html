@@ -5130,6 +5130,15 @@
         let newEntriesPollTimer = null;
         let noteSaveTimeout = null; // For debouncing note saves
 
+        // Video handoff state for seamless playback between views
+        let videoHandoff = {
+            tweetId: null,
+            mediaIndex: null,
+            currentTime: 0,
+            wasPlaying: false,
+            mediaId: null
+        };
+
         // DOM Elements
         const tweetList = document.getElementById('tweetList');
         const searchInput = document.getElementById('searchInput');
@@ -5811,15 +5820,30 @@
         }
 
         // Open tweet detail modal
-        async function openTweetDetail(tweetId) {
-            // Pause any playing inline videos on the main page
+        async function openTweetDetail(tweetId, startMediaIndex = null) {
+            // Capture playing video state for seamless handoff
+            videoHandoff = { tweetId: null, mediaIndex: null, currentTime: 0, wasPlaying: false, mediaId: null };
+
             document.querySelectorAll('.media-thumb.playing').forEach(thumb => {
-                thumb.classList.remove('playing');
                 const vid = thumb.querySelector('video');
-                if (vid) {
+                if (vid && !vid.paused) {
+                    // Capture the state before pausing
+                    const card = thumb.closest('.tweet-card');
+                    const thumbTweetId = card?.dataset?.tweetId;
+                    const mediaIdx = parseInt(thumb.dataset?.mediaIdx || '0', 10);
+
+                    if (thumbTweetId === tweetId) {
+                        videoHandoff = {
+                            tweetId: thumbTweetId,
+                            mediaIndex: mediaIdx,
+                            currentTime: vid.currentTime,
+                            wasPlaying: true,
+                            mediaId: null
+                        };
+                    }
                     vid.pause();
-                    vid.currentTime = 0;
                 }
+                thumb.classList.remove('playing');
             });
 
             const overlay = document.getElementById('detailPanelOverlay');
@@ -6065,6 +6089,26 @@
                 // Check AI analysis status and update button
                 updateRegenerateButtonState(tweet.tweet_id);
 
+                // Seamless video handoff - restore playback position if coming from main view
+                if (videoHandoff.wasPlaying && videoHandoff.tweetId === tweet.tweet_id) {
+                    // Select the correct media index if we have it
+                    if (videoHandoff.mediaIndex !== null && videoHandoff.mediaIndex !== currentDetailMediaIndex) {
+                        selectDetailMedia(videoHandoff.mediaIndex);
+                    }
+
+                    // Find the video in the detail view and restore playback
+                    setTimeout(() => {
+                        const detailVideo = document.querySelector('.detail-main-media-container video');
+                        if (detailVideo) {
+                            detailVideo.currentTime = videoHandoff.currentTime;
+                            detailVideo.play().catch(() => {}); // Autoplay may be blocked
+                        }
+                    }, 100);
+                } else if (startMediaIndex !== null) {
+                    // Open to specific media index if requested
+                    selectDetailMedia(startMediaIndex);
+                }
+
             } catch (error) {
                 console.error('Failed to fetch tweet details:', error);
                 body.innerHTML = `
@@ -6077,14 +6121,38 @@
 
         function closeDetailPanel() {
             const overlay = document.getElementById('detailPanelOverlay');
+
+            // Capture video state for seamless handoff back to main view
+            const detailVideo = overlay.querySelector('.detail-main-media-container video');
+            const wasPlaying = detailVideo && !detailVideo.paused;
+            const currentTime = detailVideo ? detailVideo.currentTime : 0;
+            const tweetId = currentTweetDetail?.tweet_id;
+
             // Pause all videos before closing
             const videos = overlay.querySelectorAll('video');
             videos.forEach(video => {
                 video.pause();
-                video.currentTime = 0;
             });
+
             overlay.classList.remove('active');
             document.body.style.overflow = '';
+
+            // Restore playback to main page video if it was playing
+            if (wasPlaying && tweetId) {
+                setTimeout(() => {
+                    const mainThumb = document.querySelector(`.tweet-card[data-tweet-id="${tweetId}"] .media-thumb[data-media-idx="${currentDetailMediaIndex}"]`);
+                    if (mainThumb) {
+                        const mainVideo = mainThumb.querySelector('video');
+                        if (mainVideo) {
+                            mainVideo.currentTime = currentTime;
+                            mainVideo.play().then(() => {
+                                mainThumb.classList.add('playing');
+                            }).catch(() => {});
+                        }
+                    }
+                }, 100);
+            }
+
             currentTweetDetail = null;
         }
 
