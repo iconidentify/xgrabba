@@ -2814,7 +2814,8 @@
         .detail-media-item video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
+            background: #000;
         }
 
         .detail-media-play {
@@ -3332,6 +3333,652 @@
             max-height: 300px;
             overflow-y: auto;
             margin: 0;
+        }
+
+        /* =============================================
+           MAIN MEDIA VIEWER WITH THUMBNAIL NAVIGATION
+           ============================================= */
+        .detail-main-media {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .detail-main-media-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            max-height: 500px;
+            background: #000;
+        }
+
+        .detail-main-media-container img,
+        .detail-main-media-container video {
+            max-width: 100%;
+            max-height: 500px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .detail-main-media-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .detail-main-media-nav:hover {
+            background: rgba(0, 0, 0, 0.9);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .detail-main-media-nav.prev { left: 12px; }
+        .detail-main-media-nav.next { right: 12px; }
+
+        .detail-main-media-nav svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .detail-main-media-counter {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 12px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 12px;
+            font-size: 12px;
+            color: white;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .detail-main-media-actions {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .detail-main-media:hover .detail-main-media-actions {
+            opacity: 1;
+        }
+
+        .detail-main-media-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .detail-main-media-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .detail-main-media-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Media Thumbnails Strip */
+        .detail-media-thumbs {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+
+        .detail-media-thumbs::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .detail-media-thumbs::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .detail-media-thumb {
+            flex-shrink: 0;
+            width: 64px;
+            height: 48px;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            opacity: 0.6;
+            background: #000;
+        }
+
+        .detail-media-thumb:hover {
+            opacity: 0.9;
+        }
+
+        .detail-media-thumb.active {
+            border-color: var(--brand-start);
+            opacity: 1;
+        }
+
+        .detail-media-thumb img,
+        .detail-media-thumb video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-media-thumb .thumb-video-icon {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .detail-media-thumb .thumb-video-icon svg {
+            width: 16px;
+            height: 16px;
+            color: white;
+        }
+
+        /* =============================================
+           NOTES SECTION
+           ============================================= */
+        .detail-notes-section {
+            margin-top: 16px;
+        }
+
+        .detail-notes-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .detail-notes-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .detail-notes-label svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0.7;
+        }
+
+        .detail-notes-status {
+            font-size: 10px;
+            color: var(--text-muted);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .detail-notes-status.visible {
+            opacity: 1;
+        }
+
+        .detail-notes-status.saved {
+            color: var(--success);
+        }
+
+        .detail-notes-textarea {
+            width: 100%;
+            min-height: 80px;
+            max-height: 200px;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            line-height: 1.5;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        .detail-notes-textarea:focus {
+            outline: none;
+            border-color: var(--brand-start);
+        }
+
+        .detail-notes-textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* =============================================
+           DIAGNOSTICS ICON + MODAL
+           ============================================= */
+        .detail-diag-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .detail-diag-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            border-color: var(--border-color);
+        }
+
+        .detail-diag-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .diag-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .diag-modal-overlay.active {
+            display: flex;
+        }
+
+        .diag-modal {
+            width: 100%;
+            max-width: 600px;
+            max-height: 80vh;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .diag-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .diag-modal-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .diag-modal-header h3 svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+        }
+
+        .diag-modal-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .diag-modal-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .diag-modal-btn.copy {
+            background: var(--brand-start);
+            border: none;
+            color: white;
+        }
+
+        .diag-modal-btn.copy:hover {
+            background: var(--brand-end);
+        }
+
+        .diag-modal-btn.copy.copied {
+            background: var(--success);
+        }
+
+        .diag-modal-btn.close {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .diag-modal-btn.close:hover {
+            background: var(--bg-hover);
+        }
+
+        .diag-modal-btn svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .diag-modal-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .diag-modal-code {
+            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+        }
+
+        /* =============================================
+           NEW ENTRY ANIMATION
+           ============================================= */
+        @keyframes newEntrySlideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.98);
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes newEntryGlow {
+            0% {
+                box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 20px 4px rgba(20, 184, 166, 0.2);
+            }
+            100% {
+                box-shadow: none;
+            }
+        }
+
+        .tweet-card.new-entry {
+            animation: newEntrySlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                       newEntryGlow 1.5s ease-out;
+        }
+
+        .tweet-card.new-entry::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--brand-gradient);
+            animation: newEntryBarFade 2s ease-out forwards;
+        }
+
+        @keyframes newEntryBarFade {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* New entries indicator */
+        .new-entries-indicator {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background: var(--brand-gradient);
+            border-radius: 20px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            z-index: 150;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 20px rgba(20, 184, 166, 0.4);
+            transition: all 0.2s;
+        }
+
+        .new-entries-indicator:hover {
+            transform: translateX(-50%) scale(1.05);
+        }
+
+        .new-entries-indicator.visible {
+            display: flex;
+            animation: indicatorPulse 0.3s ease-out;
+        }
+
+        @keyframes indicatorPulse {
+            0% { transform: translateX(-50%) scale(0.9); opacity: 0; }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+
+        .new-entries-indicator svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* =============================================
+           INFO DROPDOWN (Mobile-Friendly Stats)
+           ============================================= */
+        .info-dropdown-container {
+            position: relative;
+        }
+
+        .info-dropdown-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .info-dropdown-btn:hover,
+        .info-dropdown-btn.active {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        .info-dropdown-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .info-dropdown-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: 280px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            z-index: 200;
+            display: none;
+            overflow: hidden;
+        }
+
+        .info-dropdown-panel.active {
+            display: block;
+            animation: dropdownSlide 0.2s ease-out;
+        }
+
+        @keyframes dropdownSlide {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .info-dropdown-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .info-dropdown-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .info-dropdown-close {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .info-dropdown-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .info-dropdown-close svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .info-dropdown-content {
+            padding: 12px 16px;
+        }
+
+        .info-dropdown-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .info-dropdown-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-dropdown-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .info-dropdown-value {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .info-dropdown-panel {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                border-radius: 16px 16px 0 0;
+                max-height: 70vh;
+            }
+
+            .info-dropdown-panel.active {
+                animation: mobileSlideUp 0.3s ease-out;
+            }
+
+            @keyframes mobileSlideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
+
+            .detail-main-media-container {
+                min-height: 200px;
+                max-height: 350px;
+            }
+
+            .detail-main-media-container img,
+            .detail-main-media-container video {
+                max-height: 350px;
+            }
+
+            .detail-main-media-nav {
+                width: 36px;
+                height: 36px;
+            }
+
+            .detail-main-media-actions {
+                opacity: 1;
+            }
+
+            .detail-media-thumb {
+                width: 56px;
+                height: 42px;
+            }
         }
 
         /* Detail AI Section */
@@ -3993,7 +4640,8 @@
             </svg>
             <span style="background: linear-gradient(135deg, #14b8a6, #0891b2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">xgrabba</span>
         </h1>
-        <button class="btn btn-browse-media" onclick="openGalleryMode()">
+        <!-- Gallery mode deprecated - media now viewed in archive detail panel -->
+        <button class="btn btn-browse-media" onclick="openGalleryMode()" style="display:none;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <rect x="3" y="3" width="7" height="7" rx="1"/>
                 <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -4428,6 +5076,37 @@
         Press <kbd>Esc</kbd> to close, <kbd>/</kbd> to search
     </div>
 
+    <!-- Diagnostics Modal -->
+    <div class="diag-modal-overlay" id="diagModalOverlay" onclick="if(event.target===this)closeDiagModal()">
+        <div class="diag-modal">
+            <div class="diag-modal-header">
+                <h3>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+                    Diagnostics
+                </h3>
+                <div class="diag-modal-actions">
+                    <button class="diag-modal-btn copy" id="diagCopyBtn" onclick="copyDiagnosticsModal()">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        Copy
+                    </button>
+                    <button class="diag-modal-btn close" onclick="closeDiagModal()">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/></svg>
+                        Close
+                    </button>
+                </div>
+            </div>
+            <div class="diag-modal-content">
+                <pre class="diag-modal-code" id="diagModalCode">Loading...</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Entries Indicator -->
+    <div class="new-entries-indicator" id="newEntriesIndicator" onclick="loadNewEntries()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
+        <span id="newEntriesCount">1 new</span>
+    </div>
+
     <script>
         // Get API key from URL params first, then localStorage
         const params = new URLSearchParams(window.location.search);
@@ -4446,6 +5125,10 @@
         let lightboxImages = [];
         let lightboxIndex = 0;
         let searchTimeout = null;
+        let currentDetailMediaIndex = 0; // For main media viewer navigation
+        let lastKnownTweetIds = new Set(); // For detecting new entries
+        let newEntriesPollTimer = null;
+        let noteSaveTimeout = null; // For debouncing note saves
 
         // DOM Elements
         const tweetList = document.getElementById('tweetList');
@@ -5275,48 +5958,45 @@
                             </div>
                         </div>
 
-                        <!-- Media Preview -->
+                        <!-- Main Media Viewer -->
                         <div class="detail-section">
                             <div class="detail-section-header">
                                 <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
                                 Media
                                 <span class="detail-section-badge">${tweet.media?.length || 0}</span>
-                            </div>
-                            <div class="detail-media-grid">
-                                ${renderDetailMediaGrid(tweet)}
-                            </div>
-                            ${hasTranscript ? `
-                                <button class="transcript-toggle-btn" onclick="toggleDetailTranscript(this)">
-                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
-                                    View Transcript
+                                <button class="detail-diag-btn" onclick="openDiagModal('${tweet.tweet_id}')" title="View Diagnostics" style="margin-left: auto;">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
                                 </button>
-                                <div class="detail-transcript-panel" id="transcriptPanel-${tweet.tweet_id}">
-                                    <div class="detail-transcript-header">
-                                        <div class="detail-transcript-info">
-                                            ${transcriptLang ? `<span class="detail-transcript-lang">${escapeHtml(transcriptLang)}</span>` : ''}
-                                            <span>${transcriptWordCount} words</span>
-                                        </div>
-                                        <button class="detail-transcript-copy-btn" onclick="copyTranscriptSimple(this, \`${escapeHtml(transcriptText).replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Copy</button>
-                                    </div>
-                                    <div class="detail-transcript-content">${escapeHtml(transcriptText)}</div>
-                                </div>
-                            ` : ''}
+                            </div>
+                            ${renderMainMediaViewer(tweet, 0)}
                         </div>
 
-                        <!-- Diagnostics (Collapsible) -->
-                        <div class="detail-section" style="border-bottom: none;">
-                            <div class="detail-section-header" style="cursor: pointer;" onclick="toggleDiagnostics()">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 13h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
-                                Diagnostics
-                                <svg id="diagToggleIcon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;margin-left:auto;transition:transform 0.2s;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
-                            </div>
-                            <div id="tweetDiagnostics" style="display:none; margin-top: 8px;">
-                                <div style="display:flex; gap:8px; margin-bottom: 8px;">
-                                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); copyDiagnostics()">Copy JSON</button>
-                                    <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); loadDiagnostics('${tweet.tweet_id}')">Refresh</button>
+                        <!-- Transcript Section -->
+                        ${hasTranscript ? `
+                            <div class="detail-section">
+                                <div class="detail-section-header">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
+                                    Transcript
+                                    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+                                        ${transcriptLang ? `<span class="detail-transcript-lang">${escapeHtml(transcriptLang)}</span>` : ''}
+                                        <span style="font-size:10px; color:var(--text-muted); font-weight:normal; text-transform:none; letter-spacing:0;">${transcriptWordCount} words</span>
+                                        <button class="detail-transcript-copy-btn" onclick="copyTranscriptSimple(this, \`${escapeHtml(transcriptText).replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Copy</button>
+                                    </div>
                                 </div>
-                                <pre class="detail-diagnostics-code">Loading...</pre>
+                                <div class="detail-transcript-content" style="max-height:400px;">${escapeHtml(transcriptText)}</div>
                             </div>
+                        ` : ''}
+
+                        <!-- Notes Section -->
+                        <div class="detail-section detail-notes-section">
+                            <div class="detail-notes-header">
+                                <div class="detail-notes-label">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                                    Notes
+                                </div>
+                                <span class="detail-notes-status"></span>
+                            </div>
+                            <textarea class="detail-notes-textarea" placeholder="Add your notes here..." oninput="handleNoteChange('${tweet.tweet_id}', this)">${escapeHtml(loadNote(tweet.tweet_id))}</textarea>
                         </div>
                     </div>
 
@@ -5384,8 +6064,6 @@
 
                 // Check AI analysis status and update button
                 updateRegenerateButtonState(tweet.tweet_id);
-                // Load diagnostics panel
-                loadDiagnostics(tweet.tweet_id);
 
             } catch (error) {
                 console.error('Failed to fetch tweet details:', error);
@@ -6473,6 +7151,273 @@
             }
         }
 
+        // =============================================
+        // DIAGNOSTICS MODAL (new clean implementation)
+        // =============================================
+        async function openDiagModal(tweetId) {
+            const overlay = document.getElementById('diagModalOverlay');
+            const codeEl = document.getElementById('diagModalCode');
+            overlay.classList.add('active');
+            codeEl.textContent = 'Loading diagnostics...';
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/diagnostics`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!response.ok) throw new Error(`Failed: ${response.status}`);
+                const data = await response.json();
+                lastDiagnosticsJson = data;
+                codeEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                lastDiagnosticsJson = null;
+                codeEl.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        function closeDiagModal() {
+            document.getElementById('diagModalOverlay').classList.remove('active');
+        }
+
+        async function copyDiagnosticsModal() {
+            const btn = document.getElementById('diagCopyBtn');
+            if (!lastDiagnosticsJson) return;
+
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(lastDiagnosticsJson, null, 2));
+                btn.classList.add('copied');
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg> Copy';
+                }, 2000);
+            } catch {
+                // Fallback
+                const text = JSON.stringify(lastDiagnosticsJson, null, 2);
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                btn.classList.add('copied');
+                setTimeout(() => btn.classList.remove('copied'), 2000);
+            }
+        }
+
+        // =============================================
+        // MAIN MEDIA VIEWER WITH NAVIGATION
+        // =============================================
+        function renderMainMediaViewer(tweet, startIndex = 0) {
+            if (!tweet.media || tweet.media.length === 0) {
+                return '<div class="detail-media-empty">No media files</div>';
+            }
+
+            currentDetailMediaIndex = startIndex;
+            const media = tweet.media;
+            const current = media[startIndex];
+            const isVideo = current.type === 'video' || current.content_type?.startsWith('video/');
+            const mediaUrl = addApiKey(current.url);
+            const tweetId = tweet.tweet_id;
+
+            // Build download filename
+            const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
+            const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
+            const dateStr = tweet.posted_at ? new Date(tweet.posted_at).toISOString().split('T')[0] : 'archived';
+            const titleSlug = (tweet.ai_title || tweet.text || '').slice(0, 40).replace(/[^a-zA-Z0-9]+/g, '_').replace(/_+$/, '') || 'media';
+            const baseFilename = `${authorUsername}_${dateStr}_${titleSlug}`;
+            const ext = isVideo ? 'mp4' : (current.filename || current.url || '').split('.').pop() || 'jpg';
+            const downloadName = `${baseFilename}${media.length > 1 ? '_' + (startIndex + 1) : ''}.${ext}`;
+
+            // Main media display
+            const mainMedia = isVideo
+                ? `<video src="${mediaUrl}" controls preload="metadata" playsinline></video>`
+                : `<img src="${mediaUrl}" alt="Media ${startIndex + 1}" onclick="openTheater('${tweetId}', ${startIndex})">`;
+
+            // Navigation (only if multiple media)
+            const showNav = media.length > 1;
+            const navPrev = showNav ? `
+                <button class="detail-main-media-nav prev" onclick="navigateDetailMedia(-1)" ${startIndex === 0 ? 'style="display:none"' : ''}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                </button>` : '';
+            const navNext = showNav ? `
+                <button class="detail-main-media-nav next" onclick="navigateDetailMedia(1)" ${startIndex === media.length - 1 ? 'style="display:none"' : ''}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </button>` : '';
+
+            // Counter
+            const counter = showNav ? `<div class="detail-main-media-counter">${startIndex + 1} / ${media.length}</div>` : '';
+
+            // Action buttons
+            const actions = `
+                <div class="detail-main-media-actions">
+                    ${!isVideo ? `<button class="detail-main-media-btn" onclick="openTheater('${tweetId}', ${startIndex})" title="Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    </button>` : ''}
+                    <a class="detail-main-media-btn" href="${mediaUrl}" download="${escapeHtml(downloadName)}" title="Download">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/></svg>
+                    </a>
+                </div>`;
+
+            // Thumbnails strip
+            let thumbsHtml = '';
+            if (showNav) {
+                thumbsHtml = '<div class="detail-media-thumbs">';
+                media.forEach((m, idx) => {
+                    const thumbUrl = addApiKey(m.url);
+                    const isThumbVideo = m.type === 'video' || m.content_type?.startsWith('video/');
+                    const activeClass = idx === startIndex ? 'active' : '';
+                    thumbsHtml += `
+                        <div class="detail-media-thumb ${activeClass}" onclick="selectDetailMedia(${idx})" style="position:relative;">
+                            ${isThumbVideo
+                                ? `<video src="${thumbUrl}" preload="metadata" muted></video><div class="thumb-video-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>`
+                                : `<img src="${thumbUrl}" alt="Thumbnail ${idx + 1}">`
+                            }
+                        </div>`;
+                });
+                thumbsHtml += '</div>';
+            }
+
+            return `
+                <div class="detail-main-media" id="detailMainMedia">
+                    <div class="detail-main-media-container">
+                        ${navPrev}
+                        ${mainMedia}
+                        ${navNext}
+                        ${counter}
+                        ${actions}
+                    </div>
+                    ${thumbsHtml}
+                </div>`;
+        }
+
+        function navigateDetailMedia(direction) {
+            if (!currentTweetDetail || !currentTweetDetail.media) return;
+            const newIndex = currentDetailMediaIndex + direction;
+            if (newIndex < 0 || newIndex >= currentTweetDetail.media.length) return;
+            selectDetailMedia(newIndex);
+        }
+
+        function selectDetailMedia(index) {
+            if (!currentTweetDetail || !currentTweetDetail.media) return;
+            if (index < 0 || index >= currentTweetDetail.media.length) return;
+
+            currentDetailMediaIndex = index;
+            const container = document.getElementById('detailMainMedia');
+            if (container) {
+                container.outerHTML = renderMainMediaViewer(currentTweetDetail, index);
+            }
+
+            // Pause any playing videos when switching
+            document.querySelectorAll('.detail-main-media-container video').forEach(v => {
+                if (!v.paused) v.pause();
+            });
+        }
+
+        // =============================================
+        // NOTES FUNCTIONALITY (localStorage-based)
+        // =============================================
+        function getNoteKey(tweetId) {
+            return `xgrabba_note_${tweetId}`;
+        }
+
+        function loadNote(tweetId) {
+            return localStorage.getItem(getNoteKey(tweetId)) || '';
+        }
+
+        function saveNote(tweetId, text) {
+            if (text.trim()) {
+                localStorage.setItem(getNoteKey(tweetId), text);
+            } else {
+                localStorage.removeItem(getNoteKey(tweetId));
+            }
+        }
+
+        function handleNoteChange(tweetId, textarea) {
+            const statusEl = textarea.parentElement.querySelector('.detail-notes-status');
+
+            // Clear any pending save
+            if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
+
+            // Show "saving..." status
+            statusEl.textContent = 'Saving...';
+            statusEl.classList.add('visible');
+            statusEl.classList.remove('saved');
+
+            // Debounce save
+            noteSaveTimeout = setTimeout(() => {
+                saveNote(tweetId, textarea.value);
+                statusEl.textContent = 'Saved';
+                statusEl.classList.add('saved');
+                setTimeout(() => {
+                    statusEl.classList.remove('visible', 'saved');
+                }, 1500);
+            }, 500);
+        }
+
+        // =============================================
+        // NEW ENTRIES DETECTION
+        // =============================================
+        function startNewEntriesPolling() {
+            // Initialize with current tweet IDs
+            lastKnownTweetIds = new Set(tweets.map(t => t.tweet_id));
+
+            // Poll every 15 seconds
+            if (newEntriesPollTimer) clearInterval(newEntriesPollTimer);
+            newEntriesPollTimer = setInterval(checkForNewEntries, 15000);
+        }
+
+        async function checkForNewEntries() {
+            try {
+                const response = await fetch('/api/v1/tweets?limit=10', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const newTweets = (data.tweets || []).filter(t => !lastKnownTweetIds.has(t.tweet_id));
+
+                if (newTweets.length > 0) {
+                    showNewEntriesIndicator(newTweets.length);
+                }
+            } catch (err) {
+                console.error('Error checking for new entries:', err);
+            }
+        }
+
+        function showNewEntriesIndicator(count) {
+            const indicator = document.getElementById('newEntriesIndicator');
+            const countEl = document.getElementById('newEntriesCount');
+            countEl.textContent = count === 1 ? '1 new archive' : `${count} new archives`;
+            indicator.classList.add('visible');
+        }
+
+        function hideNewEntriesIndicator() {
+            document.getElementById('newEntriesIndicator').classList.remove('visible');
+        }
+
+        async function loadNewEntries() {
+            hideNewEntriesIndicator();
+
+            // Scroll to top smoothly
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Reload tweets
+            const previousIds = new Set(tweets.map(t => t.tweet_id));
+            await loadTweets({ preserveScroll: false, keepSearch: false });
+
+            // Mark new entries for animation
+            tweets.forEach(t => {
+                if (!previousIds.has(t.tweet_id)) {
+                    lastKnownTweetIds.add(t.tweet_id);
+                    const card = document.querySelector(`.tweet-card[data-tweet-id="${t.tweet_id}"]`);
+                    if (card) {
+                        card.classList.add('new-entry');
+                        setTimeout(() => card.classList.remove('new-entry'), 2000);
+                    }
+                }
+            });
+        }
+
         function toggleTranscript(transcriptId) {
             const el = document.getElementById(transcriptId);
             if (!el) return;
@@ -6990,6 +7935,9 @@
 
             // Check for truncated tweets after initial load
             checkTruncatedTweets();
+
+            // Start polling for new entries
+            startNewEntriesPolling();
         });
 
         // Keep the list responsive: update AI progress badges without requiring a full reload.

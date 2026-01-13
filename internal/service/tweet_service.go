@@ -418,14 +418,29 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 		return nil, domain.ErrInvalidTweetURL
 	}
 
-	// Check if already archived
+	// Check if already archived or in progress - no-op for duplicates
 	if existing, ok := s.tweets[domain.TweetID(tweetID)]; ok {
-		if existing.Status == domain.ArchiveStatusCompleted {
+		switch existing.Status {
+		case domain.ArchiveStatusCompleted:
+			s.logger.Info("duplicate tweet, already archived", "tweet_id", tweetID)
 			return &ArchiveResponse{
 				TweetID: existing.ID,
 				Status:  existing.Status,
 				Message: "Tweet already archived",
 			}, nil
+		case domain.ArchiveStatusPending, domain.ArchiveStatusFetching, domain.ArchiveStatusFetched,
+			domain.ArchiveStatusDownloading, domain.ArchiveStatusDownloaded,
+			domain.ArchiveStatusProcessing, domain.ArchiveStatusAnalyzing:
+			s.logger.Info("duplicate tweet, already in progress", "tweet_id", tweetID, "status", existing.Status)
+			return &ArchiveResponse{
+				TweetID: existing.ID,
+				Status:  existing.Status,
+				Message: "Tweet already being processed",
+			}, nil
+		case domain.ArchiveStatusFailed:
+			// Failed tweets can be re-queued - delete the old one and try again
+			s.logger.Info("re-queueing previously failed tweet", "tweet_id", tweetID)
+			delete(s.tweets, existing.ID)
 		}
 	}
 
