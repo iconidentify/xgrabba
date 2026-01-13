@@ -1,6 +1,7 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,7 @@ type ActiveExport struct {
 	CurrentFile    string             `json:"current_file"`
 	StartedAt      time.Time          `json:"started_at"`
 	Error          string             `json:"error,omitempty"`
+	ZipPath        string             `json:"zip_path,omitempty"` // Path to downloadable zip file
 	cancelFunc     context.CancelFunc `json:"-"`
 }
 
@@ -437,6 +439,7 @@ func (s *ExportService) GetExportStatus() *ActiveExport {
 		CurrentFile:    s.activeExport.CurrentFile,
 		StartedAt:      s.activeExport.StartedAt,
 		Error:          s.activeExport.Error,
+		ZipPath:        s.activeExport.ZipPath,
 	}
 }
 
@@ -458,6 +461,277 @@ func (s *ExportService) CancelExport() error {
 	}
 
 	return nil
+}
+
+// StartDownloadExportAsync starts an export that creates a downloadable zip file.
+func (s *ExportService) StartDownloadExportAsync(opts ExportOptions) (string, error) {
+	s.mu.Lock()
+	if s.activeExport != nil && (s.activeExport.Phase == "preparing" || s.activeExport.Phase == "exporting" || s.activeExport.Phase == "finalizing") {
+		s.mu.Unlock()
+		return "", ErrExportInProgress
+	}
+
+	// Generate export ID
+	exportID := fmt.Sprintf("exp_%d", time.Now().UnixNano())
+
+	// Create cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s.activeExport = &ActiveExport{
+		ID:         exportID,
+		DestPath:   "download",
+		Phase:      "preparing",
+		StartedAt:  time.Now(),
+		cancelFunc: cancel,
+	}
+	s.mu.Unlock()
+
+	// Start export in background
+	go s.runDownloadExportAsync(ctx, opts)
+
+	return exportID, nil
+}
+
+// runDownloadExportAsync creates a zip file with the export and tracks progress.
+func (s *ExportService) runDownloadExportAsync(ctx context.Context, opts ExportOptions) {
+	defer func() {
+		// Ensure phase is set on exit if not already completed/failed/cancelled
+		s.mu.Lock()
+		if s.activeExport != nil && s.activeExport.Phase != "completed" && s.activeExport.Phase != "failed" && s.activeExport.Phase != "cancelled" {
+			s.activeExport.Phase = "failed"
+			s.activeExport.Error = "unexpected exit"
+		}
+		s.mu.Unlock()
+	}()
+
+	// Create temp directory for export
+	tempDir, err := os.MkdirTemp("", "xgrabba-export-*")
+	if err != nil {
+		s.setExportError(fmt.Sprintf("create temp directory: %v", err))
+		return
+	}
+
+	// Get all tweets
+	tweets, _, err := s.tweetSvc.List(ctx, 0, 0)
+	if err != nil {
+		s.setExportError(fmt.Sprintf("list tweets: %v", err))
+		return
+	}
+
+	// Apply filters
+	if opts.DateRange != nil || len(opts.Authors) > 0 || opts.SearchQuery != "" {
+		tweets = s.filterTweets(tweets, opts)
+	}
+
+	// Sort by date (newest first)
+	sort.Slice(tweets, func(i, j int) bool {
+		return tweets[i].CreatedAt.After(tweets[j].CreatedAt)
+	})
+
+	// Update total count
+	s.mu.Lock()
+	s.activeExport.TotalTweets = len(tweets)
+	s.activeExport.Phase = "exporting"
+	s.mu.Unlock()
+
+	// Create data directory
+	dataDir := filepath.Join(tempDir, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		s.setExportError(fmt.Sprintf("create data directory: %v", err))
+		return
+	}
+
+	// Export tweets and media
+	exportedTweets := make([]ExportedTweet, 0, len(tweets))
+
+	for i, tweet := range tweets {
+		select {
+		case <-ctx.Done():
+			os.RemoveAll(tempDir)
+			s.mu.Lock()
+			s.activeExport.Phase = "cancelled"
+			s.mu.Unlock()
+			return
+		default:
+		}
+
+		// Update progress
+		s.mu.Lock()
+		s.activeExport.ExportedTweets = i
+		s.activeExport.CurrentFile = fmt.Sprintf("%s (@%s)", tweet.AITitle, tweet.Author.Username)
+		s.mu.Unlock()
+
+		exported, size, _, err := s.exportTweet(ctx, tweet, dataDir)
+		if err != nil {
+			s.logger.Warn("failed to export tweet", "tweet_id", tweet.ID, "error", err)
+			continue
+		}
+
+		exportedTweets = append(exportedTweets, *exported)
+
+		s.mu.Lock()
+		s.activeExport.BytesWritten += size
+		s.mu.Unlock()
+	}
+
+	// Update phase to finalizing
+	s.mu.Lock()
+	s.activeExport.Phase = "finalizing"
+	s.activeExport.ExportedTweets = len(exportedTweets)
+	s.activeExport.CurrentFile = "Writing metadata..."
+	s.mu.Unlock()
+
+	// Write tweets-data.json
+	tweetsDataPath := filepath.Join(tempDir, "tweets-data.json")
+	tweetsData := map[string]interface{}{
+		"tweets":      exportedTweets,
+		"total":       len(exportedTweets),
+		"exported_at": time.Now().UTC(),
+		"version":     "1.0",
+	}
+
+	tweetsJSON, err := json.MarshalIndent(tweetsData, "", "  ")
+	if err != nil {
+		os.RemoveAll(tempDir)
+		s.setExportError(fmt.Sprintf("marshal tweets data: %v", err))
+		return
+	}
+
+	if err := os.WriteFile(tweetsDataPath, tweetsJSON, 0644); err != nil {
+		os.RemoveAll(tempDir)
+		s.setExportError(fmt.Sprintf("write tweets-data.json: %v", err))
+		return
+	}
+
+	s.mu.Lock()
+	s.activeExport.CurrentFile = "Copying UI..."
+	s.mu.Unlock()
+
+	// Copy offline-capable index.html
+	if err := s.copyOfflineUI(tempDir); err != nil {
+		os.RemoveAll(tempDir)
+		s.setExportError(fmt.Sprintf("copy offline UI: %v", err))
+		return
+	}
+
+	// Write README.txt
+	if err := s.writeReadme(tempDir, len(exportedTweets)); err != nil {
+		s.logger.Warn("failed to write README", "error", err)
+	}
+
+	s.mu.Lock()
+	s.activeExport.CurrentFile = "Creating zip archive..."
+	s.mu.Unlock()
+
+	// Create zip file
+	zipPath := filepath.Join(os.TempDir(), fmt.Sprintf("xgrabba-archive-%s.zip", time.Now().Format("2006-01-02")))
+	if err := s.createZipFromDir(tempDir, zipPath); err != nil {
+		os.RemoveAll(tempDir)
+		s.setExportError(fmt.Sprintf("create zip: %v", err))
+		return
+	}
+
+	// Clean up temp directory
+	os.RemoveAll(tempDir)
+
+	// Mark as completed with zip path
+	s.mu.Lock()
+	s.activeExport.Phase = "completed"
+	s.activeExport.CurrentFile = ""
+	s.activeExport.ZipPath = zipPath
+	s.mu.Unlock()
+
+	s.logger.Info("download export complete",
+		"tweets", len(exportedTweets),
+		"bytes", s.activeExport.BytesWritten,
+		"zip_path", zipPath,
+	)
+}
+
+// createZipFromDir creates a zip archive from a directory.
+func (s *ExportService) createZipFromDir(srcDir, zipPath string) error {
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		return fmt.Errorf("create zip file: %w", err)
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// Walk the source directory
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip the root directory itself
+		if path == srcDir {
+			return nil
+		}
+
+		// Get relative path for zip entry
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+
+		// Create proper zip path (forward slashes)
+		zipEntryPath := filepath.ToSlash(relPath)
+
+		if info.IsDir() {
+			// Create directory entry
+			_, err := zipWriter.Create(zipEntryPath + "/")
+			return err
+		}
+
+		// Create file entry
+		writer, err := zipWriter.Create(zipEntryPath)
+		if err != nil {
+			return err
+		}
+
+		// Copy file contents
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		return err
+	})
+}
+
+// GetDownloadZipPath returns the path to the completed zip file.
+func (s *ExportService) GetDownloadZipPath() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.activeExport == nil {
+		return "", fmt.Errorf("no export available")
+	}
+
+	if s.activeExport.Phase != "completed" {
+		return "", fmt.Errorf("export not completed (phase: %s)", s.activeExport.Phase)
+	}
+
+	if s.activeExport.ZipPath == "" {
+		return "", fmt.Errorf("no download available for this export")
+	}
+
+	return s.activeExport.ZipPath, nil
+}
+
+// CleanupDownloadExport removes the zip file after download.
+func (s *ExportService) CleanupDownloadExport() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.activeExport != nil && s.activeExport.ZipPath != "" {
+		os.Remove(s.activeExport.ZipPath)
+		s.activeExport.ZipPath = ""
+	}
 }
 
 // getFreeDiskSpace returns the free disk space at the given path.

@@ -3,8 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/iconidentify/xgrabba/internal/service"
 )
@@ -27,6 +32,7 @@ func NewExportHandler(exportSvc *service.ExportService, logger *slog.Logger) *Ex
 type ExportStartRequest struct {
 	DestPath       string `json:"dest_path"`
 	IncludeViewers bool   `json:"include_viewers"`
+	Download       bool   `json:"download"` // If true, creates a downloadable zip instead of writing to dest_path
 }
 
 // ExportStartResponse is the response for starting an export.
@@ -47,6 +53,7 @@ type ExportStatusResponse struct {
 	CurrentFile    string `json:"current_file,omitempty"`
 	DestPath       string `json:"dest_path,omitempty"`
 	Error          string `json:"error,omitempty"`
+	DownloadReady  bool   `json:"download_ready,omitempty"` // True when zip is ready for download
 }
 
 // Estimate returns an estimate of the export size.
@@ -70,18 +77,27 @@ func (h *ExportHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.DestPath == "" {
-		http.Error(w, `{"error": "dest_path is required"}`, http.StatusBadRequest)
-		return
-	}
-
 	opts := service.ExportOptions{
 		DestPath:       req.DestPath,
 		IncludeViewers: req.IncludeViewers,
 		ViewerBinDir:   "bin", // Default viewer binary location
 	}
 
-	exportID, err := h.exportSvc.StartExportAsync(opts)
+	var exportID string
+	var err error
+
+	if req.Download {
+		// Download mode: create a zip file for browser download
+		exportID, err = h.exportSvc.StartDownloadExportAsync(opts)
+	} else {
+		// Path mode: write directly to filesystem
+		if req.DestPath == "" {
+			http.Error(w, `{"error": "dest_path is required when download is false"}`, http.StatusBadRequest)
+			return
+		}
+		exportID, err = h.exportSvc.StartExportAsync(opts)
+	}
+
 	if err != nil {
 		if errors.Is(err, service.ErrExportInProgress) {
 			w.Header().Set("Content-Type", "application/json")
@@ -111,6 +127,7 @@ func (h *ExportHandler) Status(w http.ResponseWriter, r *http.Request) {
 	status := h.exportSvc.GetExportStatus()
 
 	active := status.Phase == "preparing" || status.Phase == "exporting" || status.Phase == "finalizing"
+	downloadReady := status.Phase == "completed" && status.ZipPath != ""
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ExportStatusResponse{
@@ -123,6 +140,7 @@ func (h *ExportHandler) Status(w http.ResponseWriter, r *http.Request) {
 		CurrentFile:    status.CurrentFile,
 		DestPath:       status.DestPath,
 		Error:          status.Error,
+		DownloadReady:  downloadReady,
 	})
 }
 
@@ -143,5 +161,85 @@ func (h *ExportHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Export cancellation requested",
+	})
+}
+
+// Download streams the completed export zip file to the client.
+func (h *ExportHandler) Download(w http.ResponseWriter, r *http.Request) {
+	zipPath, err := h.exportSvc.GetDownloadZipPath()
+	if err != nil {
+		h.logger.Warn("download not available", "error", err)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Open the zip file
+	file, err := os.Open(zipPath)
+	if err != nil {
+		h.logger.Error("failed to open zip file", "path", zipPath, "error", err)
+		http.Error(w, `{"error": "failed to read export file"}`, http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Get file info for content length
+	stat, err := file.Stat()
+	if err != nil {
+		h.logger.Error("failed to stat zip file", "path", zipPath, "error", err)
+		http.Error(w, `{"error": "failed to read export file"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Generate filename with date
+	filename := fmt.Sprintf("xgrabba-archive-%s.zip", time.Now().Format("2006-01-02"))
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.Header().Set("Cache-Control", "no-cache")
+
+	// Stream the file
+	_, err = io.Copy(w, file)
+	if err != nil {
+		h.logger.Error("failed to stream zip file", "error", err)
+		return
+	}
+
+	// Clean up the zip file after successful download
+	// Do this in a goroutine to not block the response
+	go func() {
+		// Small delay to ensure the response is fully sent
+		time.Sleep(time.Second)
+		h.exportSvc.CleanupDownloadExport()
+		h.logger.Info("cleaned up export zip file", "path", zipPath)
+	}()
+}
+
+// DownloadDirect serves the zip file directly without cleanup (for resumable downloads).
+func (h *ExportHandler) DownloadDirect(w http.ResponseWriter, r *http.Request) {
+	zipPath, err := h.exportSvc.GetDownloadZipPath()
+	if err != nil {
+		h.logger.Warn("download not available", "error", err)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Use http.ServeFile for better handling of range requests
+	filename := fmt.Sprintf("xgrabba-archive-%s.zip", time.Now().Format("2006-01-02"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	http.ServeFile(w, r, zipPath)
+}
+
+// Cleanup explicitly cleans up the export zip file.
+func (h *ExportHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
+	zipPath, _ := h.exportSvc.GetDownloadZipPath()
+	h.exportSvc.CleanupDownloadExport()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"message":  "Export cleaned up",
+		"zip_path": filepath.Base(zipPath),
 	})
 }

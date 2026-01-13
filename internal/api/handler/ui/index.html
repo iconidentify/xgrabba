@@ -6019,27 +6019,9 @@
                         </div>
                     </div>
 
-                    <div class="export-path-input">
-                        <label for="exportDestPath">Destination Folder</label>
-                        <input type="text" id="exportDestPath" placeholder="Enter or select a folder path..." />
-                    </div>
-
-                    <div class="export-section-title">Quick Select</div>
-                    <div class="export-volume-list" id="exportQuickPaths">
-                        <!-- Populated by JS with common paths -->
-                    </div>
-
-                    <div class="export-section-title" id="exportVolumesTitle" style="display:none;">External Drives</div>
-                    <div class="export-volume-list" id="exportVolumeList" style="display:none;">
-                    </div>
-
-                    <label class="export-checkbox">
-                        <input type="checkbox" id="exportIncludeViewers" checked />
-                        <div class="export-checkbox-label">
-                            <div class="export-checkbox-title">Include Viewer Applications</div>
-                            <div class="export-checkbox-desc">Add Mac/Win/Linux apps to browse the archive offline</div>
-                        </div>
-                    </label>
+                    <p style="color: var(--text-secondary); margin: 16px 0; text-align: center; font-size: 14px;">
+                        Download your entire archive as a portable ZIP file. The archive includes an offline viewer that works in any browser.
+                    </p>
                 </div>
 
                 <!-- Progress View -->
@@ -6078,8 +6060,14 @@
                                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                             </svg>
                         </div>
-                        <h4>Export Complete</h4>
-                        <p id="exportCompletedSummary">Your archive has been exported successfully.</p>
+                        <h4>Export Ready</h4>
+                        <p id="exportCompletedSummary">Your archive is ready to download.</p>
+                        <button class="export-btn-primary" id="exportDownloadBtn" onclick="downloadExport()" style="margin-top: 16px;">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                            Download ZIP
+                        </button>
                     </div>
                 </div>
 
@@ -6100,9 +6088,9 @@
                 <button class="export-btn-secondary" onclick="closeExportModal()">Cancel</button>
                 <button class="export-btn-primary" id="exportStartBtn" onclick="startExport()">
                     <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        <path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/>
                     </svg>
-                    Start Export
+                    Create Archive
                 </button>
             </div>
         </div>
@@ -10093,7 +10081,6 @@
         // =============================================
         let exportPollInterval = null;
         let exportInProgress = false;
-        let selectedVolumePath = '';
 
         async function openExportModal() {
             if (OFFLINE_MODE) {
@@ -10118,68 +10105,11 @@
                 document.getElementById('exportTweetCount').textContent = data.tweet_count.toLocaleString();
                 document.getElementById('exportMediaCount').textContent = data.media_count.toLocaleString();
                 document.getElementById('exportSize').textContent = formatExportBytes(data.estimated_size_bytes);
-
-                // Populate quick paths (common destinations)
-                const quickPaths = [
-                    { name: 'Desktop', path: '~/Desktop/xgrabba-export', icon: 'M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z' },
-                    { name: 'Documents', path: '~/Documents/xgrabba-export', icon: 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
-                    { name: 'Downloads', path: '~/Downloads/xgrabba-export', icon: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z' },
-                ];
-                const quickPathsList = document.getElementById('exportQuickPaths');
-                quickPathsList.innerHTML = quickPaths.map((p, idx) => `
-                    <div class="export-volume-item" data-quick-idx="${idx}">
-                        <div class="export-volume-name">
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="${p.icon}"/>
-                            </svg>
-                            ${escapeHtml(p.name)}
-                        </div>
-                        <div class="export-volume-space">${escapeHtml(p.path)}</div>
-                    </div>
-                `).join('');
-                window._exportQuickPaths = quickPaths;
-                quickPathsList.querySelectorAll('.export-volume-item').forEach(item => {
-                    item.addEventListener('click', function() {
-                        const idx = parseInt(this.dataset.quickIdx);
-                        const qp = window._exportQuickPaths[idx];
-                        if (qp) selectExportPath(qp.path, this);
-                    });
-                });
-
-                // Populate external volumes (if any)
-                const volumeList = document.getElementById('exportVolumeList');
-                const volumesTitle = document.getElementById('exportVolumesTitle');
-                if (data.volumes && data.volumes.length > 0) {
-                    volumesTitle.style.display = 'block';
-                    volumeList.style.display = 'flex';
-                    volumeList.innerHTML = data.volumes.map((v, idx) => `
-                        <div class="export-volume-item" data-volume-idx="${idx}">
-                            <div class="export-volume-name">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.1.9 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95 0 1.22.99 2.2 2.2 2.2 1.21 0 2.2-.98 2.2-2.2 0-.85-.49-1.58-1.2-1.95V15h3c1.1 0 2-.9 2-2v-2h1V7h-4z"/>
-                            </svg>
-                                ${escapeHtml(v.name)}
-                            </div>
-                            <div class="export-volume-space">${formatExportBytes(v.free_bytes)} free</div>
-                        </div>
-                    `).join('');
-                    window._exportVolumes = data.volumes;
-                    volumeList.querySelectorAll('.export-volume-item').forEach(item => {
-                        item.addEventListener('click', function() {
-                            const idx = parseInt(this.dataset.volumeIdx);
-                            const vol = window._exportVolumes[idx];
-                            if (vol) selectExportPath(vol.path + '/xgrabba-export', this);
-                        });
-                    });
-                } else {
-                    volumesTitle.style.display = 'none';
-                    volumeList.style.display = 'none';
-                }
             } catch (err) {
                 console.error('Export estimate error:', err);
             }
 
-            // Check if there's already an export in progress
+            // Check if there's already an export in progress or completed
             try {
                 const statusResp = await fetch('/api/v1/export/status', {
                     headers: { 'X-API-Key': API_KEY }
@@ -10191,6 +10121,11 @@
                         showExportView('progress');
                         updateExportProgress(status);
                         startExportPolling();
+                    } else if (status.download_ready) {
+                        // Export is done and ready to download
+                        document.getElementById('exportCompletedSummary').textContent =
+                            `${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) ready to download`;
+                        showExportView('completed');
                     }
                 }
             } catch {}
@@ -10204,17 +10139,6 @@
             }
             document.getElementById('exportModalOverlay').classList.remove('active');
             stopExportPolling();
-        }
-
-        function selectExportPath(path, el) {
-            selectedVolumePath = path;
-            document.getElementById('exportDestPath').value = path;
-
-            // Update selection UI - clear all selections then select clicked one
-            document.querySelectorAll('.export-volume-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            if (el) el.classList.add('selected');
         }
 
         function showExportView(view) {
@@ -10231,31 +10155,30 @@
                 startBtn.style.display = 'flex';
                 startBtn.innerHTML = `
                     <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        <path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/>
                     </svg>
-                    Start Export
+                    Create Archive
                 `;
                 startBtn.onclick = startExport;
             } else if (view === 'progress') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
-                startBtn.innerHTML = 'Cancel Export';
+                startBtn.innerHTML = 'Cancel';
                 startBtn.onclick = cancelExport;
-            } else if (view === 'completed' || view === 'error') {
+            } else if (view === 'completed') {
                 footer.style.display = 'flex';
-                startBtn.style.display = 'none';
+                startBtn.style.display = 'flex';
+                startBtn.innerHTML = 'Done';
+                startBtn.onclick = closeExportModal;
+            } else if (view === 'error') {
+                footer.style.display = 'flex';
+                startBtn.style.display = 'flex';
+                startBtn.innerHTML = 'Try Again';
+                startBtn.onclick = function() { showExportView('estimate'); };
             }
         }
 
         async function startExport() {
-            const destPath = document.getElementById('exportDestPath').value.trim();
-            if (!destPath) {
-                alert('Please enter a destination path.');
-                return;
-            }
-
-            const includeViewers = document.getElementById('exportIncludeViewers').checked;
-
             try {
                 const resp = await fetch('/api/v1/export/start', {
                     method: 'POST',
@@ -10264,8 +10187,7 @@
                         'X-API-Key': API_KEY
                     },
                     body: JSON.stringify({
-                        dest_path: destPath,
-                        include_viewers: includeViewers
+                        download: true  // Use download mode - creates a zip for browser download
                     })
                 });
 
@@ -10317,9 +10239,13 @@
                     exportInProgress = false;
                     updateExportBtn(false);
 
-                    if (status.phase === 'completed') {
+                    if (status.phase === 'completed' && status.download_ready) {
                         document.getElementById('exportCompletedSummary').textContent =
-                            `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) to ${status.dest_path}`;
+                            `${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) ready to download`;
+                        showExportView('completed');
+                    } else if (status.phase === 'completed') {
+                        document.getElementById('exportCompletedSummary').textContent =
+                            `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)})`;
                         showExportView('completed');
                     } else if (status.phase === 'failed') {
                         document.getElementById('exportErrorMessage').textContent = status.error || 'Export failed';
@@ -10403,6 +10329,44 @@
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function downloadExport() {
+            // Create a temporary link to download the file
+            const downloadUrl = `/api/v1/export/download?api_key=${encodeURIComponent(API_KEY)}`;
+
+            // Use fetch with blob to handle the download with proper auth
+            fetch('/api/v1/export/download', {
+                headers: { 'X-API-Key': API_KEY }
+            })
+            .then(resp => {
+                if (!resp.ok) throw new Error('Download failed');
+                return resp.blob();
+            })
+            .then(blob => {
+                // Create a temporary link and trigger download
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `xgrabba-archive-${new Date().toISOString().split('T')[0]}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+                // Clean up on server after download
+                fetch('/api/v1/export/cleanup', {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                }).catch(() => {});
+
+                // Close modal after successful download
+                closeExportModal();
+            })
+            .catch(err => {
+                console.error('Download error:', err);
+                alert('Failed to download archive: ' + err.message);
+            });
         }
 
         // Initial bookmarks status

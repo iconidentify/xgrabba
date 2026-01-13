@@ -99,6 +99,8 @@ func NewRouter(
 			r.Post("/export/start", exportHandler.Start)
 			r.Get("/export/status", exportHandler.Status)
 			r.Post("/export/cancel", exportHandler.Cancel)
+			r.Get("/export/download", exportHandler.Download)
+			r.Post("/export/cleanup", exportHandler.Cleanup)
 		}
 	})
 
