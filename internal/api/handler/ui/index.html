@@ -314,30 +314,39 @@
             padding: 0 2px;
         }
 
-        /* Media Thumbnails - Compact Grid */
+        /* Media Thumbnails - X.com-style larger media */
         .tweet-media-preview {
             display: grid;
             gap: 2px;
-            border-radius: 6px;
+            border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 8px;
-            max-width: 280px;
+            margin-bottom: 10px;
+            width: 100%;
+            max-width: 510px;
         }
 
-        .tweet-media-preview.single { grid-template-columns: 1fr; max-width: 220px; }
-        .tweet-media-preview.double { grid-template-columns: 1fr 1fr; max-width: 280px; }
-        .tweet-media-preview.triple { grid-template-columns: 1fr 1fr; max-width: 280px; }
-        .tweet-media-preview.quad { grid-template-columns: 1fr 1fr; max-width: 280px; }
+        .tweet-media-preview.single { grid-template-columns: 1fr; }
+        .tweet-media-preview.double { grid-template-columns: 1fr 1fr; }
+        .tweet-media-preview.triple { grid-template-columns: 1fr 1fr; }
+        .tweet-media-preview.quad { grid-template-columns: 1fr 1fr; }
 
         .tweet-media-preview .media-thumb {
             position: relative;
             background: var(--bg-elevated);
-            aspect-ratio: 16/10;
+            aspect-ratio: 16/9;
             overflow: hidden;
+            cursor: pointer;
         }
 
         .tweet-media-preview.single .media-thumb {
             aspect-ratio: 16/9;
+            max-height: 290px;
+        }
+
+        .tweet-media-preview.double .media-thumb,
+        .tweet-media-preview.triple .media-thumb,
+        .tweet-media-preview.quad .media-thumb {
+            aspect-ratio: 1/1;
         }
 
         .tweet-media-preview .media-thumb img,
@@ -345,6 +354,12 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transition: transform 0.2s ease;
+        }
+
+        .tweet-media-preview .media-thumb:hover img,
+        .tweet-media-preview .media-thumb:hover video {
+            transform: scale(1.02);
         }
 
         .tweet-media-preview .video-indicator {
@@ -352,21 +367,66 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.7);
             border-radius: 50%;
-            width: 28px;
-            height: 28px;
+            width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
             pointer-events: none;
+            backdrop-filter: blur(4px);
+            transition: opacity 0.2s ease;
         }
 
         .tweet-media-preview .video-indicator svg {
-            width: 12px;
-            height: 12px;
+            width: 18px;
+            height: 18px;
             fill: white;
-            margin-left: 2px;
+            margin-left: 3px;
+        }
+
+        /* Inline video player styles */
+        .tweet-media-preview .media-thumb.playing {
+            aspect-ratio: auto;
+        }
+
+        .tweet-media-preview .media-thumb.playing .video-indicator {
+            opacity: 0;
+        }
+
+        .tweet-media-preview .media-thumb.playing video {
+            pointer-events: auto;
+        }
+
+        .tweet-media-preview .expand-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            border-radius: 4px;
+            padding: 6px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+            z-index: 2;
+        }
+
+        .tweet-media-preview .media-thumb.playing .expand-btn {
+            display: flex;
+        }
+
+        .tweet-media-preview .expand-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .tweet-media-preview .expand-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: white;
         }
 
         .tweet-media-preview .more-media {
@@ -2880,6 +2940,260 @@
             word-wrap: break-word;
         }
 
+        /* X-Style Tweet Card in Detail Panel */
+        .detail-tweet-card {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .detail-tweet-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: var(--bg-elevated);
+        }
+
+        .detail-tweet-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-tweet-avatar-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--text-muted);
+            background: var(--bg-elevated);
+        }
+
+        .detail-tweet-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .detail-tweet-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+        }
+
+        .detail-tweet-name {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .detail-tweet-name .verified-badge {
+            width: 18px;
+            height: 18px;
+        }
+
+        .detail-tweet-handle {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .detail-tweet-date {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .detail-tweet-date::before {
+            content: "·";
+            margin: 0 6px;
+        }
+
+        .detail-tweet-body {
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 8px;
+        }
+
+        .detail-tweet-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .detail-tweet-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .detail-tweet-stat svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .detail-tweet-stat-value {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* Transcript Toggle Button (near video) */
+        .transcript-toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(20, 184, 166, 0.1);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            border-radius: 20px;
+            color: var(--brand-start);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 8px;
+        }
+
+        .transcript-toggle-btn:hover {
+            background: rgba(20, 184, 166, 0.2);
+            border-color: rgba(20, 184, 166, 0.5);
+        }
+
+        .transcript-toggle-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .transcript-toggle-btn.active {
+            background: rgba(20, 184, 166, 0.2);
+        }
+
+        /* Collapsible Transcript Panel */
+        .detail-transcript-panel {
+            margin-top: 12px;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+            display: none;
+        }
+
+        .detail-transcript-panel.visible {
+            display: block;
+        }
+
+        .detail-transcript-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .detail-transcript-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .detail-transcript-lang {
+            padding: 2px 6px;
+            background: rgba(20, 184, 166, 0.15);
+            border-radius: 4px;
+            color: var(--brand-start);
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .detail-transcript-copy-btn {
+            padding: 4px 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .detail-transcript-copy-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .detail-transcript-copy-btn.copied {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .detail-transcript-content {
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+        }
+
+        .detail-transcript-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .detail-transcript-content::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        /* Insights Section (renamed from AI Analysis) */
+        .detail-insights-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .detail-insights-summary {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .detail-insights-type {
+            display: inline-block;
+            padding: 4px 10px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
         /* Detail Transcript - Enhanced */
         .detail-transcript {
             background: linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(8, 145, 178, 0.05));
@@ -3614,7 +3928,17 @@
             .tweet-media-preview.double,
             .tweet-media-preview.triple,
             .tweet-media-preview.quad {
-                max-width: 240px;
+                max-width: 100%;
+            }
+
+            .tweet-media-preview .video-indicator {
+                width: 36px;
+                height: 36px;
+            }
+
+            .tweet-media-preview .video-indicator svg {
+                width: 14px;
+                height: 14px;
             }
         }
 
@@ -4004,7 +4328,7 @@
         <!-- Main content area with sidebar layout -->
         <div class="theater-main">
             <div class="theater-stage">
-                <button class="theater-nav prev" onclick="navigateTheater(-1)" aria-label="Previous">
+                <button class="theater-nav prev" id="theaterNavPrev" onclick="navigateTheater(-1)" aria-label="Previous">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
                     </svg>
@@ -4014,7 +4338,7 @@
                     <!-- Media (image or video) inserted here dynamically -->
                 </div>
 
-                <button class="theater-nav next" onclick="navigateTheater(1)" aria-label="Next">
+                <button class="theater-nav next" id="theaterNavNext" onclick="navigateTheater(1)" aria-label="Next">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
                     </svg>
@@ -4688,11 +5012,14 @@
                         const isOurUrl = thumbUrl.startsWith('/api/');
                         const finalThumbUrl = isOurUrl ? addApiKey(thumbUrl) : thumbUrl;
 
-                        // For videos without thumbnails, create a placeholder with video element
-                        const videoUrl = isVideo && !thumbUrl ? addApiKey(media.url || '') : '';
+                        // For videos: get the actual video URL for inline playback
+                        const videoUrl = isVideo ? addApiKey(media.url || '') : '';
 
                         return `
-                            <div class="media-thumb" ${isVideo && videoUrl ? `data-video-src="${videoUrl}"` : ''} onclick="event.stopPropagation(); openTheater('${tweet.tweet_id}', ${idx})" style="cursor:pointer;">
+                            <div class="media-thumb ${isVideo ? 'is-video' : ''}"
+                                 ${isVideo ? `data-video-src="${videoUrl}" data-tweet-id="${tweet.tweet_id}" data-media-idx="${idx}"` : ''}
+                                 onclick="event.stopPropagation(); ${isVideo ? `playInlineVideo(this, '${tweet.tweet_id}', ${idx})` : `openTheater('${tweet.tweet_id}', ${idx})`}"
+                                 style="cursor:pointer;">
                                 ${finalThumbUrl
                                     ? `<img src="${finalThumbUrl}" alt="${isVideo ? 'Video thumbnail' : 'Tweet media'}" onerror="this.parentElement.classList.add('no-thumb')">`
                                     : isVideo && videoUrl
@@ -4703,6 +5030,9 @@
                                     <div class="video-indicator">
                                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                     </div>
+                                    <button class="expand-btn" onclick="event.stopPropagation(); openTheater('${tweet.tweet_id}', ${idx})" title="Fullscreen">
+                                        <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                                    </button>
                                 ` : ''}
                                 ${showMore ? `<div class="more-media">+${mediaCount - 4}</div>` : ''}
                             </div>
@@ -4717,6 +5047,74 @@
             if (!url || !API_KEY) return url;
             const separator = url.includes('?') ? '&' : '?';
             return url + separator + 'key=' + encodeURIComponent(API_KEY);
+        }
+
+        // Play video inline in the tweet stream
+        function playInlineVideo(thumb, tweetId, mediaIdx) {
+            // If already playing, toggle play/pause
+            if (thumb.classList.contains('playing')) {
+                const video = thumb.querySelector('video');
+                if (video) {
+                    if (video.paused) {
+                        video.play();
+                    } else {
+                        video.pause();
+                    }
+                }
+                return;
+            }
+
+            // Pause any other playing inline videos
+            document.querySelectorAll('.media-thumb.playing').forEach(el => {
+                if (el !== thumb) {
+                    el.classList.remove('playing');
+                    const vid = el.querySelector('video');
+                    if (vid) {
+                        vid.pause();
+                        vid.currentTime = 0;
+                    }
+                }
+            });
+
+            const videoUrl = thumb.dataset.videoSrc;
+            if (!videoUrl) {
+                // Fallback to theater if no video URL
+                openTheater(tweetId, mediaIdx);
+                return;
+            }
+
+            // Create or get the video element
+            let video = thumb.querySelector('video');
+            if (!video) {
+                video = document.createElement('video');
+                video.src = videoUrl;
+                video.controls = true;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.setAttribute('playsinline', '');
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'contain';
+                video.style.background = '#000';
+
+                // Hide the thumbnail image
+                const img = thumb.querySelector('img');
+                if (img) img.style.display = 'none';
+
+                thumb.insertBefore(video, thumb.firstChild);
+            } else {
+                // Video exists, just play it
+                video.controls = true;
+                video.style.pointerEvents = 'auto';
+                video.play();
+            }
+
+            thumb.classList.add('playing');
+
+            // Handle video end
+            video.addEventListener('ended', () => {
+                thumb.classList.remove('playing');
+            }, { once: true });
         }
 
         // Open tweet detail modal
@@ -4821,9 +5219,42 @@
                 // Check if there are videos (to show "no transcript yet" state)
                 const hasVideos = tweet.media?.some(m => m.type === 'video' || m.content_type?.startsWith('video/'));
 
+                // Format posted date
+                const postedDate = tweet.posted_at ? new Date(tweet.posted_at) : null;
+                const formattedDate = postedDate ? postedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
                 body.innerHTML = `
                     <!-- Left Column: Content -->
                     <div class="detail-content">
+                        <!-- X-Style Tweet Card -->
+                        <div class="detail-tweet-card">
+                            <div class="detail-tweet-avatar">
+                                ${avatarWithKey
+                                    ? `<img src="${avatarWithKey}" alt="${escapeHtml(displayName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="detail-tweet-avatar-placeholder" style="display:none;">${getInitials(authorUsername)}</div>`
+                                    : `<div class="detail-tweet-avatar-placeholder">${getInitials(authorUsername)}</div>`
+                                }
+                            </div>
+                            <div class="detail-tweet-main">
+                                <div class="detail-tweet-header">
+                                    <span class="detail-tweet-name">
+                                        ${escapeHtml(displayName)}
+                                        ${verified ? `<svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/></svg>` : ''}
+                                    </span>
+                                    <span class="detail-tweet-handle">@${escapeHtml(authorUsername)}</span>
+                                    ${formattedDate ? `<span class="detail-tweet-date">${formattedDate}</span>` : ''}
+                                </div>
+                                <div class="detail-tweet-body">${escapeHtml(tweet.text || '')}</div>
+                                ${tweet.metrics && (tweet.metrics.likes || tweet.metrics.views || tweet.metrics.retweets || tweet.metrics.replies) ? `
+                                    <div class="detail-tweet-stats">
+                                        ${tweet.metrics.views ? `<div class="detail-tweet-stat"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span class="detail-tweet-stat-value">${formatNumber(tweet.metrics.views)}</span></div>` : ''}
+                                        ${tweet.metrics.likes ? `<div class="detail-tweet-stat"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span class="detail-tweet-stat-value">${formatNumber(tweet.metrics.likes)}</span></div>` : ''}
+                                        ${tweet.metrics.retweets ? `<div class="detail-tweet-stat"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg><span class="detail-tweet-stat-value">${formatNumber(tweet.metrics.retweets)}</span></div>` : ''}
+                                        ${tweet.metrics.replies ? `<div class="detail-tweet-stat"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"/></svg><span class="detail-tweet-stat-value">${formatNumber(tweet.metrics.replies)}</span></div>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+
                         <!-- Media Preview -->
                         <div class="detail-section">
                             <div class="detail-section-header">
@@ -4834,51 +5265,23 @@
                             <div class="detail-media-grid">
                                 ${renderDetailMediaGrid(tweet)}
                             </div>
-                        </div>
-
-                        <!-- Tweet Text -->
-                        <div class="detail-section">
-                            <div class="detail-section-header">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
-                                Original Post
-                            </div>
-                            <div class="detail-tweet-text">${escapeHtml(tweet.text || 'No text available')}</div>
-                        </div>
-
-                        <!-- Transcript -->
-                        ${hasTranscript ? `
-                            <div class="detail-section detail-transcript">
-                                <div class="detail-section-header">
+                            ${hasTranscript ? `
+                                <button class="transcript-toggle-btn" onclick="toggleDetailTranscript(this)">
                                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
-                                    Audio Transcript
-                                    <div class="detail-transcript-meta">
-                                        ${transcriptLang ? `
-                                            <span class="detail-transcript-badge">
-                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
-                                                ${escapeHtml(transcriptLang.toUpperCase())}
-                                            </span>
-                                        ` : ''}
-                                        <span class="detail-transcript-badge">
-                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z"/></svg>
-                                            ${transcriptWordCount} words
-                                        </span>
-                                        <button class="detail-transcript-copy" onclick="event.stopPropagation(); copyDetailTranscript(this, '${tweet.tweet_id}')">
-                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                                            Copy
-                                        </button>
+                                    View Transcript
+                                </button>
+                                <div class="detail-transcript-panel" id="transcriptPanel-${tweet.tweet_id}">
+                                    <div class="detail-transcript-header">
+                                        <div class="detail-transcript-info">
+                                            ${transcriptLang ? `<span class="detail-transcript-lang">${escapeHtml(transcriptLang)}</span>` : ''}
+                                            <span>${transcriptWordCount} words</span>
+                                        </div>
+                                        <button class="detail-transcript-copy-btn" onclick="copyTranscriptSimple(this, \`${escapeHtml(transcriptText).replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Copy</button>
                                     </div>
+                                    <div class="detail-transcript-content">${escapeHtml(transcriptText)}</div>
                                 </div>
-                                <div class="detail-transcript-text">${escapeHtml(transcriptText)}</div>
-                            </div>
-                        ` : hasVideos ? `
-                            <div class="detail-section">
-                                <div class="detail-no-transcript">
-                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
-                                    <div>No transcript available</div>
-                                    <div style="font-size: 10px; margin-top: 4px; color: var(--text-muted);">Audio transcription is generated when Whisper is enabled</div>
-                                </div>
-                            </div>
-                        ` : ''}
+                            ` : ''}
+                        </div>
 
                         <!-- Diagnostics (Collapsible) -->
                         <div class="detail-section" style="border-bottom: none;">
@@ -4899,80 +5302,27 @@
 
                     <!-- Right Column: Metadata -->
                     <div class="detail-meta">
-                        <!-- AI Analysis -->
+                        <!-- Insights (Summary & Tags) -->
                         <div class="detail-section">
                             <div class="detail-section-header">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                                AI Analysis
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+                                Insights
                             </div>
-                            ${tweet.ai_title ? `
-                                <div class="detail-ai-title">${escapeHtml(tweet.ai_title)}</div>
-                            ` : ''}
                             ${tweet.ai_summary ? `
-                                <div class="detail-ai-summary">${escapeHtml(tweet.ai_summary)}</div>
+                                <div class="detail-insights-summary">${escapeHtml(tweet.ai_summary)}</div>
                             ` : ''}
                             ${tweet.ai_content_type ? `
-                                <div class="detail-ai-type">
-                                    <span class="detail-label">Type</span>
-                                    <span class="detail-value">${escapeHtml(tweet.ai_content_type)}</span>
-                                </div>
+                                <span class="detail-insights-type">${escapeHtml(tweet.ai_content_type)}</span>
                             ` : ''}
                             ${tweet.ai_tags && tweet.ai_tags.length > 0 ? `
                                 <div class="detail-tags">
                                     ${tweet.ai_tags.map(tag => `<span class="detail-tag">${escapeHtml(tag)}</span>`).join('')}
                                 </div>
                             ` : ''}
-                            ${!tweet.ai_title && !tweet.ai_summary && (!tweet.ai_tags || tweet.ai_tags.length === 0) ? `
-                                <div class="detail-ai-pending">AI analysis pending...</div>
+                            ${!tweet.ai_summary && (!tweet.ai_tags || tweet.ai_tags.length === 0) ? `
+                                <div class="detail-ai-pending">Analysis pending...</div>
                             ` : ''}
                         </div>
-
-                        <!-- Author -->
-                        <div class="detail-section">
-                            <div class="detail-section-header">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                                Author
-                            </div>
-                            <div class="detail-author-card">
-                                <div class="detail-author-avatar">
-                                    ${avatarWithKey
-                                        ? `<img src="${avatarWithKey}" alt="${escapeHtml(displayName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;align-items:center;justify-content:center;width:100%;height:100%;font-weight:600;color:var(--text-muted);">${getInitials(authorUsername)}</span>`
-                                        : `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-weight:600;color:var(--text-muted);">${getInitials(authorUsername)}</span>`
-                                    }
-                                </div>
-                                <div class="detail-author-info">
-                                    <div class="detail-author-name">
-                                        ${escapeHtml(displayName)}
-                                        ${verified ? `<svg class="verified-badge" viewBox="0 0 24 24" fill="currentColor"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.04 4.3l-3.54-3.54 1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/></svg>` : ''}
-                                    </div>
-                                    <div class="detail-author-handle">@${escapeHtml(authorUsername)}</div>
-                                </div>
-                            </div>
-                            ${hasAuthorMeta ? `
-                                <div class="detail-author-stats">
-                                    ${followerCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(followerCount)}</span><span class="detail-stat-label">Followers</span></div>` : ''}
-                                    ${followingCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(followingCount)}</span><span class="detail-stat-label">Following</span></div>` : ''}
-                                    ${tweetCount !== undefined ? `<div class="detail-author-stat"><span class="detail-stat-value">${formatNumber(tweetCount)}</span><span class="detail-stat-label">Posts</span></div>` : ''}
-                                </div>
-                            ` : ''}
-                            ${authorBio ? `<div class="detail-author-bio">${escapeHtml(authorBio)}</div>` : ''}
-                        </div>
-
-                        <!-- Engagement Metrics -->
-                        ${tweet.metrics && (tweet.metrics.likes || tweet.metrics.views || tweet.metrics.retweets || tweet.metrics.replies) ? `
-                            <div class="detail-section">
-                                <div class="detail-section-header">
-                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
-                                    Engagement
-                                </div>
-                                <div class="detail-metrics">
-                                    ${tweet.metrics.views ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.views)}</span><span class="detail-metric-label">Views</span></div>` : ''}
-                                    ${tweet.metrics.likes ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.likes)}</span><span class="detail-metric-label">Likes</span></div>` : ''}
-                                    ${tweet.metrics.retweets ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.retweets)}</span><span class="detail-metric-label">Reposts</span></div>` : ''}
-                                    ${tweet.metrics.replies ? `<div class="detail-metric"><span class="detail-metric-value">${formatNumber(tweet.metrics.replies)}</span><span class="detail-metric-label">Replies</span></div>` : ''}
-                                </div>
-                            </div>
-                        ` : ''}
 
                         <!-- Technical Details -->
                         <div class="detail-section">
@@ -5038,6 +5388,42 @@
             overlay.classList.remove('active');
             document.body.style.overflow = '';
             currentTweetDetail = null;
+        }
+
+        // Toggle transcript panel visibility
+        function toggleDetailTranscript(btn) {
+            const panel = btn.nextElementSibling;
+            if (!panel) return;
+
+            const isVisible = panel.classList.contains('visible');
+            if (isVisible) {
+                panel.classList.remove('visible');
+                btn.classList.remove('active');
+                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg> View Transcript`;
+            } else {
+                panel.classList.add('visible');
+                btn.classList.add('active');
+                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg> Hide Transcript`;
+            }
+        }
+
+        // Copy transcript to clipboard without prompt fallback
+        function copyTranscriptSimple(btn, text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = 'var(--success)';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 1500);
+            }).catch(() => {
+                // Silent fail - just show error state briefly
+                btn.textContent = 'Error';
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                }, 1500);
+            });
         }
 
         // Get current tweet index in the tweets array
@@ -5351,6 +5737,9 @@
                 theater.classList.add('controls-visible');
                 setTimeout(() => theater.classList.remove('controls-visible'), 2000);
             }
+
+            // Hide nav arrows if only one media item
+            updateTheaterNavVisibility();
         }
 
         function closeTheater() {
@@ -5376,6 +5765,17 @@
             document.body.style.overflow = '';
             theaterTweet = null;
             theaterMedia = [];
+        }
+
+        // Show/hide navigation arrows based on media count
+        function updateTheaterNavVisibility() {
+            const prevBtn = document.getElementById('theaterNavPrev');
+            const nextBtn = document.getElementById('theaterNavNext');
+            const mediaCount = galleryMode ? allGalleryMedia.length : theaterMedia.length;
+            const showNav = mediaCount > 1;
+
+            if (prevBtn) prevBtn.style.display = showNav ? '' : 'none';
+            if (nextBtn) nextBtn.style.display = showNav ? '' : 'none';
         }
 
         function navigateTheater(direction) {
@@ -5573,8 +5973,16 @@
 
         function updateTheaterAiContent() {
             const content = document.getElementById('theaterAiContent');
-            const media = theaterMedia[theaterIndex];
+            if (!content) return;
+
+            const media = theaterMedia[theaterIndex] || {};
             const tweet = theaterTweet;
+
+            // Handle missing data gracefully
+            if (!tweet) {
+                content.innerHTML = '<div class="ai-panel-section"><div class="ai-panel-text" style="color: var(--text-muted);">No tweet info available</div></div>';
+                return;
+            }
 
             let html = '';
 
@@ -5814,6 +6222,9 @@
             // Show controls briefly then hide
             theater.classList.add('controls-visible');
             setTimeout(() => theater.classList.remove('controls-visible'), 2000);
+
+            // Hide nav arrows if only one media item
+            updateTheaterNavVisibility();
         }
 
         function closeGalleryMode() {
