@@ -59,6 +59,7 @@ type TweetResponse struct {
 	TweetCount        int            `json:"tweet_count,omitempty"`
 	AuthorBio         string         `json:"author_bio,omitempty"`
 	Text              string         `json:"text,omitempty"`
+	TextTruncated     bool           `json:"text_truncated,omitempty"`
 	MediaCount        int            `json:"media_count"`
 	Media             []MediaPreview `json:"media,omitempty"`
 	// Tweet engagement metrics
@@ -238,6 +239,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			TweetCount:        t.Author.TweetCount,
 			AuthorBio:         t.Author.Description,
 			Text:              truncateText(t.Text, 200),
+			TextTruncated:     len(t.Text) > 200,
 			MediaCount:        len(t.Media),
 			Media:             mediaPreviews,
 			LikeCount:         t.Metrics.Likes,
