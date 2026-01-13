@@ -5139,6 +5139,223 @@
             justify-content: flex-end;
         }
 
+        /* Toast Notifications */
+        .usb-notification {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 20px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 400;
+            animation: notificationIn 0.3s ease-out;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            max-width: 380px;
+        }
+
+        .usb-notification.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .usb-notification.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .usb-notification.info {
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        @keyframes notificationIn {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Rename Dialog */
+        .usb-rename-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 270;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .usb-rename-modal {
+            width: 100%;
+            max-width: 360px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            animation: renameModalIn 0.2s ease-out;
+        }
+
+        @keyframes renameModalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .usb-rename-modal h4 {
+            margin: 0 0 16px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .usb-rename-input {
+            margin-bottom: 16px;
+        }
+
+        .usb-rename-input label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .usb-rename-input input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .usb-rename-input input:focus {
+            outline: none;
+            border-color: var(--brand-start);
+        }
+
+        .usb-rename-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        /* Format Progress Modal */
+        .format-progress-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .format-progress-modal {
+            width: 100%;
+            max-width: 400px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            animation: formatModalIn 0.3s ease-out;
+        }
+
+        @keyframes formatModalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .format-progress-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .format-progress-header h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .format-progress-body {
+            padding: 24px;
+        }
+
+        .format-progress-phase {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .format-progress-phase::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--brand-start);
+            border-radius: 50%;
+            animation: phasePulse 1s infinite;
+        }
+
+        @keyframes phasePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .format-progress-bar-container {
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .format-progress-bar {
+            height: 100%;
+            background: var(--brand-gradient);
+            border-radius: 4px;
+            transition: width 0.3s ease-out;
+        }
+
+        .format-progress-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Real-time indicator */
+        .usb-realtime-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .usb-realtime-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: realtimePulse 2s infinite;
+        }
+
+        @keyframes realtimePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 186, 124, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0, 186, 124, 0); }
+        }
+
         .stats-modal-cpu-sparkline {
             width: 100%;
             height: 40px;
@@ -10420,6 +10637,72 @@
         let usbDrives = [];
         let selectedUSBDrive = null;
         let usbAvailable = false;
+        let usbEventSource = null;
+        let formatPollInterval = null;
+
+        // =============================================
+        // USB REAL-TIME DETECTION (SSE)
+        // =============================================
+        function initUSBEventStream() {
+            if (usbEventSource) {
+                usbEventSource.close();
+            }
+
+            usbEventSource = new EventSource(`/api/v1/usb/drives/events?api_key=${API_KEY}`);
+
+            usbEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'init') {
+                        // Initial drive list
+                        usbDrives = data.drives || [];
+                        usbAvailable = true;
+                        renderUSBDrives();
+                        updateUSBBadge();
+                    } else if (data.type === 'added') {
+                        // Drive added - refresh list
+                        loadUSBDrives();
+                        showNotification('USB drive connected', 'success');
+                    } else if (data.type === 'removed') {
+                        // Drive removed
+                        usbDrives = usbDrives.filter(d => d.device !== data.device);
+                        if (selectedUSBDrive && selectedUSBDrive.device === data.device) {
+                            selectedUSBDrive = null;
+                        }
+                        renderUSBDrives();
+                        updateUSBBadge();
+                        showNotification('USB drive disconnected', 'info');
+                    }
+                } catch (e) {
+                    console.warn('SSE parse error:', e);
+                }
+            };
+
+            usbEventSource.onerror = () => {
+                // Fall back to polling on SSE failure
+                console.warn('SSE connection failed, falling back to polling');
+                usbEventSource.close();
+                usbEventSource = null;
+            };
+        }
+
+        function updateUSBBadge() {
+            const badge = document.getElementById('usbBadge');
+            if (usbDrives.length > 0) {
+                badge.textContent = usbDrives.length;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function closeUSBEventStream() {
+            if (usbEventSource) {
+                usbEventSource.close();
+                usbEventSource = null;
+            }
+        }
 
         function selectExportMode(mode) {
             currentExportMode = mode;
@@ -10523,6 +10806,7 @@
                                     ? `<button class="usb-drive-action" onclick="ejectUSBDrive('${drive.device}')">Eject</button>`
                                     : `<button class="usb-drive-action" onclick="mountUSBDrive('${drive.device}')">Mount</button>`
                                 }
+                                <button class="usb-drive-action" onclick="showRenameDialog('${drive.device}', '${deviceName}', '${(drive.label || '').replace(/'/g, "\\'")}')">Rename</button>
                                 <button class="usb-drive-action danger" onclick="showFormatConfirm('${drive.device}', '${deviceName}')">Format</button>
                             </div>
                         </div>
@@ -10552,8 +10836,9 @@
                 }
                 await loadUSBDrives();
                 selectUSBDrive(device);
+                showNotification('Drive mounted successfully', 'success');
             } catch (err) {
-                alert('Failed to mount drive: ' + err.message);
+                showNotification('Failed to mount drive: ' + err.message, 'error');
             }
         }
 
@@ -10573,9 +10858,9 @@
                     selectedUSBDrive = null;
                 }
                 await loadUSBDrives();
-                alert('Drive safely ejected. You can now remove it.');
+                showNotification('Drive safely ejected. You can now remove it.', 'success');
             } catch (err) {
-                alert('Failed to eject drive: ' + err.message);
+                showNotification('Failed to eject drive: ' + err.message, 'error');
             }
         }
 
@@ -10647,10 +10932,104 @@
                     const data = await resp.json();
                     throw new Error(data.message || 'Failed to format drive');
                 }
-                alert('Drive formatted successfully.');
+                showNotification('Drive formatted successfully', 'success');
                 await loadUSBDrives();
             } catch (err) {
-                alert('Failed to format drive: ' + err.message);
+                showNotification('Failed to format drive: ' + err.message, 'error');
+            }
+        }
+
+        // =============================================
+        // TOAST NOTIFICATIONS
+        // =============================================
+        function showNotification(message, type = 'info') {
+            // Remove existing notification
+            const existing = document.querySelector('.usb-notification');
+            if (existing) existing.remove();
+
+            const iconSvg = {
+                success: '<svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;color:var(--success)"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
+                error: '<svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;color:var(--danger)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>',
+                info: '<svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;color:var(--accent-primary)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>'
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `usb-notification ${type}`;
+            notification.innerHTML = `${iconSvg[type] || iconSvg.info}<span>${message}</span>`;
+            document.body.appendChild(notification);
+
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(30px)';
+                notification.style.transition = 'all 0.3s';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+        // =============================================
+        // DRIVE RENAME
+        // =============================================
+        function showRenameDialog(device, deviceName, currentLabel) {
+            const html = `
+                <div class="usb-rename-overlay" id="renameOverlay" onclick="if(event.target===this)closeRenameDialog()">
+                    <div class="usb-rename-modal">
+                        <h4>Rename Drive</h4>
+                        <div class="usb-rename-input">
+                            <label>Drive Label:</label>
+                            <input type="text" id="renameInput" value="${currentLabel || ''}"
+                                   maxlength="32" placeholder="Enter new label" autocomplete="off">
+                        </div>
+                        <div class="usb-rename-actions">
+                            <button class="export-btn-secondary" onclick="closeRenameDialog()">Cancel</button>
+                            <button class="export-btn-primary" onclick="confirmRename('${device}', '${deviceName}')">Rename</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+
+            const input = document.getElementById('renameInput');
+            input.focus();
+            input.select();
+        }
+
+        function closeRenameDialog() {
+            const overlay = document.getElementById('renameOverlay');
+            if (overlay) overlay.remove();
+        }
+
+        async function confirmRename(device, deviceName) {
+            const input = document.getElementById('renameInput');
+            const newLabel = input.value.trim();
+
+            if (!newLabel) {
+                showNotification('Please enter a label', 'error');
+                return;
+            }
+
+            closeRenameDialog();
+
+            try {
+                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/rename`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({ label: newLabel })
+                });
+
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.message || data.error || 'Failed to rename drive');
+                }
+
+                showNotification(`Drive renamed to "${newLabel}"`, 'success');
+                await loadUSBDrives();
+
+            } catch (err) {
+                showNotification('Rename failed: ' + err.message, 'error');
             }
         }
 
@@ -10729,7 +11108,10 @@
                 console.error('Export estimate error:', err);
             }
 
-            // Pre-fetch USB status to show badge
+            // Initialize SSE for real-time USB detection
+            initUSBEventStream();
+
+            // Pre-fetch USB status to show badge (fallback if SSE not ready yet)
             try {
                 const usbResp = await fetch('/api/v1/usb/drives', {
                     headers: { 'X-API-Key': API_KEY }
@@ -10776,6 +11158,7 @@
             }
             document.getElementById('exportModalOverlay').classList.remove('active');
             stopExportPolling();
+            closeUSBEventStream();
         }
 
         function showExportView(view) {

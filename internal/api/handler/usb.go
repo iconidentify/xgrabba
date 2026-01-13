@@ -82,6 +82,32 @@ type USBHealthResponse struct {
 	DrivesDetected int    `json:"drives_detected"`
 }
 
+// RenameRequest is the request for renaming a USB drive.
+type USBRenameRequest struct {
+	Label string `json:"label"`
+}
+
+// RenameResponse is the response for renaming a USB drive.
+type USBRenameResponse struct {
+	Success bool   `json:"success"`
+	Label   string `json:"label"`
+	Message string `json:"message"`
+}
+
+// FormatAsyncRequest is the request for async formatting a USB drive.
+type USBFormatAsyncRequest struct {
+	Filesystem   string `json:"filesystem"`
+	Label        string `json:"label"`
+	ConfirmToken string `json:"confirm_token"`
+}
+
+// FormatAsyncResponse is the response for async format start.
+type USBFormatAsyncResponse struct {
+	OperationID string `json:"operation_id"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
 // ListDrives returns a list of connected USB drives.
 func (h *USBHandler) ListDrives(w http.ResponseWriter, r *http.Request) {
 	drives, err := h.client.ListDrives(r.Context())
@@ -220,6 +246,145 @@ func (h *USBHandler) FormatDrive(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "Drive formatted to " + req.Filesystem + " with label " + req.Label,
 	})
+}
+
+// RenameDrive changes the filesystem label of a USB drive.
+func (h *USBHandler) RenameDrive(w http.ResponseWriter, r *http.Request) {
+	device := chi.URLParam(r, "device")
+	if device == "" {
+		h.writeError(w, http.StatusBadRequest, "device parameter is required")
+		return
+	}
+
+	var req USBRenameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Label == "" {
+		h.writeError(w, http.StatusBadRequest, "label is required")
+		return
+	}
+
+	if len(req.Label) > 32 {
+		h.writeError(w, http.StatusBadRequest, "label too long (max 32 characters)")
+		return
+	}
+
+	err := h.client.RenameDrive(r.Context(), device, req.Label)
+	if err != nil {
+		h.logger.Error("failed to rename USB drive", "device", device, "error", err)
+		h.writeJSON(w, http.StatusInternalServerError, USBRenameResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, USBRenameResponse{
+		Success: true,
+		Label:   req.Label,
+		Message: "Drive renamed successfully",
+	})
+}
+
+// DriveEvents proxies the SSE stream from USB Manager.
+func (h *USBHandler) DriveEvents(w http.ResponseWriter, r *http.Request) {
+	// Proxy the SSE stream from USB Manager
+	proxyURL := h.client.GetBaseURL() + "/api/v1/usb/drives/events"
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, proxyURL, nil)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to create request")
+		return
+	}
+
+	req.Header.Set("Accept", "text/event-stream")
+	if apiKey := h.client.GetAPIKey(); apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	// Use a client without timeout for SSE
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, "failed to connect to USB Manager")
+		return
+	}
+	defer resp.Body.Close()
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Stream the response
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			w.Write(buf[:n])
+			flusher.Flush()
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// FormatDriveAsync starts an async format operation.
+func (h *USBHandler) FormatDriveAsync(w http.ResponseWriter, r *http.Request) {
+	device := chi.URLParam(r, "device")
+	if device == "" {
+		h.writeError(w, http.StatusBadRequest, "device parameter is required")
+		return
+	}
+
+	var req USBFormatAsyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	opID, err := h.client.FormatDriveAsync(r.Context(), device, req.Filesystem, req.Label, req.ConfirmToken)
+	if err != nil {
+		h.logger.Error("failed to start async format", "device", device, "error", err)
+		h.writeJSON(w, http.StatusInternalServerError, USBFormatAsyncResponse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	h.writeJSON(w, http.StatusAccepted, USBFormatAsyncResponse{
+		OperationID: opID,
+		Status:      "started",
+		Message:     "Format operation started",
+	})
+}
+
+// FormatProgress returns the progress of a format operation.
+func (h *USBHandler) FormatProgress(w http.ResponseWriter, r *http.Request) {
+	opID := chi.URLParam(r, "operationID")
+	if opID == "" {
+		h.writeError(w, http.StatusBadRequest, "operationID parameter is required")
+		return
+	}
+
+	progress, err := h.client.GetFormatProgress(r.Context(), opID)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, progress)
 }
 
 // Health returns the health status of the USB Manager.

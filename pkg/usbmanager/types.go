@@ -83,6 +83,46 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// RenameRequest contains parameters for renaming a drive.
+type RenameRequest struct {
+	Label string `json:"label"`
+}
+
+// RenameResponse contains the result of a rename operation.
+type RenameResponse struct {
+	Success bool   `json:"success"`
+	Label   string `json:"label"`
+	Message string `json:"message"`
+}
+
+// FormatProgress tracks formatting progress for async operations.
+type FormatProgress struct {
+	OperationID   string `json:"operation_id"`
+	Device        string `json:"device"`
+	Phase         string `json:"phase"` // preparing, unmounting, formatting, verifying, completed, failed
+	Progress      int    `json:"progress"`
+	BytesWritten  int64  `json:"bytes_written"`
+	TotalBytes    int64  `json:"total_bytes"`
+	StartedAt     int64  `json:"started_at"`
+	EstimatedSecs int    `json:"estimated_seconds"`
+	ElapsedSecs   int    `json:"elapsed_seconds"`
+	Error         string `json:"error,omitempty"`
+}
+
+// FormatAsyncRequest starts an async format operation.
+type FormatAsyncRequest struct {
+	Filesystem   string `json:"filesystem"`
+	Label        string `json:"label"`
+	ConfirmToken string `json:"confirm_token"`
+}
+
+// FormatAsyncResponse returns the operation ID.
+type FormatAsyncResponse struct {
+	OperationID string `json:"operation_id"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
 // Error codes for USB operations.
 const (
 	ErrCodeNoDrives          = "NO_DRIVES"
@@ -91,6 +131,7 @@ const (
 	ErrCodeMountFailed       = "MOUNT_FAILED"
 	ErrCodeUnmountFailed     = "UNMOUNT_FAILED"
 	ErrCodeFormatFailed      = "FORMAT_FAILED"
+	ErrCodeRenameFailed      = "RENAME_FAILED"
 	ErrCodeInvalidToken      = "INVALID_TOKEN"
 	ErrCodeInvalidFilesystem = "INVALID_FILESYSTEM"
 	ErrCodeInsufficientSpace = "INSUFFICIENT_SPACE"

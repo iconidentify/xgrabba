@@ -57,6 +57,34 @@ type FormatResponse struct {
 	Message string `json:"message"`
 }
 
+// RenameResponse is the response from the rename endpoint.
+type RenameResponse struct {
+	Success bool   `json:"success"`
+	Label   string `json:"label"`
+	Message string `json:"message"`
+}
+
+// FormatAsyncResponse is the response from the async format endpoint.
+type FormatAsyncResponse struct {
+	OperationID string `json:"operation_id"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
+// FormatProgress is the progress of a format operation.
+type FormatProgress struct {
+	OperationID   string `json:"operation_id"`
+	Device        string `json:"device"`
+	Phase         string `json:"phase"`
+	Progress      int    `json:"progress"`
+	BytesWritten  int64  `json:"bytes_written"`
+	TotalBytes    int64  `json:"total_bytes"`
+	StartedAt     int64  `json:"started_at"`
+	EstimatedSecs int    `json:"estimated_seconds"`
+	ElapsedSecs   int    `json:"elapsed_seconds"`
+	Error         string `json:"error,omitempty"`
+}
+
 // HealthResponse is the response from the health endpoint.
 type HealthResponse struct {
 	Status         string `json:"status"`
@@ -156,6 +184,27 @@ func (c *Client) FormatDrive(ctx context.Context, device, filesystem, label, con
 	return nil
 }
 
+// RenameDrive changes the filesystem label of a USB drive.
+func (c *Client) RenameDrive(ctx context.Context, device, label string) error {
+	deviceName := device
+	if strings.HasPrefix(device, "/dev/") {
+		deviceName = strings.TrimPrefix(device, "/dev/")
+	}
+
+	body := fmt.Sprintf(`{"label":"%s"}`, label)
+
+	var resp RenameResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/api/v1/usb/drives/"+deviceName+"/rename", strings.NewReader(body), &resp); err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("rename failed: %s", resp.Message)
+	}
+
+	return nil
+}
+
 // Health checks the health of the USB Manager.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 	var resp HealthResponse
@@ -163,6 +212,46 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// FormatDriveAsync starts an async format operation.
+func (c *Client) FormatDriveAsync(ctx context.Context, device, filesystem, label, confirmToken string) (string, error) {
+	deviceName := device
+	if strings.HasPrefix(device, "/dev/") {
+		deviceName = strings.TrimPrefix(device, "/dev/")
+	}
+
+	body := fmt.Sprintf(`{"filesystem":"%s","label":"%s","confirm_token":"%s"}`, filesystem, label, confirmToken)
+
+	var resp FormatAsyncResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/api/v1/usb/drives/"+deviceName+"/format/async", strings.NewReader(body), &resp); err != nil {
+		return "", err
+	}
+
+	if resp.Status == "error" {
+		return "", fmt.Errorf("format failed: %s", resp.Message)
+	}
+
+	return resp.OperationID, nil
+}
+
+// GetFormatProgress returns the progress of a format operation.
+func (c *Client) GetFormatProgress(ctx context.Context, operationID string) (*FormatProgress, error) {
+	var resp FormatProgress
+	if err := c.doRequest(ctx, http.MethodGet, "/api/v1/usb/format/"+operationID, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GetBaseURL returns the base URL of the USB Manager.
+func (c *Client) GetBaseURL() string {
+	return c.baseURL
+}
+
+// GetAPIKey returns the API key.
+func (c *Client) GetAPIKey() string {
+	return c.apiKey
 }
 
 // IsAvailable checks if the USB Manager service is reachable.

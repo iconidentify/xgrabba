@@ -376,3 +376,75 @@ func (m *Manager) GetDrive(device string) (*Drive, error) {
 func (m *Manager) ExportBasePath() string {
 	return m.exportBasePath
 }
+
+// Rename changes the filesystem label of a drive.
+func (m *Manager) Rename(ctx context.Context, device, newLabel string) error {
+	m.mu.RLock()
+	drive, ok := m.drives[device]
+	m.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("device not found: %s", device)
+	}
+
+	partition := drive.Partition
+	if partition == "" {
+		partition = device
+	}
+
+	// Get filesystem type
+	fsInfo, err := m.getFilesystemInfo(partition)
+	if err != nil {
+		return fmt.Errorf("failed to detect filesystem: %w", err)
+	}
+
+	// Need to unmount temporarily for some label tools
+	wasMounted := drive.IsMounted
+	if wasMounted {
+		if err := m.Unmount(ctx, device); err != nil {
+			return fmt.Errorf("failed to unmount for rename: %w", err)
+		}
+	}
+
+	// Run appropriate label command based on filesystem
+	var cmd *exec.Cmd
+	switch fsInfo.fsType {
+	case "exfat":
+		cmd = exec.CommandContext(ctx, "exfatlabel", partition, newLabel)
+	case "ext4", "ext3", "ext2":
+		cmd = exec.CommandContext(ctx, "e2label", partition, newLabel)
+	case "ntfs":
+		cmd = exec.CommandContext(ctx, "ntfslabel", partition, newLabel)
+	case "vfat", "fat32", "fat16", "msdos":
+		cmd = exec.CommandContext(ctx, "fatlabel", partition, newLabel)
+	default:
+		// Remount before returning error
+		if wasMounted {
+			_, _ = m.Mount(ctx, device, "")
+		}
+		return fmt.Errorf("unsupported filesystem for rename: %s", fsInfo.fsType)
+	}
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Try to remount even if rename failed
+		if wasMounted {
+			_, _ = m.Mount(ctx, device, "")
+		}
+		return fmt.Errorf("rename failed: %s: %w", string(output), err)
+	}
+
+	// Update cached drive info
+	m.mu.Lock()
+	drive.Label = newLabel
+	m.mu.Unlock()
+
+	// Remount if it was mounted
+	if wasMounted {
+		if _, err := m.Mount(ctx, device, ""); err != nil {
+			m.logger.Warn("failed to remount after rename", "error", err)
+		}
+	}
+
+	m.logger.Info("renamed drive", "device", device, "new_label", newLabel)
+	return nil
+}

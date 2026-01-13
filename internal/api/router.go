@@ -107,9 +107,13 @@ func NewRouter(
 		// USB drive operations (when USB Manager is available)
 		if usbHandler != nil {
 			r.Get("/usb/drives", usbHandler.ListDrives)
+			r.Get("/usb/drives/events", usbHandler.DriveEvents)
 			r.Post("/usb/drives/{device}/mount", usbHandler.MountDrive)
 			r.Post("/usb/drives/{device}/unmount", usbHandler.UnmountDrive)
 			r.Post("/usb/drives/{device}/format", usbHandler.FormatDrive)
+			r.Post("/usb/drives/{device}/format/async", usbHandler.FormatDriveAsync)
+			r.Post("/usb/drives/{device}/rename", usbHandler.RenameDrive)
+			r.Get("/usb/format/{operationID}", usbHandler.FormatProgress)
 			r.Get("/usb/health", usbHandler.Health)
 		}
 	})
