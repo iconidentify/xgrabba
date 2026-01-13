@@ -729,11 +729,13 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		// If we get a 403, the guest token might be rate-limited; clear it
-		if resp.StatusCode == http.StatusForbidden {
+		// If we get a 403, the guest token might be stale/rate-limited; clear it and retry once
+		if resp.StatusCode == http.StatusForbidden && !isRetry {
+			c.logger.Warn("GraphQL got 403, clearing guest token and retrying", "tweet_id", tweetID)
 			c.guestTokenMu.Lock()
 			c.guestToken = ""
 			c.guestTokenMu.Unlock()
+			return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, true)
 		}
 		return "", fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
 	}
@@ -790,6 +792,10 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 // fetchFromGraphQL fetches complete tweet data using X's GraphQL API.
 // This is used as a fallback when the syndication API fails entirely.
 func (c *Client) fetchFromGraphQL(ctx context.Context, tweetID string) (*domain.Tweet, error) {
+	return c.fetchFromGraphQLWithRetry(ctx, tweetID, false)
+}
+
+func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, isRetry bool) (*domain.Tweet, error) {
 	guestToken, err := c.getGuestToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get guest token: %w", err)
@@ -827,10 +833,13 @@ func (c *Client) fetchFromGraphQL(ctx context.Context, tweetID string) (*domain.
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == http.StatusForbidden {
+		// If we get a 403, the guest token might be stale/rate-limited; clear it and retry once
+		if resp.StatusCode == http.StatusForbidden && !isRetry {
+			c.logger.Warn("GraphQL got 403, clearing guest token and retrying", "tweet_id", tweetID)
 			c.guestTokenMu.Lock()
 			c.guestToken = ""
 			c.guestTokenMu.Unlock()
+			return c.fetchFromGraphQLWithRetry(ctx, tweetID, true)
 		}
 		return nil, fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
 	}
