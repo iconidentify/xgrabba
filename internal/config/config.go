@@ -19,6 +19,7 @@ type Config struct {
 	Download  DownloadConfig  `yaml:"download"`
 	AI        AIConfig        `yaml:"ai"`
 	Bookmarks BookmarksConfig `yaml:"bookmarks"`
+	USB       USBConfig       `yaml:"usb"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -74,6 +75,13 @@ type AIConfig struct {
 	// RegenerateTimeout is the max wall-clock time a background regenerate/backfill job is allowed to run.
 	// This prevents "AI in progress" from getting stuck forever if an external process hangs.
 	RegenerateTimeout time.Duration `yaml:"regenerate_timeout" envconfig:"AI_REGENERATE_TIMEOUT" default:"20m"`
+}
+
+// USBConfig holds USB export configuration.
+type USBConfig struct {
+	Enabled    bool   `yaml:"enabled" envconfig:"USB_ENABLED" default:"false"`
+	ManagerURL string `yaml:"manager_url" envconfig:"USB_MANAGER_URL" default:"http://localhost:8080"`
+	ExportPath string `yaml:"export_path" envconfig:"USB_EXPORT_PATH" default:"/mnt/xgrabba-export"`
 }
 
 // BookmarksConfig controls polling X bookmarks to trigger archiving.

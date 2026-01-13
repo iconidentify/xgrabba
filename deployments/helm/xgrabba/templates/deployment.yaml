@@ -53,6 +53,11 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.usbManager.enabled }}
+            - name: usb-export
+              mountPath: {{ .Values.usbManager.exportPath }}
+              mountPropagation: HostToContainer
+            {{- end }}
         {{- if .Values.samba.enabled }}
         - name: samba
           image: "{{ .Values.samba.image.repository }}:{{ .Values.samba.image.tag }}"
@@ -88,6 +93,12 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.usbManager.enabled }}
+        - name: usb-export
+          hostPath:
+            path: {{ .Values.usbManager.exportPath }}
+            type: DirectoryOrCreate
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

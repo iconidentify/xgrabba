@@ -178,3 +178,26 @@ samba:
     limits:
       cpu: 200m
       memory: 256Mi
+
+# USB Manager for USB drive export support
+# Enables exporting archives directly to USB drives connected to the Kubernetes node
+usbManager:
+  enabled: false
+  image:
+    repository: ghcr.io/iconidentify/xgrabba-usb-manager
+    tag: ""  # Defaults to chart appVersion
+    pullPolicy: IfNotPresent
+  # Base path for mounting USB drives
+  exportPath: /mnt/xgrabba-export
+  # Node selector to target specific nodes with USB access
+  # Example: usb-access: "true"
+  nodeSelector: {}
+  # Tolerations for nodes with USB access
+  tolerations: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

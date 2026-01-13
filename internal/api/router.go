@@ -18,6 +18,7 @@ func NewRouter(
 	uiHandler *handler.UIHandler,
 	exportHandler *handler.ExportHandler,
 	bookmarksOAuthHandler *handler.BookmarksOAuthHandler,
+	usbHandler *handler.USBHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -101,6 +102,15 @@ func NewRouter(
 			r.Post("/export/cancel", exportHandler.Cancel)
 			r.Get("/export/download", exportHandler.Download)
 			r.Post("/export/cleanup", exportHandler.Cleanup)
+		}
+
+		// USB drive operations (when USB Manager is available)
+		if usbHandler != nil {
+			r.Get("/usb/drives", usbHandler.ListDrives)
+			r.Post("/usb/drives/{device}/mount", usbHandler.MountDrive)
+			r.Post("/usb/drives/{device}/unmount", usbHandler.UnmountDrive)
+			r.Post("/usb/drives/{device}/format", usbHandler.FormatDrive)
+			r.Get("/usb/health", usbHandler.Health)
 		}
 	})
 

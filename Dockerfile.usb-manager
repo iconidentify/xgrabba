@@ -1,0 +1,61 @@
+# Build stage
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build arguments for version info
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o xgrabba-usb-manager \
+    ./cmd/usb-manager
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install required tools for USB management
+# - util-linux: provides blkid, mount, umount
+# - exfatprogs: provides mkfs.exfat (exFAT filesystem tools)
+# - e2fsprogs: provides mkfs.ext4
+# - ntfs-3g: provides mkfs.ntfs and NTFS support
+# - eudev: provides udev for device events
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    util-linux \
+    exfatprogs \
+    e2fsprogs \
+    ntfs-3g \
+    eudev
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/xgrabba-usb-manager .
+
+# Create export directory
+RUN mkdir -p /mnt/xgrabba-export
+
+# Default environment variables
+ENV EXPORT_BASE_PATH=/mnt/xgrabba-export \
+    API_KEY=""
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
+
+# Run as root since we need privileged access for mount/format
+ENTRYPOINT ["/app/xgrabba-usb-manager"]

@@ -21,6 +21,7 @@ import (
 	"github.com/iconidentify/xgrabba/internal/worker"
 	"github.com/iconidentify/xgrabba/pkg/grok"
 	"github.com/iconidentify/xgrabba/pkg/twitter"
+	"github.com/iconidentify/xgrabba/pkg/usbclient"
 	"github.com/iconidentify/xgrabba/pkg/whisper"
 )
 
@@ -262,8 +263,16 @@ func main() {
 		}
 	}
 
+	// USB handler (optional). Enables USB drive export when USB Manager is running.
+	var usbHandler *handler.USBHandler
+	if cfg.USB.Enabled {
+		usbClient := usbclient.NewClient(cfg.USB.ManagerURL, cfg.Server.APIKey)
+		usbHandler = handler.NewUSBHandler(usbClient, logger)
+		logger.Info("USB export enabled", "manager_url", cfg.USB.ManagerURL)
+	}
+
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

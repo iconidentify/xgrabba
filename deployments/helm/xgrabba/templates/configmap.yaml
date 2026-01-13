@@ -36,3 +36,8 @@ data:
   DOWNLOAD_TIMEOUT: {{ .Values.config.download.timeout | quote }}
   DOWNLOAD_RETRY_DELAY: {{ .Values.config.download.retryDelay | quote }}
   DOWNLOAD_MAX_RETRY_DELAY: {{ .Values.config.download.maxRetryDelay | quote }}
+  {{- if .Values.usbManager.enabled }}
+  USB_ENABLED: "true"
+  USB_MANAGER_URL: "http://{{ include "xgrabba.fullname" . }}-usb-manager:8080"
+  USB_EXPORT_PATH: {{ .Values.usbManager.exportPath | quote }}
+  {{- end }}

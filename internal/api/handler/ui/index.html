@@ -4854,6 +4854,291 @@
             font-size: 13px;
         }
 
+        /* USB Export Mode Selector */
+        .export-mode-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 4px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+        }
+
+        .export-mode-tab {
+            flex: 1;
+            padding: 10px 14px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.15s;
+            position: relative;
+        }
+
+        .export-mode-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .export-mode-tab.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .export-mode-tab svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .usb-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            background: var(--brand-start);
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* USB Drive List */
+        .usb-drive-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 16px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .usb-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .usb-no-drives {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-muted);
+        }
+
+        .usb-no-drives svg {
+            width: 48px;
+            height: 48px;
+            opacity: 0.4;
+            margin-bottom: 12px;
+        }
+
+        .usb-no-drives p {
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .usb-unavailable {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-muted);
+        }
+
+        .usb-unavailable p {
+            margin: 8px 0 0;
+        }
+
+        .usb-drive-item {
+            padding: 14px 16px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .usb-drive-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .usb-drive-item.selected {
+            border-color: var(--brand-start);
+            background: rgba(20, 184, 166, 0.08);
+        }
+
+        .usb-drive-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .usb-drive-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        .usb-drive-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .usb-drive-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .usb-drive-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .usb-drive-name .usb-mounted-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: rgba(0, 186, 124, 0.15);
+            color: var(--success);
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .usb-drive-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .usb-drive-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .usb-drive-action {
+            padding: 6px 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .usb-drive-action:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .usb-drive-action.danger {
+            color: var(--danger);
+        }
+
+        .usb-drive-action.danger:hover {
+            background: rgba(244, 33, 46, 0.1);
+        }
+
+        /* Format Confirmation Dialog */
+        .usb-format-confirm {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 260;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .usb-format-confirm-box {
+            width: 100%;
+            max-width: 380px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+
+        .usb-format-warning {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(244, 33, 46, 0.1);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .usb-format-warning svg {
+            width: 24px;
+            height: 24px;
+            color: var(--danger);
+            flex-shrink: 0;
+        }
+
+        .usb-format-warning p {
+            font-size: 13px;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .usb-format-input {
+            margin-bottom: 16px;
+        }
+
+        .usb-format-input label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .usb-format-input input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .usb-format-input input:focus {
+            outline: none;
+            border-color: var(--brand-start);
+        }
+
+        .usb-format-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
         .stats-modal-cpu-sparkline {
             width: 100%;
             height: 40px;
@@ -6002,7 +6287,24 @@
                 </button>
             </div>
             <div class="export-modal-body">
-                <!-- Estimate View -->
+                <!-- Export Mode Selector -->
+                <div id="exportModeSelector" class="export-mode-selector">
+                    <button class="export-mode-tab active" id="exportModeDownload" onclick="selectExportMode('download')">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                        Download ZIP
+                    </button>
+                    <button class="export-mode-tab" id="exportModeUSB" onclick="selectExportMode('usb')">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                            <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                        </svg>
+                        USB Drive
+                        <span class="usb-badge" id="usbBadge" style="display: none;">0</span>
+                    </button>
+                </div>
+
+                <!-- Estimate View (Download Mode) -->
                 <div id="exportEstimateView">
                     <div class="export-stat-grid">
                         <div class="export-stat-item">
@@ -6022,6 +6324,39 @@
                     <p style="color: var(--text-secondary); margin: 16px 0; text-align: center; font-size: 14px;">
                         Download your entire archive as a portable ZIP file. The archive includes an offline viewer that works in any browser.
                     </p>
+                </div>
+
+                <!-- USB Drive View -->
+                <div id="exportUSBView" style="display: none;">
+                    <div class="export-stat-grid">
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportUSBTweetCount">--</div>
+                            <div class="export-stat-label">Tweets</div>
+                        </div>
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportUSBMediaCount">--</div>
+                            <div class="export-stat-label">Media Files</div>
+                        </div>
+                        <div class="export-stat-item">
+                            <div class="export-stat-value" id="exportUSBSize">--</div>
+                            <div class="export-stat-label">Est. Size</div>
+                        </div>
+                    </div>
+
+                    <div class="usb-drive-list" id="usbDriveList">
+                        <div class="usb-loading">
+                            <div class="spinner" style="width: 24px; height: 24px;"></div>
+                            <span>Scanning for USB drives...</span>
+                        </div>
+                    </div>
+
+                    <div class="usb-unavailable" id="usbUnavailable" style="display: none;">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48" style="opacity: 0.5;">
+                            <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                        </svg>
+                        <p>USB export is not available.</p>
+                        <p style="font-size: 12px; opacity: 0.7;">USB Manager service not connected.</p>
+                    </div>
                 </div>
 
                 <!-- Progress View -->
@@ -10081,6 +10416,283 @@
         // =============================================
         let exportPollInterval = null;
         let exportInProgress = false;
+        let currentExportMode = 'download'; // 'download' or 'usb'
+        let usbDrives = [];
+        let selectedUSBDrive = null;
+        let usbAvailable = false;
+
+        function selectExportMode(mode) {
+            currentExportMode = mode;
+            document.getElementById('exportModeDownload').classList.toggle('active', mode === 'download');
+            document.getElementById('exportModeUSB').classList.toggle('active', mode === 'usb');
+
+            if (mode === 'usb') {
+                showExportView('usb');
+                loadUSBDrives();
+            } else {
+                showExportView('estimate');
+            }
+        }
+
+        async function loadUSBDrives() {
+            const driveList = document.getElementById('usbDriveList');
+            const unavailable = document.getElementById('usbUnavailable');
+
+            driveList.innerHTML = `
+                <div class="usb-loading">
+                    <div class="spinner" style="width: 24px; height: 24px;"></div>
+                    <span>Scanning for USB drives...</span>
+                </div>
+            `;
+            unavailable.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/v1/usb/drives', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) throw new Error('Failed to fetch USB drives');
+                const data = await resp.json();
+
+                usbAvailable = data.available;
+                usbDrives = data.drives || [];
+
+                // Update badge
+                const badge = document.getElementById('usbBadge');
+                if (usbDrives.length > 0) {
+                    badge.textContent = usbDrives.length;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                if (!usbAvailable) {
+                    driveList.innerHTML = '';
+                    unavailable.style.display = 'block';
+                    return;
+                }
+
+                if (usbDrives.length === 0) {
+                    driveList.innerHTML = `
+                        <div class="usb-no-drives">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                            </svg>
+                            <p>No USB drives detected</p>
+                            <p style="font-size: 11px; margin-top: 4px;">Connect a USB drive to the server</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                renderUSBDrives();
+            } catch (err) {
+                console.error('USB drives error:', err);
+                driveList.innerHTML = '';
+                unavailable.style.display = 'block';
+            }
+        }
+
+        function renderUSBDrives() {
+            const driveList = document.getElementById('usbDriveList');
+            driveList.innerHTML = usbDrives.map(drive => {
+                const deviceName = drive.device.replace('/dev/', '');
+                const label = drive.label || deviceName;
+                const size = formatExportBytes(drive.size_bytes);
+                const free = formatExportBytes(drive.free_bytes);
+                const isSelected = selectedUSBDrive && selectedUSBDrive.device === drive.device;
+
+                return `
+                    <div class="usb-drive-item ${isSelected ? 'selected' : ''}" onclick="selectUSBDrive('${drive.device}')">
+                        <div class="usb-drive-header">
+                            <div class="usb-drive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                                </svg>
+                            </div>
+                            <div class="usb-drive-info">
+                                <div class="usb-drive-name">
+                                    ${label}
+                                    ${drive.is_mounted ? '<span class="usb-mounted-badge">MOUNTED</span>' : ''}
+                                </div>
+                                <div class="usb-drive-meta">
+                                    ${drive.vendor || ''} ${drive.model || ''} - ${size} (${free} free)
+                                </div>
+                            </div>
+                            <div class="usb-drive-actions" onclick="event.stopPropagation()">
+                                ${drive.is_mounted
+                                    ? `<button class="usb-drive-action" onclick="ejectUSBDrive('${drive.device}')">Eject</button>`
+                                    : `<button class="usb-drive-action" onclick="mountUSBDrive('${drive.device}')">Mount</button>`
+                                }
+                                <button class="usb-drive-action danger" onclick="showFormatConfirm('${drive.device}', '${deviceName}')">Format</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectUSBDrive(device) {
+            selectedUSBDrive = usbDrives.find(d => d.device === device);
+            renderUSBDrives();
+
+            const startBtn = document.getElementById('exportStartBtn');
+            startBtn.disabled = !selectedUSBDrive || !selectedUSBDrive.is_mounted;
+        }
+
+        async function mountUSBDrive(device) {
+            try {
+                const deviceName = device.replace('/dev/', '');
+                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/mount`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.message || 'Failed to mount drive');
+                }
+                await loadUSBDrives();
+                selectUSBDrive(device);
+            } catch (err) {
+                alert('Failed to mount drive: ' + err.message);
+            }
+        }
+
+        async function ejectUSBDrive(device) {
+            if (!confirm('Safely eject this drive? Make sure no export is in progress.')) return;
+            try {
+                const deviceName = device.replace('/dev/', '');
+                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/unmount`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.message || 'Failed to eject drive');
+                }
+                if (selectedUSBDrive && selectedUSBDrive.device === device) {
+                    selectedUSBDrive = null;
+                }
+                await loadUSBDrives();
+                alert('Drive safely ejected. You can now remove it.');
+            } catch (err) {
+                alert('Failed to eject drive: ' + err.message);
+            }
+        }
+
+        let formatConfirmDevice = null;
+        function showFormatConfirm(device, deviceName) {
+            formatConfirmDevice = { device, deviceName };
+            const html = `
+                <div class="usb-format-confirm" id="formatConfirmOverlay" onclick="if(event.target===this)closeFormatConfirm()">
+                    <div class="usb-format-confirm-box">
+                        <h4 style="margin: 0 0 16px; font-size: 16px;">Format USB Drive</h4>
+                        <div class="usb-format-warning">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                            <p>This will <strong>ERASE ALL DATA</strong> on ${deviceName}. This cannot be undone.</p>
+                        </div>
+                        <div class="usb-format-input">
+                            <label>Type "${deviceName}" to confirm:</label>
+                            <input type="text" id="formatConfirmInput" placeholder="${deviceName}" autocomplete="off">
+                        </div>
+                        <div class="usb-format-input">
+                            <label>New drive label (optional):</label>
+                            <input type="text" id="formatLabelInput" placeholder="XGRABBA" value="XGRABBA" maxlength="11">
+                        </div>
+                        <div class="usb-format-actions">
+                            <button class="export-btn-secondary" onclick="closeFormatConfirm()">Cancel</button>
+                            <button class="export-btn-primary" style="background: var(--danger);" onclick="confirmFormat()">Format Drive</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+            document.getElementById('formatConfirmInput').focus();
+        }
+
+        function closeFormatConfirm() {
+            const overlay = document.getElementById('formatConfirmOverlay');
+            if (overlay) overlay.remove();
+            formatConfirmDevice = null;
+        }
+
+        async function confirmFormat() {
+            const input = document.getElementById('formatConfirmInput');
+            const labelInput = document.getElementById('formatLabelInput');
+            if (!formatConfirmDevice || input.value !== formatConfirmDevice.deviceName) {
+                alert('Please type the device name correctly to confirm.');
+                return;
+            }
+
+            const label = labelInput.value.trim() || 'XGRABBA';
+            const confirmToken = `erase-all-data-on-${formatConfirmDevice.deviceName}`;
+
+            closeFormatConfirm();
+
+            try {
+                const resp = await fetch(`/api/v1/usb/drives/${formatConfirmDevice.deviceName}/format`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        filesystem: 'exfat',
+                        label: label,
+                        confirm_token: confirmToken
+                    })
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.message || 'Failed to format drive');
+                }
+                alert('Drive formatted successfully.');
+                await loadUSBDrives();
+            } catch (err) {
+                alert('Failed to format drive: ' + err.message);
+            }
+        }
+
+        async function startUSBExport() {
+            if (!selectedUSBDrive || !selectedUSBDrive.is_mounted) {
+                alert('Please select a mounted USB drive first.');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/v1/export/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        download: false,
+                        dest_path: selectedUSBDrive.mount_point
+                    })
+                });
+
+                if (resp.status === 409) {
+                    alert('An export is already in progress.');
+                    return;
+                }
+
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.error || 'Failed to start export');
+                }
+
+                exportInProgress = true;
+                showExportView('progress');
+                updateExportBtn(true);
+                startExportPolling();
+            } catch (err) {
+                console.error('Start USB export error:', err);
+                document.getElementById('exportErrorMessage').textContent = err.message;
+                showExportView('error');
+            }
+        }
 
         async function openExportModal() {
             if (OFFLINE_MODE) {
@@ -10091,7 +10703,10 @@
             const overlay = document.getElementById('exportModalOverlay');
             overlay.classList.add('active');
 
-            // Reset to estimate view
+            // Reset state
+            currentExportMode = 'download';
+            selectedUSBDrive = null;
+            selectExportMode('download');
             showExportView('estimate');
 
             // Fetch estimate
@@ -10105,9 +10720,31 @@
                 document.getElementById('exportTweetCount').textContent = data.tweet_count.toLocaleString();
                 document.getElementById('exportMediaCount').textContent = data.media_count.toLocaleString();
                 document.getElementById('exportSize').textContent = formatExportBytes(data.estimated_size_bytes);
+
+                // Also update USB view stats
+                document.getElementById('exportUSBTweetCount').textContent = data.tweet_count.toLocaleString();
+                document.getElementById('exportUSBMediaCount').textContent = data.media_count.toLocaleString();
+                document.getElementById('exportUSBSize').textContent = formatExportBytes(data.estimated_size_bytes);
             } catch (err) {
                 console.error('Export estimate error:', err);
             }
+
+            // Pre-fetch USB status to show badge
+            try {
+                const usbResp = await fetch('/api/v1/usb/drives', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (usbResp.ok) {
+                    const usbData = await usbResp.json();
+                    const badge = document.getElementById('usbBadge');
+                    if (usbData.available && usbData.drives && usbData.drives.length > 0) {
+                        badge.textContent = usbData.drives.length;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch {}
 
             // Check if there's already an export in progress or completed
             try {
@@ -10142,10 +10779,35 @@
         }
 
         function showExportView(view) {
-            document.getElementById('exportEstimateView').style.display = view === 'estimate' ? 'block' : 'none';
-            document.getElementById('exportProgressView').style.display = view === 'progress' ? 'block' : 'none';
-            document.getElementById('exportCompletedView').style.display = view === 'completed' ? 'block' : 'none';
-            document.getElementById('exportErrorView').style.display = view === 'error' ? 'block' : 'none';
+            const modeSelector = document.getElementById('exportModeSelector');
+            const estimateView = document.getElementById('exportEstimateView');
+            const usbView = document.getElementById('exportUSBView');
+            const progressView = document.getElementById('exportProgressView');
+            const completedView = document.getElementById('exportCompletedView');
+            const errorView = document.getElementById('exportErrorView');
+
+            // Hide all views first
+            estimateView.style.display = 'none';
+            usbView.style.display = 'none';
+            progressView.style.display = 'none';
+            completedView.style.display = 'none';
+            errorView.style.display = 'none';
+
+            // Show mode selector only for estimate/usb views
+            modeSelector.style.display = (view === 'estimate' || view === 'usb') ? 'flex' : 'none';
+
+            // Show the appropriate view
+            if (view === 'estimate') {
+                estimateView.style.display = 'block';
+            } else if (view === 'usb') {
+                usbView.style.display = 'block';
+            } else if (view === 'progress') {
+                progressView.style.display = 'block';
+            } else if (view === 'completed') {
+                completedView.style.display = 'block';
+            } else if (view === 'error') {
+                errorView.style.display = 'block';
+            }
 
             const footer = document.getElementById('exportModalFooter');
             const startBtn = document.getElementById('exportStartBtn');
@@ -10153,6 +10815,7 @@
             if (view === 'estimate') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
+                startBtn.disabled = false;
                 startBtn.innerHTML = `
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/>
@@ -10160,21 +10823,38 @@
                     Create Archive
                 `;
                 startBtn.onclick = startExport;
+            } else if (view === 'usb') {
+                footer.style.display = 'flex';
+                startBtn.style.display = 'flex';
+                startBtn.disabled = !selectedUSBDrive || !selectedUSBDrive.is_mounted;
+                startBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                    </svg>
+                    Export to USB
+                `;
+                startBtn.onclick = startUSBExport;
             } else if (view === 'progress') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
+                startBtn.disabled = false;
                 startBtn.innerHTML = 'Cancel';
                 startBtn.onclick = cancelExport;
             } else if (view === 'completed') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
+                startBtn.disabled = false;
                 startBtn.innerHTML = 'Done';
                 startBtn.onclick = closeExportModal;
             } else if (view === 'error') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
+                startBtn.disabled = false;
                 startBtn.innerHTML = 'Try Again';
-                startBtn.onclick = function() { showExportView('estimate'); };
+                startBtn.onclick = function() {
+                    selectExportMode(currentExportMode);
+                    showExportView(currentExportMode === 'usb' ? 'usb' : 'estimate');
+                };
             }
         }
 

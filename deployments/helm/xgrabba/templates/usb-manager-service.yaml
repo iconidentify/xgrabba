@@ -1,0 +1,19 @@
+{{- if .Values.usbManager.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xgrabba.fullname" . }}-usb-manager
+  labels:
+    {{- include "xgrabba.labels" . | nindent 4 }}
+    app.kubernetes.io/component: usb-manager
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "xgrabba.name" . }}-usb-manager
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

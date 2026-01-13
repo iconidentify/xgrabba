@@ -1,0 +1,93 @@
+{{- if .Values.usbManager.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "xgrabba.fullname" . }}-usb-manager
+  labels:
+    {{- include "xgrabba.labels" . | nindent 4 }}
+    app.kubernetes.io/component: usb-manager
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "xgrabba.name" . }}-usb-manager
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: {{ include "xgrabba.name" . }}-usb-manager
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      hostPID: true
+      {{- with .Values.usbManager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.usbManager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: usb-manager
+          image: "{{ .Values.usbManager.image.repository }}:{{ .Values.usbManager.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.usbManager.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EXPORT_BASE_PATH
+              value: {{ .Values.usbManager.exportPath | quote }}
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xgrabba.fullname" . }}
+                  key: API_KEY
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: run-udev
+              mountPath: /run/udev
+              readOnly: true
+            - name: export-volume
+              mountPath: {{ .Values.usbManager.exportPath }}
+              mountPropagation: Bidirectional
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/usb/health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.usbManager.resources | nindent 12 }}
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: run-udev
+          hostPath:
+            path: /run/udev
+        - name: export-volume
+          hostPath:
+            path: {{ .Values.usbManager.exportPath }}
+            type: DirectoryOrCreate
+{{- end }}
