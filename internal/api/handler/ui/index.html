@@ -10911,12 +10911,13 @@
             }
 
             const label = labelInput.value.trim() || 'XGRABBA';
-            const confirmToken = `erase-all-data-on-${formatConfirmDevice.deviceName}`;
+            const deviceName = formatConfirmDevice.deviceName;
+            const confirmToken = `erase-all-data-on-${deviceName}`;
 
             closeFormatConfirm();
 
             try {
-                const resp = await fetch(`/api/v1/usb/drives/${formatConfirmDevice.deviceName}/format`, {
+                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/format`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
