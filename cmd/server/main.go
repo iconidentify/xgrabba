@@ -122,6 +122,8 @@ func main() {
 
 	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
+	var bookmarkMonitor *bookmarks.Monitor                   // Will be set if monitor starts successfully
+	var bookmarksOAuthHandler *handler.BookmarksOAuthHandler // Declared here so watching goroutine can access it
 	if cfg.Bookmarks.Enabled {
 		ua := "xgrabba-bookmarks-monitor/" + Version
 
@@ -215,6 +217,11 @@ func main() {
 						startCfg := bmCfg
 						startCfg.UserID = st.UserID
 						mon := bookmarks.NewMonitor(startCfg, rtClient, tweetSvc, logger)
+						// Register monitor with handler for control endpoints
+						// (handler is already created by the time this goroutine detects the OAuth store)
+						if bookmarksOAuthHandler != nil {
+							bookmarksOAuthHandler.SetMonitor(mon)
+						}
 						go mon.Start(bookmarksCtx)
 						return
 					}
@@ -231,6 +238,7 @@ func main() {
 				UserAgent: ua,
 			})
 			mon := bookmarks.NewMonitor(bmCfg, bmClient, tweetSvc, logger)
+			bookmarkMonitor = mon
 			go mon.Start(bookmarksCtx)
 		}
 	}
@@ -242,9 +250,12 @@ func main() {
 	uiHandler := handler.NewUIHandler()
 
 	// Bookmarks OAuth connect handler (optional). Lets you do a one-time browser auth to store refresh token on disk.
-	var bookmarksOAuthHandler *handler.BookmarksOAuthHandler
 	if cfg.Bookmarks.OAuthClientID != "" {
 		bookmarksOAuthHandler = handler.NewBookmarksOAuthHandler(cfg.Bookmarks, cfg.Server.APIKey, logger)
+		// Register monitor if it was created synchronously above
+		if bookmarkMonitor != nil {
+			bookmarksOAuthHandler.SetMonitor(bookmarkMonitor)
+		}
 	}
 
 	// Setup router

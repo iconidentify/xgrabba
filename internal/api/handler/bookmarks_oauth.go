@@ -18,6 +18,17 @@ import (
 	"github.com/iconidentify/xgrabba/internal/config"
 )
 
+// BookmarksMonitor is the interface for interacting with the bookmarks monitor.
+type BookmarksMonitor interface {
+	State() bookmarks.MonitorState
+	LastPoll() time.Time
+	LastError() string
+	Pause()
+	Resume()
+	CheckNow()
+	Activity() *bookmarks.ActivityLog
+}
+
 type BookmarksOAuthHandler struct {
 	cfg    config.BookmarksConfig
 	apiKey string
@@ -29,6 +40,9 @@ type BookmarksOAuthHandler struct {
 	// in-memory state store for PKCE (single replica)
 	mu     sync.Mutex
 	states map[string]pkceState
+
+	// Monitor reference (can be set after creation)
+	monitor BookmarksMonitor
 }
 
 type pkceState struct {
@@ -287,5 +301,129 @@ func fetchUserID(ctx context.Context, baseURL, accessToken string) (string, erro
 		return "", fmt.Errorf("users/me missing id")
 	}
 	return parsed.Data.ID, nil
+}
+
+// SetMonitor sets the bookmark monitor reference for control endpoints.
+func (h *BookmarksOAuthHandler) SetMonitor(m BookmarksMonitor) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.monitor = m
+}
+
+// EnhancedStatus returns detailed status including monitor state.
+func (h *BookmarksOAuthHandler) EnhancedStatus(w http.ResponseWriter, r *http.Request) {
+	store, err := bookmarks.LoadOAuthStore(h.cfg.OAuthStorePath)
+
+	response := map[string]any{
+		"connected":     false,
+		"monitor_state": string(bookmarks.MonitorStateIdle),
+	}
+
+	if err == nil && store != nil {
+		response["connected"] = store.RefreshToken != "" && store.UserID != ""
+		response["user_id"] = store.UserID
+		response["updated_at"] = store.UpdatedAt
+	}
+
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon != nil {
+		response["monitor_state"] = string(mon.State())
+		if !mon.LastPoll().IsZero() {
+			response["last_poll"] = mon.LastPoll()
+		}
+		if lastErr := mon.LastError(); lastErr != "" {
+			response["last_error"] = lastErr
+		}
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// Activity returns recent bookmark activity events.
+func (h *BookmarksOAuthHandler) Activity(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeJSON(w, http.StatusOK, map[string]any{
+			"events": []any{},
+		})
+		return
+	}
+
+	activity := mon.Activity()
+	if activity == nil {
+		h.writeJSON(w, http.StatusOK, map[string]any{
+			"events": []any{},
+		})
+		return
+	}
+
+	events, err := activity.GetRecent(50)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to load activity")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+	})
+}
+
+// PauseMonitor pauses the bookmark monitor.
+func (h *BookmarksOAuthHandler) PauseMonitor(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "monitor not running")
+		return
+	}
+
+	mon.Pause()
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"state":   string(mon.State()),
+	})
+}
+
+// ResumeMonitor resumes the bookmark monitor.
+func (h *BookmarksOAuthHandler) ResumeMonitor(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "monitor not running")
+		return
+	}
+
+	mon.Resume()
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"state":   string(mon.State()),
+	})
+}
+
+// CheckNowMonitor triggers an immediate poll.
+func (h *BookmarksOAuthHandler) CheckNowMonitor(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "monitor not running")
+		return
+	}
+
+	mon.CheckNow()
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+	})
 }
 

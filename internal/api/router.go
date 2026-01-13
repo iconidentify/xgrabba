@@ -55,10 +55,16 @@ func NewRouter(
 		// System stats
 		r.Get("/stats", healthHandler.Stats)
 
-		// Bookmarks OAuth connect flow (optional; used to obtain refresh_token once via browser)
+		// Bookmarks OAuth connect flow and monitor control (optional)
 		if bookmarksOAuthHandler != nil {
 			r.Get("/bookmarks/oauth/status", bookmarksOAuthHandler.Status)
 			r.Post("/bookmarks/oauth/disconnect", bookmarksOAuthHandler.Disconnect)
+			// Enhanced status and monitor control
+			r.Get("/bookmarks/status", bookmarksOAuthHandler.EnhancedStatus)
+			r.Get("/bookmarks/activity", bookmarksOAuthHandler.Activity)
+			r.Post("/bookmarks/pause", bookmarksOAuthHandler.PauseMonitor)
+			r.Post("/bookmarks/resume", bookmarksOAuthHandler.ResumeMonitor)
+			r.Post("/bookmarks/check-now", bookmarksOAuthHandler.CheckNowMonitor)
 		}
 
 		// Tweet operations (new - full tweet archival)

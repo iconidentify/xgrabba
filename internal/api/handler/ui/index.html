@@ -77,20 +77,6 @@
             flex-shrink: 0;
         }
 
-        .stats {
-            display: flex;
-            gap: 16px;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-
-        .stats span {
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
         /* Container - Tighter */
         .container {
             max-width: 680px;
@@ -609,6 +595,226 @@
         .btn-ghost:hover {
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-secondary);
+        }
+
+        /* X Bookmarks Button */
+        .bookmarks-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+
+        .bookmarks-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--text-muted);
+        }
+
+        .bookmarks-btn .x-logo {
+            width: 18px;
+            height: 18px;
+        }
+
+        .bookmarks-btn.connected {
+            border-color: rgba(0, 186, 124, 0.4);
+            background: rgba(0, 186, 124, 0.1);
+        }
+
+        .bookmarks-btn.connected .x-logo {
+            color: #00ba7c;
+        }
+
+        .bookmarks-status {
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .bookmarks-status.connected {
+            color: #00ba7c;
+        }
+
+        .bookmarks-status.disconnected {
+            color: var(--text-muted);
+        }
+
+        /* Bookmarks Modal */
+        .bookmarks-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 300;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .bookmarks-modal.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .bookmarks-modal-content {
+            width: 100%;
+            max-width: 600px;
+            background: var(--bg-primary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+            animation: detailSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bookmarks-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .bookmarks-modal-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .bookmarks-modal-header h2 svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .bookmarks-modal-body {
+            padding: 20px;
+        }
+
+        .bookmarks-connection-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .bookmarks-connection-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .bookmarks-connection-dot.connected {
+            background: #00ba7c;
+            box-shadow: 0 0 8px rgba(0, 186, 124, 0.5);
+        }
+
+        .bookmarks-connection-info {
+            flex: 1;
+        }
+
+        .bookmarks-connection-info .status {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .bookmarks-connection-info .details {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .bookmarks-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .bookmarks-controls .btn {
+            flex: 1;
+            justify-content: center;
+        }
+
+        .bookmarks-activity {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .bookmarks-activity-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            position: sticky;
+            top: 0;
+        }
+
+        .bookmarks-activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .bookmarks-activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+
+        .activity-dot.success { background: #00ba7c; }
+        .activity-dot.rate_limited { background: #ffd400; }
+        .activity-dot.failed { background: #f4212e; }
+        .activity-dot.paused { background: var(--text-muted); }
+        .activity-dot.resumed { background: #1d9bf0; }
+        .activity-dot.check_now { background: #1d9bf0; }
+
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-title {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .activity-details {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .bookmarks-activity-empty {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
         }
 
         .btn-browse-media {
@@ -1918,6 +2124,36 @@
             color: #ffab00;
         }
 
+        /* CPU Sparkline */
+        .stat-pill.cpu-stat {
+            background: rgba(0, 186, 124, 0.1);
+            border-color: rgba(0, 186, 124, 0.2);
+        }
+
+        .stat-pill.cpu-stat .stat-label {
+            color: rgba(0, 186, 124, 0.8);
+        }
+
+        .cpu-sparkline {
+            width: 80px;
+            height: 20px;
+            margin-left: 6px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .cpu-sparkline polyline {
+            transition: stroke 0.3s;
+        }
+
+        .cpu-sparkline.warn polyline {
+            stroke: #ffd400;
+        }
+
+        .cpu-sparkline.critical polyline {
+            stroke: #f4212e;
+        }
+
         /* ============================================
            DETAIL PANEL - Multi-Column Magazine Layout
            ============================================ */
@@ -2540,6 +2776,101 @@
             color: white;
         }
 
+        /* Inline Video Player in Detail Panel */
+        .detail-media-item.video.inline-player {
+            aspect-ratio: auto;
+            grid-column: 1 / -1;
+            max-width: 100%;
+            cursor: default;
+        }
+
+        .detail-media-item.video.inline-player:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .detail-media-item.video.inline-player video {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .detail-media-item.video.inline-player .detail-media-play {
+            display: none;
+        }
+
+        .detail-video-controls {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .detail-media-item.video.inline-player:hover .detail-video-controls {
+            opacity: 1;
+        }
+
+        .detail-video-controls button {
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .detail-video-controls button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .detail-video-controls button svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .detail-video-download {
+            position: absolute;
+            bottom: 48px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s, background 0.2s;
+            text-decoration: none;
+        }
+
+        .detail-media-item.video.inline-player:hover .detail-video-download {
+            opacity: 1;
+        }
+
+        .detail-video-download:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .detail-video-download svg {
+            width: 16px;
+            height: 16px;
+        }
+
         /* Detail Tweet Text */
         .detail-tweet-text {
             font-size: 15px;
@@ -2549,19 +2880,84 @@
             word-wrap: break-word;
         }
 
-        /* Detail Transcript */
+        /* Detail Transcript - Enhanced */
+        .detail-transcript {
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(8, 145, 178, 0.05));
+            border-radius: 12px;
+            border: 1px solid rgba(20, 184, 166, 0.2);
+            overflow: hidden;
+        }
+
+        .detail-transcript .detail-section-header {
+            background: rgba(20, 184, 166, 0.1);
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(20, 184, 166, 0.15);
+        }
+
+        .detail-transcript-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .detail-transcript-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: rgba(20, 184, 166, 0.2);
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--brand-start);
+            text-transform: uppercase;
+        }
+
+        .detail-transcript-badge svg {
+            width: 10px;
+            height: 10px;
+        }
+
+        .detail-transcript-copy {
+            background: rgba(20, 184, 166, 0.15);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            color: var(--brand-start);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .detail-transcript-copy:hover {
+            background: rgba(20, 184, 166, 0.25);
+            border-color: rgba(20, 184, 166, 0.5);
+        }
+
+        .detail-transcript-copy.copied {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .detail-transcript-copy svg {
+            width: 12px;
+            height: 12px;
+        }
+
         .detail-transcript-text {
-            max-height: 300px;
+            max-height: 280px;
             overflow-y: auto;
-            padding: 14px 16px;
-            background: rgba(20, 184, 166, 0.05);
-            border-radius: 8px;
-            border-left: 3px solid rgba(20, 184, 166, 0.4);
+            padding: 16px;
             font-size: 13px;
             line-height: 1.7;
             color: var(--text-primary);
             white-space: pre-wrap;
-            font-family: 'SF Mono', 'Menlo', ui-monospace, monospace;
         }
 
         .detail-transcript-text::-webkit-scrollbar {
@@ -2569,8 +2965,30 @@
         }
 
         .detail-transcript-text::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(20, 184, 166, 0.3);
             border-radius: 2px;
+        }
+
+        .detail-transcript-text::-webkit-scrollbar-thumb:hover {
+            background: rgba(20, 184, 166, 0.5);
+        }
+
+        /* No Transcript State */
+        .detail-no-transcript {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            border: 1px dashed var(--border-color);
+        }
+
+        .detail-no-transcript svg {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 8px;
+            opacity: 0.5;
         }
 
         /* Detail Diagnostics */
@@ -3144,14 +3562,6 @@
                 flex-shrink: 0;
             }
 
-            .stats {
-                font-size: 10px;
-                gap: 8px;
-                flex: 1;
-                justify-content: center;
-                min-width: 0;
-            }
-
             .btn-browse-media {
                 padding: 6px 12px;
                 font-size: 11px;
@@ -3208,12 +3618,8 @@
             }
         }
 
-        /* Very small screens - hide stats to prevent cramping */
+        /* Very small screens */
         @media (max-width: 400px) {
-            .stats {
-                display: none;
-            }
-
             .header {
                 justify-content: space-between;
             }
@@ -3246,10 +3652,6 @@
             </svg>
             <span style="background: linear-gradient(135deg, #14b8a6, #0891b2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">xgrabba</span>
         </h1>
-        <div class="stats">
-            <div>Tweets: <span id="totalTweets">0</span></div>
-            <div>Media: <span id="totalMedia">0</span></div>
-        </div>
         <button class="btn btn-browse-media" onclick="openGalleryMode()">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -3260,22 +3662,29 @@
             <span class="btn-text-full">Browse Media</span>
             <span class="btn-text-short">Media</span>
         </button>
-        <div style="display:flex; gap:10px; align-items:center;">
-            <button class="btn btn-ghost" id="connectBookmarksBtn" onclick="openBookmarksConnect(event)">Connect X Bookmarks</button>
-            <button class="btn btn-ghost" id="disconnectBookmarksBtn" style="display:none;" onclick="disconnectBookmarks(event)">Disconnect</button>
-            <span id="bookmarksAuthStatus" style="font-size:12px; color: var(--text-muted);"></span>
-        </div>
+        <!-- X Bookmarks Button -->
+        <button class="bookmarks-btn" id="bookmarksBtn" onclick="openBookmarksModal()" title="X Bookmarks">
+            <svg class="x-logo" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <span class="bookmarks-status" id="bookmarksStatus"></span>
+        </button>
     </header>
 
     <!-- System Stats Bar -->
     <div class="stats-bar" id="statsBar">
-        <div class="stat-pill">
+        <!-- CPU Usage with Sparkline -->
+        <div class="stat-pill cpu-stat">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                <path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/>
             </svg>
-            <span class="stat-label">Uptime</span>
-            <span class="stat-value" id="statUptime">--</span>
+            <span class="stat-label">CPU</span>
+            <span class="stat-value" id="statCPU">0%</span>
+            <svg id="cpuSparkline" class="cpu-sparkline" viewBox="0 0 80 20" preserveAspectRatio="none">
+                <polyline id="cpuSparklineLine" fill="none" stroke="var(--success)" stroke-width="1.5" points="0,20"></polyline>
+            </svg>
         </div>
+        <!-- Disk Usage -->
         <div class="stat-pill">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                 <path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/>
@@ -3286,28 +3695,8 @@
                 <div class="stat-bar-fill" id="statDiskBar" style="width: 0%"></div>
             </div>
         </div>
-        <div class="stat-pill">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/>
-            </svg>
-            <span class="stat-label">Mem</span>
-            <span class="stat-value" id="statMem">--</span>
-        </div>
-        <div class="stat-pill">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-            </svg>
-            <span class="stat-label">Goroutines</span>
-            <span class="stat-value" id="statGoroutines">--</span>
-        </div>
-        <div class="stat-pill">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/>
-            </svg>
-            <span class="stat-label">CPU</span>
-            <span class="stat-value" id="statCPU">--</span>
-        </div>
         <div class="stat-divider"></div>
+        <!-- Archive Stats -->
         <div class="stat-pill archive-stat">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
@@ -3392,6 +3781,51 @@
                     </svg>
                     Delete
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bookmarks Modal -->
+    <div class="bookmarks-modal" id="bookmarksModal">
+        <div class="bookmarks-modal-content">
+            <div class="bookmarks-modal-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    Bookmarks Monitor
+                </h2>
+                <button class="modal-close" onclick="closeBookmarksModal()" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="bookmarks-modal-body">
+                <!-- Connection Status -->
+                <div class="bookmarks-connection-status" id="bookmarksConnectionStatus">
+                    <div class="bookmarks-connection-dot" id="bookmarksConnectionDot"></div>
+                    <div class="bookmarks-connection-info">
+                        <div class="status" id="bookmarksConnectionLabel">Disconnected</div>
+                        <div class="details" id="bookmarksConnectionDetails">Not connected to X</div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="bookmarks-controls" id="bookmarksControls">
+                    <button class="btn btn-secondary" id="bookmarksPauseBtn" onclick="toggleBookmarksPause()">Pause</button>
+                    <button class="btn btn-secondary" id="bookmarksCheckNowBtn" onclick="bookmarksCheckNow()">Check Now</button>
+                    <button class="btn btn-ghost" id="bookmarksConnectBtn" onclick="openBookmarksConnect(event)">Connect</button>
+                    <button class="btn btn-ghost" id="bookmarksDisconnectBtn" onclick="disconnectBookmarks(event)" style="display:none;">Disconnect</button>
+                </div>
+
+                <!-- Activity Log -->
+                <div class="bookmarks-activity">
+                    <div class="bookmarks-activity-header">Activity Log</div>
+                    <div id="bookmarksActivityList">
+                        <div class="bookmarks-activity-empty">No activity yet</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -3549,9 +3983,9 @@
             <div class="theater-actions">
                 <button class="theater-btn" id="theaterAiToggle" onclick="toggleTheaterAI()">
                     <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
                     </svg>
-                    AI Notes
+                    Media Info
                 </button>
                 <a class="theater-btn" id="theaterDownload" href="#" download>
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3930,13 +4364,14 @@
         }
 
         function updateStats() {
-            document.getElementById('totalTweets').textContent = tweets.length;
-            const totalMedia = tweets.reduce((sum, t) => sum + (t.media_count || 0), 0);
-            document.getElementById('totalMedia').textContent = totalMedia;
+            // Stats now shown in the stats bar via fetchSystemStats()
         }
 
         // System stats fetching
         let statsInterval = null;
+        const cpuHistory = []; // Store last 30 CPU readings for sparkline
+        const CPU_HISTORY_MAX = 30;
+
         async function fetchSystemStats() {
             try {
                 const response = await fetch('/api/v1/stats', {
@@ -3945,8 +4380,14 @@
                 if (!response.ok) return;
                 const stats = await response.json();
 
-                // Update uptime
-                document.getElementById('statUptime').textContent = stats.uptime_human || '--';
+                // Update CPU with sparkline
+                const cpuPct = stats.cpu_usage_percent || 0;
+                document.getElementById('statCPU').textContent = `${cpuPct.toFixed(0)}%`;
+
+                // Update CPU history and sparkline
+                cpuHistory.push(cpuPct);
+                if (cpuHistory.length > CPU_HISTORY_MAX) cpuHistory.shift();
+                updateCpuSparkline(cpuPct);
 
                 // Update disk usage
                 const diskUsedGB = (stats.disk_used_bytes / (1024 * 1024 * 1024)).toFixed(1);
@@ -3964,22 +4405,46 @@
                     diskBar.style.background = 'var(--brand-gradient)';
                 }
 
-                // Update memory
-                document.getElementById('statMem').textContent = `${stats.mem_alloc_mb} MB`;
-
-                // Update goroutines
-                document.getElementById('statGoroutines').textContent = stats.num_goroutines;
-
-                // Update CPU cores
-                document.getElementById('statCPU').textContent = `${stats.num_cpu} cores`;
-
-                // Update archive stats
+                // Update archive stats (count and size)
                 document.getElementById('statTweets').textContent = stats.tweet_count || 0;
-                document.getElementById('statVideos').textContent = `${stats.video_mb || 0} MB`;
-                document.getElementById('statImages').textContent = `${stats.image_mb || 0} MB`;
+                const videoCount = stats.video_count || 0;
+                const videoMB = stats.video_mb || 0;
+                document.getElementById('statVideos').textContent = `${videoCount} (${videoMB} MB)`;
+                const imageCount = stats.image_count || 0;
+                const imageMB = stats.image_mb || 0;
+                document.getElementById('statImages').textContent = `${imageCount} (${imageMB} MB)`;
                 document.getElementById('statArchive').textContent = `${stats.archive_total_mb || 0} MB`;
             } catch (error) {
                 console.error('Failed to fetch system stats:', error);
+            }
+        }
+
+        function updateCpuSparkline(currentPct) {
+            const sparkline = document.getElementById('cpuSparkline');
+            const line = document.getElementById('cpuSparklineLine');
+            if (!sparkline || !line || cpuHistory.length === 0) return;
+
+            // Generate SVG polyline points
+            const width = 80;
+            const height = 20;
+            const padding = 1;
+            const availableWidth = width - padding * 2;
+            const availableHeight = height - padding * 2;
+
+            const points = cpuHistory.map((val, idx) => {
+                const x = padding + (idx / (CPU_HISTORY_MAX - 1)) * availableWidth;
+                const y = height - padding - (val / 100) * availableHeight;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+
+            line.setAttribute('points', points);
+
+            // Update color based on current CPU
+            sparkline.classList.remove('warn', 'critical');
+            if (currentPct >= 80) {
+                sparkline.classList.add('critical');
+            } else if (currentPct >= 50) {
+                sparkline.classList.add('warn');
             }
         }
 
@@ -4344,8 +4809,17 @@
                 // Calculate total storage size
                 const totalSize = tweet.media?.reduce((sum, m) => sum + (m.size || 0), 0) || 0;
 
-                // Build transcript HTML
-                const hasTranscript = tweet.transcript && tweet.transcript.trim().length > 0;
+                // Build transcript HTML - find first video with transcript
+                const videoWithTranscript = tweet.media?.find(m =>
+                    (m.type === 'video' || m.content_type?.startsWith('video/')) && m.transcript && m.transcript.trim().length > 0
+                );
+                const hasTranscript = !!videoWithTranscript;
+                const transcriptText = videoWithTranscript?.transcript || '';
+                const transcriptLang = videoWithTranscript?.transcript_language || '';
+                const transcriptWordCount = transcriptText ? transcriptText.trim().split(/\s+/).length : 0;
+
+                // Check if there are videos (to show "no transcript yet" state)
+                const hasVideos = tweet.media?.some(m => m.type === 'video' || m.content_type?.startsWith('video/'));
 
                 body.innerHTML = `
                     <!-- Left Column: Content -->
@@ -4376,9 +4850,33 @@
                             <div class="detail-section detail-transcript">
                                 <div class="detail-section-header">
                                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
-                                    Transcript
+                                    Audio Transcript
+                                    <div class="detail-transcript-meta">
+                                        ${transcriptLang ? `
+                                            <span class="detail-transcript-badge">
+                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+                                                ${escapeHtml(transcriptLang.toUpperCase())}
+                                            </span>
+                                        ` : ''}
+                                        <span class="detail-transcript-badge">
+                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z"/></svg>
+                                            ${transcriptWordCount} words
+                                        </span>
+                                        <button class="detail-transcript-copy" onclick="event.stopPropagation(); copyDetailTranscript(this, '${tweet.tweet_id}')">
+                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                                            Copy
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="detail-transcript-text">${escapeHtml(tweet.transcript)}</div>
+                                <div class="detail-transcript-text">${escapeHtml(transcriptText)}</div>
+                            </div>
+                        ` : hasVideos ? `
+                            <div class="detail-section">
+                                <div class="detail-no-transcript">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
+                                    <div>No transcript available</div>
+                                    <div style="font-size: 10px; margin-top: 4px; color: var(--text-muted);">Audio transcription is generated when Whisper is enabled</div>
+                                </div>
                             </div>
                         ` : ''}
 
@@ -4609,21 +5107,36 @@
             }
 
             const tweetId = tweet.tweet_id;
+
+            // Build download filename
+            const authorObj = typeof tweet.author === 'object' ? tweet.author : null;
+            const authorUsername = authorObj ? authorObj.username : (tweet.author || 'unknown');
+            const dateStr = tweet.posted_at ? new Date(tweet.posted_at).toISOString().split('T')[0] : 'archived';
+            const titleSlug = (tweet.ai_title || tweet.text || '').slice(0, 40).replace(/[^a-zA-Z0-9]+/g, '_').replace(/_+$/, '') || 'media';
+            const baseFilename = `${authorUsername}_${dateStr}_${titleSlug}`;
+
             return tweet.media.map((m, index) => {
                 const mediaUrl = addApiKey(m.url);
                 const isVideo = m.type === 'video' || m.content_type?.startsWith('video/');
 
                 if (isVideo) {
+                    // Videos play inline with controls
+                    const downloadName = `${baseFilename}${tweet.media.filter(x => x.type === 'video').length > 1 ? '_' + (index + 1) : ''}.mp4`;
                     return `
-                        <div class="detail-media-item video" onclick="openTheater('${tweetId}', ${index})">
-                            <video src="${mediaUrl}" preload="metadata"></video>
-                            <div class="detail-media-play">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <div class="detail-media-item video inline-player">
+                            <video src="${mediaUrl}" controls preload="metadata" playsinline></video>
+                            <div class="detail-video-controls">
+                                <button onclick="event.stopPropagation(); openTheater('${tweetId}', ${index})" title="Fullscreen">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                                </button>
                             </div>
-                            ${m.duration_seconds ? `<span class="detail-media-duration">${formatDuration(m.duration_seconds)}</span>` : ''}
+                            <a class="detail-video-download" href="${mediaUrl}" download="${escapeHtml(downloadName)}" onclick="event.stopPropagation()" title="Download">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-5-5 1.41-1.41L11 12.17V4h2v8.17l2.59-2.58L17 11l-5 5zm-7 2h14v2H5z"/></svg>
+                            </a>
                         </div>
                     `;
                 } else {
+                    // Images still open theater on click
                     return `
                         <div class="detail-media-item" onclick="openTheater('${tweetId}', ${index})">
                             <img src="${mediaUrl}" alt="Media ${index + 1}" loading="lazy">
@@ -5291,8 +5804,12 @@
             theater.classList.add('active', 'gallery-mode');
             document.body.style.overflow = 'hidden';
 
-            // Open AI panel by default in gallery mode
-            document.getElementById('theaterAiPanel').classList.add('active');
+            // Open info panel by default in gallery mode (desktop only)
+            const isMobile = window.innerWidth <= 768;
+            if (!isMobile) {
+                document.getElementById('theaterAiPanel').classList.add('active');
+                theater.classList.add('ai-panel-open');
+            }
 
             // Show controls briefly then hide
             theater.classList.add('controls-visible');
@@ -5471,6 +5988,33 @@
                 }
             } catch {
                 prompt('Copy transcript:', text);
+            }
+        }
+
+        // Copy transcript from detail panel with visual feedback
+        async function copyDetailTranscript(btn, tweetId) {
+            if (!currentTweetDetail || !currentTweetDetail.media) return;
+
+            // Find the first video with transcript
+            const videoWithTranscript = currentTweetDetail.media.find(m =>
+                (m.type === 'video' || m.content_type?.startsWith('video/')) && m.transcript && m.transcript.trim().length > 0
+            );
+
+            if (!videoWithTranscript?.transcript) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(videoWithTranscript.transcript);
+                // Visual feedback
+                btn.classList.add('copied');
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg> Copy';
+                }, 1500);
+            } catch {
+                prompt('Copy transcript:', videoWithTranscript.transcript);
             }
         }
 
@@ -5952,28 +6496,218 @@
         // Start system stats polling
         startSystemStatsPolling();
 
-        async function refreshBookmarksAuthStatus() {
-            const el = document.getElementById('bookmarksAuthStatus');
-            const connectBtn = document.getElementById('connectBookmarksBtn');
-            const disconnectBtn = document.getElementById('disconnectBookmarksBtn');
-            if (!el || !connectBtn || !disconnectBtn) return;
+        // Bookmarks state
+        let bookmarksState = {
+            connected: false,
+            monitorState: 'idle',
+            userId: null,
+            lastPoll: null,
+            lastError: null
+        };
+
+        async function refreshBookmarksStatus() {
+            const headerBtn = document.getElementById('bookmarksBtn');
+            const statusSpan = document.getElementById('bookmarksStatus');
 
             try {
-                const resp = await fetch('/api/v1/bookmarks/oauth/status', { headers: { 'X-API-Key': API_KEY } });
-                if (!resp.ok) {
-                    el.textContent = '';
-                    return;
-                }
+                const resp = await fetch('/api/v1/bookmarks/status', { headers: { 'X-API-Key': API_KEY } });
+                if (!resp.ok) return;
                 const data = await resp.json();
+
+                bookmarksState.connected = data.connected;
+                bookmarksState.monitorState = data.monitor_state || 'idle';
+                bookmarksState.userId = data.user_id || null;
+                bookmarksState.lastPoll = data.last_poll ? new Date(data.last_poll) : null;
+                bookmarksState.lastError = data.last_error || null;
+
+                // Update header button
                 if (data.connected) {
-                    el.textContent = `Bookmarks connected (user ${data.user_id})`;
-                    disconnectBtn.style.display = 'inline-flex';
+                    headerBtn.classList.add('connected');
+                    if (data.monitor_state === 'running') {
+                        statusSpan.textContent = 'Running';
+                        statusSpan.className = 'bookmarks-status connected';
+                    } else if (data.monitor_state === 'paused') {
+                        statusSpan.textContent = 'Paused';
+                        statusSpan.className = 'bookmarks-status';
+                    } else {
+                        statusSpan.textContent = 'Connected';
+                        statusSpan.className = 'bookmarks-status connected';
+                    }
                 } else {
-                    el.textContent = 'Bookmarks not connected';
-                    disconnectBtn.style.display = 'none';
+                    headerBtn.classList.remove('connected');
+                    statusSpan.textContent = '';
+                    statusSpan.className = 'bookmarks-status disconnected';
                 }
             } catch {
-                el.textContent = '';
+                // Silent fail
+            }
+        }
+
+        function updateBookmarksModalUI() {
+            const dot = document.getElementById('bookmarksConnectionDot');
+            const label = document.getElementById('bookmarksConnectionLabel');
+            const details = document.getElementById('bookmarksConnectionDetails');
+            const pauseBtn = document.getElementById('bookmarksPauseBtn');
+            const checkNowBtn = document.getElementById('bookmarksCheckNowBtn');
+            const connectBtn = document.getElementById('bookmarksConnectBtn');
+            const disconnectBtn = document.getElementById('bookmarksDisconnectBtn');
+
+            if (bookmarksState.connected) {
+                dot.classList.add('connected');
+                if (bookmarksState.monitorState === 'running') {
+                    label.textContent = 'Connected & Running';
+                    pauseBtn.textContent = 'Pause';
+                    pauseBtn.disabled = false;
+                    checkNowBtn.disabled = false;
+                } else if (bookmarksState.monitorState === 'paused') {
+                    label.textContent = 'Connected (Paused)';
+                    pauseBtn.textContent = 'Resume';
+                    pauseBtn.disabled = false;
+                    checkNowBtn.disabled = true;
+                } else {
+                    label.textContent = 'Connected';
+                    pauseBtn.disabled = true;
+                    checkNowBtn.disabled = true;
+                }
+
+                let detailsText = `User ID: ${bookmarksState.userId || 'Unknown'}`;
+                if (bookmarksState.lastPoll) {
+                    detailsText += ` | Last poll: ${formatRelativeTime(bookmarksState.lastPoll)}`;
+                }
+                if (bookmarksState.lastError) {
+                    detailsText += ` | Error: ${bookmarksState.lastError}`;
+                }
+                details.textContent = detailsText;
+
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-flex';
+            } else {
+                dot.classList.remove('connected');
+                label.textContent = 'Disconnected';
+                details.textContent = 'Not connected to X Bookmarks';
+                pauseBtn.disabled = true;
+                checkNowBtn.disabled = true;
+                connectBtn.style.display = 'inline-flex';
+                disconnectBtn.style.display = 'none';
+            }
+        }
+
+        async function loadBookmarksActivity() {
+            const list = document.getElementById('bookmarksActivityList');
+            try {
+                const resp = await fetch('/api/v1/bookmarks/activity', { headers: { 'X-API-Key': API_KEY } });
+                if (!resp.ok) return;
+                const data = await resp.json();
+
+                if (!data.events || data.events.length === 0) {
+                    list.innerHTML = '<div class="bookmarks-activity-empty">No activity yet</div>';
+                    return;
+                }
+
+                list.innerHTML = data.events.map(event => {
+                    let title = event.status;
+                    let details = '';
+
+                    switch (event.status) {
+                        case 'success':
+                            title = 'Poll completed';
+                            details = `${event.total_bookmarks || 0} bookmarks, ${event.new_bookmarks || 0} new`;
+                            if (event.archived_ids && event.archived_ids.length > 0) {
+                                details += ` (archived: ${event.archived_ids.join(', ')})`;
+                            }
+                            break;
+                        case 'rate_limited':
+                            title = 'Rate limited';
+                            details = event.error || 'Waiting for rate limit reset';
+                            break;
+                        case 'failed':
+                            title = 'Poll failed';
+                            details = event.error || 'Unknown error';
+                            break;
+                        case 'paused':
+                            title = 'Monitor paused';
+                            break;
+                        case 'resumed':
+                            title = 'Monitor resumed';
+                            break;
+                        case 'check_now':
+                            title = 'Manual check triggered';
+                            break;
+                    }
+
+                    const time = event.timestamp ? formatRelativeTime(new Date(event.timestamp)) : '';
+
+                    return `
+                        <div class="bookmarks-activity-item">
+                            <div class="activity-dot ${event.status}"></div>
+                            <div class="activity-content">
+                                <div class="activity-title">${title}</div>
+                                ${details ? `<div class="activity-details">${escapeHtml(details)}</div>` : ''}
+                            </div>
+                            <div class="activity-time">${time}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch {
+                list.innerHTML = '<div class="bookmarks-activity-empty">Failed to load activity</div>';
+            }
+        }
+
+        function formatRelativeTime(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffSecs < 60) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return `${diffDays}d ago`;
+        }
+
+        async function openBookmarksModal() {
+            await refreshBookmarksStatus();
+            updateBookmarksModalUI();
+            loadBookmarksActivity();
+
+            const modal = document.getElementById('bookmarksModal');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeBookmarksModal() {
+            const modal = document.getElementById('bookmarksModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        async function toggleBookmarksPause() {
+            const endpoint = bookmarksState.monitorState === 'paused'
+                ? '/api/v1/bookmarks/resume'
+                : '/api/v1/bookmarks/pause';
+
+            try {
+                await fetch(endpoint, { method: 'POST', headers: { 'X-API-Key': API_KEY } });
+                await refreshBookmarksStatus();
+                updateBookmarksModalUI();
+                loadBookmarksActivity();
+            } catch (err) {
+                console.error('Failed to toggle pause:', err);
+            }
+        }
+
+        async function bookmarksCheckNow() {
+            try {
+                await fetch('/api/v1/bookmarks/check-now', { method: 'POST', headers: { 'X-API-Key': API_KEY } });
+                // Refresh after a short delay to show the result
+                setTimeout(() => {
+                    refreshBookmarksStatus();
+                    loadBookmarksActivity();
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to trigger check:', err);
             }
         }
 
@@ -5998,20 +6732,33 @@
             }
             window.open(url, '_blank');
             // Refresh status after the user completes OAuth in the other window.
-            setTimeout(refreshBookmarksAuthStatus, 3000);
+            setTimeout(() => {
+                refreshBookmarksStatus();
+                updateBookmarksModalUI();
+                loadBookmarksActivity();
+            }, 3000);
         }
 
         async function disconnectBookmarks(e) {
             if (e) e.preventDefault();
-            if (!confirm('Disconnect bookmarks monitoring? (Archives will remain)')) return;
+            if (!confirm('Disconnect bookmarks monitoring? Your archives will remain.')) return;
             try {
                 await fetch('/api/v1/bookmarks/oauth/disconnect', { method: 'POST', headers: { 'X-API-Key': API_KEY } });
             } catch {}
-            await refreshBookmarksAuthStatus();
+            await refreshBookmarksStatus();
+            updateBookmarksModalUI();
+            loadBookmarksActivity();
         }
 
+        // Close bookmarks modal on overlay click
+        document.getElementById('bookmarksModal').addEventListener('click', (e) => {
+            if (e.target.id === 'bookmarksModal') {
+                closeBookmarksModal();
+            }
+        });
+
         // Initial bookmarks status
-        refreshBookmarksAuthStatus();
+        refreshBookmarksStatus();
     </script>
 </body>
 </html>

@@ -3,18 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/repository"
 )
-
-var startTime = time.Now()
 
 // HealthHandler handles health check endpoints.
 type HealthHandler struct {
@@ -86,26 +82,25 @@ func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 
 // SystemStats contains system resource statistics.
 type SystemStats struct {
-	Uptime        int64  `json:"uptime_seconds"`
-	UptimeHuman   string `json:"uptime_human"`
-	MemAllocMB    int64  `json:"mem_alloc_mb"`
-	MemSysMB      int64  `json:"mem_sys_mb"`
-	MemHeapMB     int64  `json:"mem_heap_mb"`
-	NumGoroutines int    `json:"num_goroutines"`
-	NumCPU        int    `json:"num_cpu"`
+	// Disk usage
 	DiskUsedBytes  int64   `json:"disk_used_bytes"`
 	DiskFreeBytes  int64   `json:"disk_free_bytes"`
 	DiskTotalBytes int64   `json:"disk_total_bytes"`
 	DiskUsedPct    float64 `json:"disk_used_pct"`
 	StoragePath    string  `json:"storage_path"`
 
+	// CPU usage (process-level)
+	CPUUsagePercent float64 `json:"cpu_usage_percent"`
+
 	// Archive storage breakdown
 	ArchiveTotalBytes int64 `json:"archive_total_bytes"`
 	ArchiveTotalMB    int64 `json:"archive_total_mb"`
 	VideoBytes        int64 `json:"video_bytes"`
 	VideoMB           int64 `json:"video_mb"`
+	VideoCount        int   `json:"video_count"`
 	ImageBytes        int64 `json:"image_bytes"`
 	ImageMB           int64 `json:"image_mb"`
+	ImageCount        int   `json:"image_count"`
 	OtherBytes        int64 `json:"other_bytes"`
 	OtherMB           int64 `json:"other_mb"`
 	TweetCount        int   `json:"tweet_count"`
@@ -113,21 +108,7 @@ type SystemStats struct {
 
 // Stats handles GET /api/v1/stats - system statistics.
 func (h *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	uptime := time.Since(startTime)
-	uptimeStr := formatUptime(uptime)
-
-	stats := SystemStats{
-		Uptime:        int64(uptime.Seconds()),
-		UptimeHuman:   uptimeStr,
-		MemAllocMB:    int64(m.Alloc / 1024 / 1024),
-		MemSysMB:      int64(m.Sys / 1024 / 1024),
-		MemHeapMB:     int64(m.HeapAlloc / 1024 / 1024),
-		NumGoroutines: runtime.NumGoroutine(),
-		NumCPU:        runtime.NumCPU(),
-	}
+	var stats SystemStats
 
 	// Get disk stats for storage path
 	storagePath := os.Getenv("STORAGE_PATH")
@@ -138,8 +119,11 @@ func (h *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	stats.DiskTotalBytes, stats.DiskFreeBytes, stats.DiskUsedBytes, stats.DiskUsedPct = getDiskStats(storagePath)
 
+	// Get CPU usage
+	stats.CPUUsagePercent = getCPUUsage()
+
 	// Calculate archive storage breakdown
-	stats.VideoBytes, stats.ImageBytes, stats.OtherBytes, stats.TweetCount = getArchiveStats(storagePath)
+	stats.VideoBytes, stats.VideoCount, stats.ImageBytes, stats.ImageCount, stats.OtherBytes, stats.TweetCount = getArchiveStats(storagePath)
 	stats.ArchiveTotalBytes = stats.VideoBytes + stats.ImageBytes + stats.OtherBytes
 	stats.ArchiveTotalMB = stats.ArchiveTotalBytes / 1024 / 1024
 	stats.VideoMB = stats.VideoBytes / 1024 / 1024
@@ -152,7 +136,7 @@ func (h *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
 }
 
 // getArchiveStats walks the storage directory and calculates size breakdown.
-func getArchiveStats(storagePath string) (videoBytes, imageBytes, otherBytes int64, tweetCount int) {
+func getArchiveStats(storagePath string) (videoBytes int64, videoCount int, imageBytes int64, imageCount int, otherBytes int64, tweetCount int) {
 	// Video extensions
 	videoExts := map[string]bool{".mp4": true, ".webm": true, ".mov": true, ".avi": true, ".mkv": true}
 	// Image extensions
@@ -176,8 +160,10 @@ func getArchiveStats(storagePath string) (videoBytes, imageBytes, otherBytes int
 
 		if videoExts[ext] {
 			videoBytes += size
+			videoCount++
 		} else if imageExts[ext] {
 			imageBytes += size
+			imageCount++
 		} else {
 			otherBytes += size
 		}
@@ -187,18 +173,4 @@ func getArchiveStats(storagePath string) (videoBytes, imageBytes, otherBytes int
 
 	tweetCount = len(tweetDirs)
 	return
-}
-
-func formatUptime(d time.Duration) string {
-	days := int(d.Hours() / 24)
-	hours := int(d.Hours()) % 24
-	mins := int(d.Minutes()) % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
-	}
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm", hours, mins)
-	}
-	return fmt.Sprintf("%dm", mins)
 }

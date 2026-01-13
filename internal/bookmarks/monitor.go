@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/config"
@@ -29,6 +30,15 @@ type rateLimitState struct {
 	ResetAt time.Time `json:"reset_at"`
 }
 
+// MonitorState represents the current state of the bookmark monitor.
+type MonitorState string
+
+const (
+	MonitorStateIdle    MonitorState = "idle"
+	MonitorStateRunning MonitorState = "running"
+	MonitorStatePaused  MonitorState = "paused"
+)
+
 // Monitor polls X bookmarks and triggers archiving for new bookmark IDs.
 type Monitor struct {
 	cfg    config.BookmarksConfig
@@ -38,13 +48,24 @@ type Monitor struct {
 
 	seen          map[string]time.Time
 	rateLimitFile string
+
+	// State management for pause/resume
+	mu        sync.RWMutex
+	state     MonitorState
+	checkNow  chan struct{}
+	activity  *ActivityLog
+	lastPoll  time.Time
+	lastError string
 }
 
 func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc archiver, logger *slog.Logger) *Monitor {
 	// Store rate limit state next to the OAuth file
 	rateLimitFile := ""
+	activityPath := ""
 	if cfg.OAuthStorePath != "" {
-		rateLimitFile = filepath.Join(filepath.Dir(cfg.OAuthStorePath), ".x_bookmarks_ratelimit.json")
+		dir := filepath.Dir(cfg.OAuthStorePath)
+		rateLimitFile = filepath.Join(dir, ".x_bookmarks_ratelimit.json")
+		activityPath = filepath.Join(dir, ".x_bookmarks_activity.jsonl")
 	}
 
 	return &Monitor{
@@ -54,13 +75,89 @@ func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc arch
 		logger:        logger,
 		seen:          make(map[string]time.Time),
 		rateLimitFile: rateLimitFile,
+		state:         MonitorStateIdle,
+		checkNow:      make(chan struct{}, 1),
+		activity:      NewActivityLog(activityPath, 100),
 	}
+}
+
+// State returns the current monitor state.
+func (m *Monitor) State() MonitorState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.state
+}
+
+// LastPoll returns the timestamp of the last poll attempt.
+func (m *Monitor) LastPoll() time.Time {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastPoll
+}
+
+// LastError returns the last error message, if any.
+func (m *Monitor) LastError() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastError
+}
+
+// Pause pauses the monitor polling.
+func (m *Monitor) Pause() {
+	m.mu.Lock()
+	if m.state == MonitorStateRunning {
+		m.state = MonitorStatePaused
+		m.logger.Info("bookmarks monitor paused")
+		m.activity.Append(ActivityEvent{Status: "paused"})
+	}
+	m.mu.Unlock()
+}
+
+// Resume resumes the monitor polling.
+func (m *Monitor) Resume() {
+	m.mu.Lock()
+	if m.state == MonitorStatePaused {
+		m.state = MonitorStateRunning
+		m.logger.Info("bookmarks monitor resumed")
+		m.activity.Append(ActivityEvent{Status: "resumed"})
+	}
+	m.mu.Unlock()
+}
+
+// CheckNow triggers an immediate poll (non-blocking).
+func (m *Monitor) CheckNow() {
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+
+	if state != MonitorStateRunning {
+		return
+	}
+
+	select {
+	case m.checkNow <- struct{}{}:
+		m.logger.Info("check-now triggered")
+		m.activity.Append(ActivityEvent{Status: "check_now"})
+	default:
+		// Channel full, poll already pending
+	}
+}
+
+// Activity returns the activity log for external access.
+func (m *Monitor) Activity() *ActivityLog {
+	return m.activity
 }
 
 func (m *Monitor) Start(ctx context.Context) {
 	if !m.cfg.Enabled {
 		return
 	}
+
+	// Set state to running
+	m.mu.Lock()
+	m.state = MonitorStateRunning
+	m.mu.Unlock()
+
 	m.logger.Info("starting bookmarks monitor",
 		"user_id", m.cfg.UserID,
 		"poll_interval", m.cfg.PollInterval.String(),
@@ -99,9 +196,22 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			m.mu.Lock()
+			m.state = MonitorStateIdle
+			m.mu.Unlock()
 			m.logger.Info("bookmarks monitor stopped")
 			return
+		case <-m.checkNow:
+			// Immediate poll requested
+			m.pollWithRetry(ctx)
 		case <-t.C:
+			// Skip if paused
+			m.mu.RLock()
+			paused := m.state == MonitorStatePaused
+			m.mu.RUnlock()
+			if paused {
+				continue
+			}
 			m.pollWithRetry(ctx)
 		}
 	}
@@ -140,8 +250,14 @@ func (m *Monitor) pollWithRetry(ctx context.Context) {
 
 // pollOnce attempts a single poll. Returns (success, wasRateLimited).
 func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
+	// Update last poll timestamp
+	m.mu.Lock()
+	m.lastPoll = time.Now()
+	m.mu.Unlock()
+
 	if m.cfg.UserID == "" {
 		m.logger.Warn("bookmarks monitor missing user id; skipping")
+		m.setLastError("missing user id")
 		return false, false
 	}
 
@@ -150,20 +266,29 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 		var rl *twitter.RateLimitError
 		if errors.As(err, &rl) {
 			sleepFor := 30 * time.Second
+			resetTime := time.Now().Add(sleepFor)
 			if !rl.Reset.IsZero() {
 				until := time.Until(rl.Reset.Add(2 * time.Second))
 				if until > 0 {
 					sleepFor = until
 				}
+				resetTime = rl.Reset.Add(2 * time.Second)
 				// Persist the rate limit so we respect it across restarts
-				m.saveRateLimitState(rl.Reset.Add(2 * time.Second))
+				m.saveRateLimitState(resetTime)
 			} else {
 				// No reset time provided, use exponential backoff style wait
 				// and persist a conservative estimate
-				m.saveRateLimitState(time.Now().Add(sleepFor))
+				m.saveRateLimitState(resetTime)
 			}
 
 			m.logger.Warn("bookmarks rate limited; backing off", "sleep", sleepFor.Round(time.Second).String())
+			m.setLastError("rate limited")
+			m.activity.Append(ActivityEvent{
+				Status:         "rate_limited",
+				Error:          "rate limited by X API",
+				RateLimitReset: &resetTime,
+			})
+
 			timer := time.NewTimer(sleepFor)
 			defer timer.Stop()
 			select {
@@ -176,8 +301,16 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 		}
 
 		m.logger.Warn("bookmarks poll failed", "error", err)
+		m.setLastError(err.Error())
+		m.activity.Append(ActivityEvent{
+			Status: "failed",
+			Error:  err.Error(),
+		})
 		return false, false
 	}
+
+	// Clear last error on success
+	m.setLastError("")
 
 	now := time.Now()
 	m.pruneSeen(now)
@@ -205,10 +338,17 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 
 	if len(newIDs) == 0 {
 		m.logger.Info("bookmark poll complete", "total_bookmarks", len(ids), "new", 0)
+		m.activity.Append(ActivityEvent{
+			Status:         "success",
+			TotalBookmarks: len(ids),
+			NewBookmarks:   0,
+		})
 		return true, false
 	}
 
 	m.logger.Info("new bookmarks detected", "count", len(newIDs))
+
+	archivedIDs := make([]string, 0, len(newIDs))
 	for _, id := range newIDs {
 		// Use placeholder username - the syndication API doesn't require the real username
 		tweetURL := fmt.Sprintf("https://x.com/x/status/%s", id)
@@ -217,9 +357,26 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 			m.logger.Warn("failed to enqueue bookmark archive", "tweet_id", id, "error", err)
 			continue
 		}
+		archivedIDs = append(archivedIDs, id)
 		m.logger.Info("bookmark enqueued for archiving", "tweet_id", id)
 	}
+
+	// Log success with new bookmarks
+	m.activity.Append(ActivityEvent{
+		Status:         "success",
+		TotalBookmarks: len(ids),
+		NewBookmarks:   len(newIDs),
+		ArchivedIDs:    archivedIDs,
+	})
+
 	return true, false
+}
+
+// setLastError updates the last error message (thread-safe).
+func (m *Monitor) setLastError(err string) {
+	m.mu.Lock()
+	m.lastError = err
+	m.mu.Unlock()
 }
 
 func (m *Monitor) pruneSeen(now time.Time) {
