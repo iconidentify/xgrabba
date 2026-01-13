@@ -67,9 +67,12 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 			if len(fullText) > len(tweet.Text) {
 				c.logger.Info("GraphQL returned longer text, using it", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText))
 				tweet.Text = fullText
+			} else {
+				c.logger.Debug("GraphQL text not longer", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText))
 			}
+		} else if gqlErr != nil {
+			c.logger.Warn("GraphQL fetch failed", "tweet_id", tweetID, "error", gqlErr)
 		}
-		// Don't log GraphQL failures - it's just a best-effort enhancement
 
 		return tweet, nil
 	}
