@@ -159,13 +159,29 @@ func (m *Manager) getFilesystemInfo(device string) (*fsInfo, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "LABEL=") {
-			info.label = strings.TrimPrefix(line, "LABEL=")
+			// blkid escapes special chars with backslashes (e.g., "STORE\ N\ GO")
+			info.label = unescapeShellString(strings.TrimPrefix(line, "LABEL="))
 		} else if strings.HasPrefix(line, "TYPE=") {
 			info.fsType = strings.TrimPrefix(line, "TYPE=")
 		}
 	}
 
 	return info, nil
+}
+
+// unescapeShellString removes shell-style backslash escapes.
+func unescapeShellString(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+			result.WriteByte(s[i])
+		} else {
+			result.WriteByte(s[i])
+		}
+	}
+	return result.String()
 }
 
 // getMountPoint checks if a device is mounted and returns its mount point.
