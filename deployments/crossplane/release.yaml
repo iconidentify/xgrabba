@@ -61,10 +61,10 @@ spec:
       resources:
         requests:
           cpu: 200m
-          memory: 256Mi
+          memory: 512Mi
         limits:
-          cpu: "1"
-          memory: 4Gi
+          cpu: "2"
+          memory: 8Gi
 
     # Set secrets from Kubernetes secrets
     set:
