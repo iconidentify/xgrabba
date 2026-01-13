@@ -5729,6 +5729,10 @@
             theater.classList.add('active');
             document.body.style.overflow = 'hidden';
 
+            // Force reflow to ensure panel width transition works correctly
+            // (The panel was never laid out while theater was display:none)
+            void theater.offsetWidth;
+
             // Auto-open info panel only on desktop (not mobile)
             const isMobile = window.innerWidth <= 768;
             // Sync resize tracker state when theater opens
@@ -6259,6 +6263,10 @@
             const theater = document.getElementById('mediaTheater');
             theater.classList.add('active', 'gallery-mode');
             document.body.style.overflow = 'hidden';
+
+            // Force reflow to ensure panel width transition works correctly
+            // (The panel was never laid out while theater was display:none)
+            void theater.offsetWidth;
 
             // Open info panel by default in gallery mode (desktop only)
             const isMobile = window.innerWidth <= 768;
