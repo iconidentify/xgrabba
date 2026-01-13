@@ -179,11 +179,29 @@ func (m *Manager) getMountPoint(device string) (string, bool) {
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) >= 2 && fields[0] == device {
-			return fields[1], true
+			return unescapeMountPath(fields[1]), true
 		}
 	}
 
 	return "", false
+}
+
+// unescapeMountPath decodes octal escape sequences from /proc/mounts.
+// /proc/mounts escapes spaces as \040, tabs as \011, newlines as \012, backslashes as \134.
+func unescapeMountPath(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if i+3 < len(s) && s[i] == '\\' && s[i+1] >= '0' && s[i+1] <= '3' {
+			if octal, err := strconv.ParseInt(s[i+1:i+4], 8, 32); err == nil {
+				result.WriteByte(byte(octal))
+				i += 3
+				continue
+			}
+		}
+		result.WriteByte(s[i])
+	}
+	return result.String()
 }
 
 // updateSpaceInfo updates free/used space for a mounted drive.
