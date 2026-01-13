@@ -6422,7 +6422,7 @@
                                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                     </div>
                                     ${media.transcript ? `
-                                        <button class="transcript-btn" onclick="event.stopPropagation(); openTranscriptModal(${JSON.stringify(media.transcript)}, '${media.transcript_language || ''}', ${(media.transcript || '').split(/\\s+/).length})" title="View transcript">
+                                        <button class="transcript-btn" data-transcript="${escapeHtml(media.transcript)}" data-lang="${escapeHtml(media.transcript_language || '')}" onclick="event.stopPropagation(); event.preventDefault(); showTranscriptFromButton(this);" title="View transcript">
                                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
                                         </button>
                                     ` : ''}
@@ -6684,18 +6684,18 @@
 
                         <!-- Transcript Section -->
                         ${hasTranscript ? `
-                            <div class="detail-section" style="cursor:pointer;" onclick="openTranscriptModal(\`${escapeHtml(transcriptText).replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`, '${escapeHtml(transcriptLang || '')}', ${transcriptWordCount})">
-                                <div class="detail-section-header">
+                            <div class="detail-section detail-transcript-section">
+                                <div class="detail-section-header" style="cursor:pointer;" onclick="toggleInlineTranscript(this.parentElement)">
                                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
                                     Transcript
                                     <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
                                         ${transcriptLang ? `<span class="detail-transcript-lang">${escapeHtml(transcriptLang)}</span>` : ''}
                                         <span style="font-size:10px; color:var(--text-muted); font-weight:normal; text-transform:none; letter-spacing:0;">${transcriptWordCount} words</span>
-                                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;color:var(--text-muted);"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                                        <svg class="transcript-expand-icon" viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;color:var(--text-muted);transition:transform 0.2s;"><path d="M7 10l5 5 5-5z"/></svg>
                                     </div>
                                 </div>
-                                <div class="detail-transcript-content" style="max-height:150px; overflow:hidden; mask-image:linear-gradient(to bottom, black 70%, transparent 100%); -webkit-mask-image:linear-gradient(to bottom, black 70%, transparent 100%);">${escapeHtml(transcriptText)}</div>
-                                <div style="text-align:center; padding:8px 0; font-size:12px; color:var(--brand-start);">Click to expand full transcript</div>
+                                <div class="detail-transcript-content" style="max-height:120px; overflow:hidden; mask-image:linear-gradient(to bottom, black 60%, transparent 100%); -webkit-mask-image:linear-gradient(to bottom, black 60%, transparent 100%); transition: max-height 0.3s ease;">${escapeHtml(transcriptText)}</div>
+                                <div class="transcript-toggle-hint" style="text-align:center; padding:8px 0; font-size:12px; color:var(--brand-start); cursor:pointer;" onclick="toggleInlineTranscript(this.parentElement)">Show full transcript</div>
                             </div>
                         ` : ''}
 
@@ -8169,6 +8169,40 @@
 
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
+        }
+
+        // Show transcript from button data attributes (for browse view)
+        function showTranscriptFromButton(btn) {
+            const text = btn.dataset.transcript || '';
+            const lang = btn.dataset.lang || '';
+            const wordCount = text.split(/\s+/).filter(w => w).length;
+            openTranscriptModal(text, lang, wordCount);
+        }
+
+        // Toggle inline transcript expansion (for archive details)
+        function toggleInlineTranscript(section) {
+            const content = section.querySelector('.detail-transcript-content');
+            const hint = section.querySelector('.transcript-toggle-hint');
+            const icon = section.querySelector('.transcript-expand-icon');
+            const isExpanded = section.classList.contains('expanded');
+
+            if (isExpanded) {
+                // Collapse
+                section.classList.remove('expanded');
+                content.style.maxHeight = '120px';
+                content.style.maskImage = 'linear-gradient(to bottom, black 60%, transparent 100%)';
+                content.style.webkitMaskImage = 'linear-gradient(to bottom, black 60%, transparent 100%)';
+                hint.textContent = 'Show full transcript';
+                if (icon) icon.style.transform = '';
+            } else {
+                // Expand
+                section.classList.add('expanded');
+                content.style.maxHeight = '500px';
+                content.style.maskImage = 'none';
+                content.style.webkitMaskImage = 'none';
+                hint.textContent = 'Show less';
+                if (icon) icon.style.transform = 'rotate(180deg)';
+            }
         }
 
         function closeTranscriptModal() {
