@@ -90,6 +90,7 @@ type MediaPreview struct {
 	Type               string `json:"type"`
 	ThumbnailURL       string `json:"thumbnail_url,omitempty"`
 	URL                string `json:"url,omitempty"`
+	Duration           int    `json:"duration,omitempty"`
 	Transcript         string `json:"transcript,omitempty"`
 	TranscriptLanguage string `json:"transcript_language,omitempty"`
 }
@@ -183,6 +184,7 @@ func (h *TweetHandler) List(w http.ResponseWriter, r *http.Request) {
 			mp := MediaPreview{
 				Type:               string(m.Type),
 				URL:                mediaURL,
+				Duration:           m.Duration,
 				Transcript:         m.Transcript,
 				TranscriptLanguage: m.TranscriptLanguage,
 			}

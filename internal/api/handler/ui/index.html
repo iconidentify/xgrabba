@@ -387,6 +387,24 @@
             margin-left: 3px;
         }
 
+        .tweet-media-preview .video-duration {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 5px;
+            border-radius: 3px;
+            pointer-events: none;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tweet-media-preview .media-thumb.playing .video-duration {
+            display: none;
+        }
+
         /* Inline video player styles */
         .tweet-media-preview .media-thumb.playing {
             /* Keep original aspect-ratio to prevent layout shift */
@@ -6210,6 +6228,29 @@
             return div.innerHTML;
         }
 
+        // Escape for use in HTML attributes (also escapes quotes)
+        function escapeAttr(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Format duration in seconds to MM:SS or H:MM:SS
+        function formatDuration(seconds) {
+            if (!seconds || seconds <= 0) return '';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            if (h > 0) {
+                return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
         function highlightText(text, query) {
             if (!query) return escapeHtml(text);
             const escaped = escapeHtml(text);
@@ -6330,7 +6371,7 @@
                                 ${formatDate(tweet.created_at)}
                             </div>
                         </div>
-                        <div class="tweet-text" data-full-text="${escapeHtml(tweet.text || '')}">${highlightText((tweet.text || '').length > 200 ? (tweet.text || '').substring(0, 200) + '...' : (tweet.text || ''), searchQuery)}</div>
+                        <div class="tweet-text" data-full-text="${escapeAttr(tweet.text || '')}">${highlightText((tweet.text || '').length > 200 ? (tweet.text || '').substring(0, 200) + '...' : (tweet.text || ''), searchQuery)}</div>
                         ${(tweet.text || '').length > 200 ? `<button class="tweet-more-btn" onclick="event.stopPropagation(); toggleTweetExpand(this)">
                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
                             <span>Show more</span>
@@ -6421,8 +6462,9 @@
                                     <div class="video-indicator">
                                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                     </div>
+                                    ${media.duration ? `<div class="video-duration">${formatDuration(media.duration)}</div>` : ''}
                                     ${media.transcript ? `
-                                        <button class="transcript-btn" data-transcript="${escapeHtml(media.transcript)}" data-lang="${escapeHtml(media.transcript_language || '')}" onclick="event.stopPropagation(); event.preventDefault(); showTranscriptFromButton(this);" title="View transcript">
+                                        <button class="transcript-btn" data-transcript="${escapeAttr(media.transcript)}" data-lang="${escapeAttr(media.transcript_language || '')}" onclick="event.stopPropagation(); event.preventDefault(); showTranscriptFromButton(this);" title="View transcript">
                                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"/></svg>
                                         </button>
                                     ` : ''}
