@@ -8492,14 +8492,16 @@
                 // Collapse
                 section.classList.remove('expanded');
                 content.style.maxHeight = '120px';
+                content.style.overflowY = 'hidden';
                 content.style.maskImage = 'linear-gradient(to bottom, black 60%, transparent 100%)';
                 content.style.webkitMaskImage = 'linear-gradient(to bottom, black 60%, transparent 100%)';
                 hint.textContent = 'Show full transcript';
                 if (icon) icon.style.transform = '';
             } else {
-                // Expand
+                // Expand - show full transcript with scroll
                 section.classList.add('expanded');
-                content.style.maxHeight = '500px';
+                content.style.maxHeight = 'none';
+                content.style.overflowY = 'auto';
                 content.style.maskImage = 'none';
                 content.style.webkitMaskImage = 'none';
                 hint.textContent = 'Show less';
