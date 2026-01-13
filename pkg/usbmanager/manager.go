@@ -275,7 +275,16 @@ func (m *Manager) Mount(ctx context.Context, device string, mountAs string) (str
 		partition = device
 	}
 
-	cmd := exec.CommandContext(ctx, "mount", "-t", "auto", partition, mountPoint)
+	// Build mount options based on filesystem type
+	// FAT-based filesystems need uid/gid options for non-root access
+	var cmd *exec.Cmd
+	switch strings.ToLower(drive.Filesystem) {
+	case "vfat", "exfat", "ntfs":
+		// uid/gid 1000 is the xgrabba user in the main container
+		cmd = exec.CommandContext(ctx, "mount", "-t", "auto", "-o", "uid=1000,gid=1000,umask=0002", partition, mountPoint)
+	default:
+		cmd = exec.CommandContext(ctx, "mount", "-t", "auto", partition, mountPoint)
+	}
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("mount failed: %s: %w", string(output), err)
 	}
