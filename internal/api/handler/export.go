@@ -33,6 +33,8 @@ type ExportStartRequest struct {
 	DestPath       string `json:"dest_path"`
 	IncludeViewers bool   `json:"include_viewers"`
 	Download       bool   `json:"download"` // If true, creates a downloadable zip instead of writing to dest_path
+	Encrypt        bool   `json:"encrypt"`  // If true, encrypts the archive with the given password
+	Password       string `json:"password"` // Password for encryption (required if encrypt is true)
 }
 
 // ExportStartResponse is the response for starting an export.
@@ -78,10 +80,22 @@ func (h *ExportHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate encryption options
+	if req.Encrypt && req.Password == "" {
+		http.Error(w, `{"error": "password is required when encryption is enabled"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Encrypt && len(req.Password) < 8 {
+		http.Error(w, `{"error": "password must be at least 8 characters"}`, http.StatusBadRequest)
+		return
+	}
+
 	opts := service.ExportOptions{
 		DestPath:       req.DestPath,
 		IncludeViewers: req.IncludeViewers,
 		ViewerBinDir:   "bin", // Default viewer binary location
+		Encrypt:        req.Encrypt,
+		Password:       req.Password,
 	}
 
 	var exportID string
@@ -89,6 +103,11 @@ func (h *ExportHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	if req.Download {
 		// Download mode: create a zip file for browser download
+		// Note: encryption not yet supported for download mode
+		if req.Encrypt {
+			http.Error(w, `{"error": "encryption is not yet supported for download mode, please use USB export"}`, http.StatusBadRequest)
+			return
+		}
 		exportID, err = h.exportSvc.StartDownloadExportAsync(opts)
 	} else {
 		// Path mode: write directly to filesystem

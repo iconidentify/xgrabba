@@ -3,6 +3,8 @@ package service
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/domain"
+	"github.com/iconidentify/xgrabba/pkg/crypto"
 )
 
 // ExportService handles exporting the archive to portable formats.
@@ -443,9 +446,27 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		}
 	}
 
-	// Write README.txt
-	if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
-		s.logger.Warn("failed to write README", "error", err)
+	// Encrypt archive if requested
+	if opts.Encrypt && opts.Password != "" {
+		s.mu.Lock()
+		s.activeExport.Phase = "encrypting"
+		s.activeExport.CurrentFile = "Encrypting archive..."
+		s.mu.Unlock()
+
+		if err := s.encryptExport(opts.DestPath, opts.Password); err != nil {
+			s.setExportError(fmt.Sprintf("encrypt archive: %v", err))
+			return
+		}
+
+		// Write encrypted README (different from regular README)
+		if err := s.writeEncryptedReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
+			s.logger.Warn("failed to write encrypted README", "error", err)
+		}
+	} else {
+		// Write regular README.txt
+		if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
+			s.logger.Warn("failed to write README", "error", err)
+		}
 	}
 
 	// Mark as completed
@@ -457,6 +478,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.logger.Info("async export complete",
 		"tweets", len(exportedTweets),
 		"bytes", s.activeExport.BytesWritten,
+		"encrypted", opts.Encrypt,
 	)
 }
 
@@ -508,6 +530,312 @@ func (s *ExportService) cleanupExport(destPath string) {
 	}
 
 	s.logger.Info("export cleanup completed", "path", destPath)
+}
+
+// encryptExport encrypts all export files in place.
+// It encrypts tweets-data.json → data.enc, and all files in data/ directory.
+// Creates manifest.enc with mapping of original to encrypted file names.
+func (s *ExportService) encryptExport(destPath, password string) error {
+	s.logger.Info("encrypting export", "path", destPath)
+
+	// 1. Encrypt tweets-data.json → data.enc
+	tweetsDataPath := filepath.Join(destPath, "tweets-data.json")
+	if _, err := os.Stat(tweetsDataPath); err == nil {
+		data, err := os.ReadFile(tweetsDataPath)
+		if err != nil {
+			return fmt.Errorf("read tweets-data.json: %w", err)
+		}
+
+		encrypted, err := crypto.Encrypt(data, password)
+		if err != nil {
+			return fmt.Errorf("encrypt tweets-data.json: %w", err)
+		}
+
+		encPath := filepath.Join(destPath, "data.enc")
+		if err := writeFileSync(encPath, encrypted, 0644); err != nil {
+			return fmt.Errorf("write data.enc: %w", err)
+		}
+
+		// Remove original
+		os.Remove(tweetsDataPath)
+		s.logger.Info("encrypted tweets-data.json", "size", len(data), "encrypted_size", len(encrypted))
+	}
+
+	// 2. Encrypt all files in data/ directory
+	dataDir := filepath.Join(destPath, "data")
+	manifest := make(map[string]string) // originalPath -> encryptedName
+
+	if _, err := os.Stat(dataDir); err == nil {
+		err := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+
+			// Read file
+			data, err := os.ReadFile(path)
+			if err != nil {
+				s.logger.Warn("failed to read file for encryption", "path", path, "error", err)
+				return nil // Continue with other files
+			}
+
+			// Generate obfuscated name based on hash of path
+			hash := sha256.Sum256([]byte(path))
+			encName := hex.EncodeToString(hash[:8]) + ".enc"
+
+			// Encrypt
+			encrypted, err := crypto.Encrypt(data, password)
+			if err != nil {
+				s.logger.Warn("failed to encrypt file", "path", path, "error", err)
+				return nil
+			}
+
+			// Get relative path from destPath for manifest
+			relPath, _ := filepath.Rel(destPath, path)
+			manifest[relPath] = encName
+
+			// Write encrypted file to encrypted/ directory
+			encDir := filepath.Join(destPath, "encrypted")
+			os.MkdirAll(encDir, 0755)
+			encPath := filepath.Join(encDir, encName)
+
+			if err := writeFileSync(encPath, encrypted, 0644); err != nil {
+				s.logger.Warn("failed to write encrypted file", "path", encPath, "error", err)
+				return nil
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			s.logger.Warn("error walking data directory", "error", err)
+		}
+
+		// Remove original data directory
+		os.RemoveAll(dataDir)
+	}
+
+	// 3. Write encrypted manifest
+	manifestData, err := json.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+
+	encManifest, err := crypto.Encrypt(manifestData, password)
+	if err != nil {
+		return fmt.Errorf("encrypt manifest: %w", err)
+	}
+
+	manifestPath := filepath.Join(destPath, "manifest.enc")
+	if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
+		return fmt.Errorf("write manifest.enc: %w", err)
+	}
+
+	// 4. Replace index.html with encrypted archive notice
+	if err := s.writeEncryptedIndexHTML(destPath); err != nil {
+		s.logger.Warn("failed to write encrypted index.html", "error", err)
+	}
+
+	s.logger.Info("encryption complete", "files_encrypted", len(manifest)+1)
+	return nil
+}
+
+// writeEncryptedIndexHTML writes an index.html that explains the archive is encrypted.
+func (s *ExportService) writeEncryptedIndexHTML(destPath string) error {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypted XGrabba Archive</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #15202b;
+            color: #e7e9ea;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            text-align: center;
+        }
+        .lock-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            color: #1d9bf0;
+        }
+        h1 { font-size: 24px; margin-bottom: 16px; }
+        p { color: #8b98a5; margin-bottom: 24px; line-height: 1.6; }
+        .instructions {
+            background: #1e2732;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 24px;
+        }
+        .instructions h2 {
+            font-size: 14px;
+            color: #8b98a5;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .instructions ol {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .viewer-list {
+            display: grid;
+            gap: 8px;
+        }
+        .viewer-item {
+            background: #1e2732;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .viewer-item .os { color: #8b98a5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <h1>Encrypted Archive</h1>
+        <p>This XGrabba archive is protected with AES-256-GCM encryption. To view your tweets, use one of the viewer applications below.</p>
+
+        <div class="instructions">
+            <h2>How to View</h2>
+            <ol>
+                <li>Run the viewer app for your operating system</li>
+                <li>Enter your encryption password when prompted</li>
+                <li>Browse your archive in your web browser</li>
+            </ol>
+        </div>
+
+        <div class="viewer-list">
+            <div class="viewer-item">
+                <span>xgrabba-viewer.exe</span>
+                <span class="os">Windows</span>
+            </div>
+            <div class="viewer-item">
+                <span>xgrabba-viewer-mac-arm64</span>
+                <span class="os">macOS (Apple Silicon)</span>
+            </div>
+            <div class="viewer-item">
+                <span>xgrabba-viewer-mac-amd64</span>
+                <span class="os">macOS (Intel)</span>
+            </div>
+            <div class="viewer-item">
+                <span>xgrabba-viewer-linux</span>
+                <span class="os">Linux</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`
+
+	return writeFileSync(filepath.Join(destPath, "index.html"), []byte(html), 0644)
+}
+
+// writeEncryptedReadme writes a README for encrypted archives.
+func (s *ExportService) writeEncryptedReadme(destPath string, tweetCount int, totalBytes int64) error {
+	sizeStr := formatBytes(totalBytes)
+	now := time.Now().UTC()
+	dateStr := now.Format("January 2, 2006 at 3:04:05 PM UTC")
+
+	readme := fmt.Sprintf(`================================================================================
+                    ENCRYPTED XGRABBA ARCHIVE
+================================================================================
+
+ARCHIVE INFORMATION
+-------------------
+Tweets Archived:  %d
+Total Data Size:  %s
+Export Date:      %s
+Encryption:       AES-256-GCM with Argon2id key derivation
+
+================================================================================
+
+THIS ARCHIVE IS ENCRYPTED
+
+Your tweets and media are protected with strong encryption. The archive cannot
+be read without your password.
+
+To view your archive, run one of the viewer applications included in this folder.
+
+================================================================================
+
+VIEWER APPLICATIONS
+-------------------
+
+Windows:
+  Double-click xgrabba-viewer.exe
+  If SmartScreen appears: Click "More info" → "Run anyway"
+
+macOS (Apple Silicon M1/M2/M3/M4):
+  Right-click xgrabba-viewer-mac-arm64 → Open
+  If blocked: System Settings → Privacy & Security → Open Anyway
+
+macOS (Intel):
+  Right-click xgrabba-viewer-mac-amd64 → Open
+
+Linux:
+  chmod +x xgrabba-viewer-linux
+  ./xgrabba-viewer-linux
+
+================================================================================
+
+SECURITY NOTES
+--------------
+
+• Your password is never stored - if you forget it, the data cannot be recovered
+• Each file is encrypted with a unique key derived from your password
+• The encryption uses AES-256-GCM (authenticated encryption)
+• Key derivation uses Argon2id (memory-hard, resistant to GPU attacks)
+
+================================================================================
+
+FILE STRUCTURE
+--------------
+
+README.txt        - This file
+index.html        - Explains the archive is encrypted
+data.enc          - Encrypted tweet index
+manifest.enc      - Encrypted file mapping
+encrypted/        - Encrypted media files
+xgrabba-viewer.*  - Viewer applications for each platform
+
+================================================================================
+
+DISCLAIMER
+----------
+
+XGrabba is an open source project for personal archival purposes. The creators
+are not responsible for the data you choose to archive. Use responsibly.
+
+Source: https://github.com/iconidentify/xgrabba
+
+================================================================================
+`, tweetCount, sizeStr, dateStr)
+
+	return writeFileSync(filepath.Join(destPath, "README.txt"), []byte(readme), 0644)
 }
 
 // writeFileSync writes data to a file and ensures it's flushed to disk.
@@ -877,6 +1205,8 @@ type ExportOptions struct {
 	DateRange       *DateRange // Optional date filter
 	Authors         []string // Optional author filter
 	SearchQuery     string   // Optional search filter
+	Encrypt         bool     // Enable AES-256-GCM encryption
+	Password        string   // Password for encryption (required if Encrypt is true)
 }
 
 // DateRange filters tweets by date.

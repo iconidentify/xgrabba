@@ -4643,6 +4643,50 @@
             margin-top: 2px;
         }
 
+        .export-options-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .encryption-password-group {
+            margin-bottom: 12px;
+        }
+
+        .encryption-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .encryption-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .encryption-input:focus {
+            outline: none;
+            border-color: var(--brand-start);
+        }
+
+        .encryption-warning {
+            padding: 8px 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
         .export-modal-footer {
             display: flex;
             gap: 10px;
@@ -6533,6 +6577,28 @@
                         <div class="usb-loading">
                             <div class="spinner" style="width: 24px; height: 24px;"></div>
                             <span>Scanning for USB drives...</span>
+                        </div>
+                    </div>
+
+                    <!-- Encryption Options -->
+                    <div class="export-options-section" id="encryptionOptions" style="display: none;">
+                        <div class="export-checkbox">
+                            <input type="checkbox" id="encryptExport" onchange="toggleEncryptionFields()">
+                            <div class="export-checkbox-label">
+                                <div class="export-checkbox-title">Encrypt Archive</div>
+                                <div class="export-checkbox-desc">Protect with AES-256 encryption (password required to view)</div>
+                            </div>
+                        </div>
+                        <div id="encryptionFields" style="display: none;">
+                            <div class="encryption-password-group">
+                                <label class="encryption-label">Password (min 8 characters)</label>
+                                <input type="password" id="encryptPassword" class="encryption-input" placeholder="Enter password" autocomplete="new-password">
+                            </div>
+                            <div class="encryption-password-group">
+                                <label class="encryption-label">Confirm Password</label>
+                                <input type="password" id="encryptPasswordConfirm" class="encryption-input" placeholder="Confirm password" autocomplete="new-password">
+                            </div>
+                            <div class="encryption-warning" id="encryptionWarning" style="display: none;"></div>
                         </div>
                     </div>
 
@@ -10694,9 +10760,12 @@
                 usbAvailable = data.available;
                 usbDrives = data.drives || [];
 
+                const encryptionOpts = document.getElementById('encryptionOptions');
+
                 if (!usbAvailable) {
                     driveList.innerHTML = '';
                     unavailable.style.display = 'block';
+                    encryptionOpts.style.display = 'none';
                     return;
                 }
 
@@ -10710,9 +10779,11 @@
                             <p style="font-size: 11px; margin-top: 4px;">Connect a USB drive to the server</p>
                         </div>
                     `;
+                    encryptionOpts.style.display = 'none';
                     return;
                 }
 
+                encryptionOpts.style.display = 'block';
                 renderUSBDrives();
             } catch (err) {
                 console.error('USB drives error:', err);
@@ -11085,18 +11156,31 @@
                 return;
             }
 
+            // Validate encryption settings
+            const encryptionResult = validateEncryption();
+            if (!encryptionResult.valid) {
+                return;
+            }
+
             try {
+                const requestBody = {
+                    download: false,
+                    dest_path: selectedUSBDrive.mount_point,
+                    include_viewers: true
+                };
+
+                if (encryptionResult.encrypt) {
+                    requestBody.encrypt = true;
+                    requestBody.password = encryptionResult.password;
+                }
+
                 const resp = await fetch('/api/v1/export/start', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-API-Key': API_KEY
                     },
-                    body: JSON.stringify({
-                        download: false,
-                        dest_path: selectedUSBDrive.mount_point,
-                        include_viewers: true
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (resp.status === 409) {
@@ -11181,6 +11265,47 @@
             document.getElementById('exportModalOverlay').classList.remove('active');
             stopExportPolling();
             closeUSBEventStream();
+            // Reset encryption fields
+            document.getElementById('encryptExport').checked = false;
+            document.getElementById('encryptPassword').value = '';
+            document.getElementById('encryptPasswordConfirm').value = '';
+            document.getElementById('encryptionFields').style.display = 'none';
+            document.getElementById('encryptionWarning').style.display = 'none';
+        }
+
+        function toggleEncryptionFields() {
+            const checkbox = document.getElementById('encryptExport');
+            const fields = document.getElementById('encryptionFields');
+            fields.style.display = checkbox.checked ? 'block' : 'none';
+            if (!checkbox.checked) {
+                document.getElementById('encryptPassword').value = '';
+                document.getElementById('encryptPasswordConfirm').value = '';
+                document.getElementById('encryptionWarning').style.display = 'none';
+            }
+        }
+
+        function validateEncryption() {
+            const checkbox = document.getElementById('encryptExport');
+            if (!checkbox.checked) return { valid: true, encrypt: false, password: '' };
+
+            const password = document.getElementById('encryptPassword').value;
+            const confirm = document.getElementById('encryptPasswordConfirm').value;
+            const warning = document.getElementById('encryptionWarning');
+
+            if (password.length < 8) {
+                warning.textContent = 'Password must be at least 8 characters';
+                warning.style.display = 'block';
+                return { valid: false };
+            }
+
+            if (password !== confirm) {
+                warning.textContent = 'Passwords do not match';
+                warning.style.display = 'block';
+                return { valid: false };
+            }
+
+            warning.style.display = 'none';
+            return { valid: true, encrypt: true, password: password };
         }
 
         function showExportView(view) {
@@ -11272,8 +11397,10 @@
                     updateExportBtn(false);
 
                     if (status.phase === 'completed') {
+                        const wasEncrypted = document.getElementById('encryptExport').checked;
+                        const encryptedNote = wasEncrypted ? ' (encrypted)' : '';
                         document.getElementById('exportCompletedSummary').textContent =
-                            `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)})`;
+                            `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)})${encryptedNote}`;
 
                         // Show completed view FIRST, before auto-eject
                         showExportView('completed');
@@ -11308,6 +11435,7 @@
             const phaseLabels = {
                 preparing: 'Preparing...',
                 exporting: 'Exporting...',
+                encrypting: 'Encrypting...',
                 finalizing: 'Finalizing...',
                 completed: 'Complete!'
             };
