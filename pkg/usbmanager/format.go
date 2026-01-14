@@ -41,10 +41,9 @@ func NewFormatManager(manager *Manager, logger *slog.Logger) *FormatManager {
 
 // StartFormat begins an async format operation.
 func (fm *FormatManager) StartFormat(device, fsType, label, confirmToken string) (string, error) {
-	// Validate confirmation token
-	expectedToken := fmt.Sprintf("erase-all-data-on-%s", filepath.Base(device))
-	if confirmToken != expectedToken {
-		return "", fmt.Errorf("invalid confirmation token")
+	// Validate confirmation token - user must type "FORMAT" to confirm
+	if confirmToken != "FORMAT" {
+		return "", fmt.Errorf("invalid confirmation - type FORMAT to confirm")
 	}
 
 	// Validate filesystem type

@@ -357,10 +357,9 @@ func (m *Manager) Unmount(ctx context.Context, device string) error {
 
 // Format formats a USB drive with the specified filesystem.
 func (m *Manager) Format(ctx context.Context, device, fsType, label, confirmToken string) error {
-	// Validate confirmation token
-	expectedToken := fmt.Sprintf("erase-all-data-on-%s", filepath.Base(device))
-	if confirmToken != expectedToken {
-		return errors.New("invalid confirmation token")
+	// Validate confirmation token - user must type "FORMAT" to confirm
+	if confirmToken != "FORMAT" {
+		return errors.New("invalid confirmation - type FORMAT to confirm")
 	}
 
 	// Validate filesystem type

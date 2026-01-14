@@ -287,6 +287,42 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	}
 	os.Remove(testFile)
 
+	// Check if destination has existing files (require empty/formatted drive)
+	// This prevents exporting to a populated drive which could cause confusion
+	entries, err := os.ReadDir(opts.DestPath)
+	if err == nil && len(entries) > 0 {
+		// Check if these are leftover files from a previous xgrabba export
+		hasNonXgrabbaFiles := false
+		for _, entry := range entries {
+			name := entry.Name()
+			// Allow only xgrabba export files/dirs
+			if name != "data" && name != "index.html" && name != "README.txt" &&
+				name != "tweets-data.json" && !strings.HasPrefix(name, "xgrabba-viewer") &&
+				!strings.HasPrefix(name, ".") { // Allow hidden files like .Trashes, .Spotlight-V100
+				hasNonXgrabbaFiles = true
+				break
+			}
+		}
+		if hasNonXgrabbaFiles {
+			s.setExportError("destination contains existing files - please format the drive first or use an empty drive")
+			return
+		}
+		// Clean up previous xgrabba export files
+		s.logger.Info("cleaning up previous export files", "path", opts.DestPath)
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") {
+				continue // Don't delete hidden system files
+			}
+			path := filepath.Join(opts.DestPath, name)
+			if entry.IsDir() {
+				os.RemoveAll(path)
+			} else {
+				os.Remove(path)
+			}
+		}
+	}
+
 	// Create destination directory (no-op if already exists)
 	if err := os.MkdirAll(opts.DestPath, 0755); err != nil {
 		s.setExportError(fmt.Sprintf("create destination directory: %v, path: %s", err, opts.DestPath))
@@ -332,6 +368,9 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 			s.mu.Lock()
 			s.activeExport.Phase = "cancelled"
 			s.mu.Unlock()
+			// Clean up partial export
+			s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
+			s.cleanupExport(opts.DestPath)
 			return
 		default:
 		}
@@ -429,6 +468,46 @@ func (s *ExportService) setExportError(err string) {
 		s.activeExport.Phase = "failed"
 		s.activeExport.Error = err
 	}
+}
+
+// cleanupExport removes all xgrabba export files from the destination.
+// Called when an export is cancelled to ensure no partial data is left behind.
+func (s *ExportService) cleanupExport(destPath string) {
+	// Remove xgrabba export files/directories
+	filesToRemove := []string{
+		"data",
+		"index.html",
+		"README.txt",
+		"tweets-data.json",
+		"xgrabba-viewer.exe",
+		"xgrabba-viewer-mac",
+		"xgrabba-viewer-mac-arm64",
+		"xgrabba-viewer-mac-amd64",
+		"xgrabba-viewer-linux",
+	}
+
+	for _, name := range filesToRemove {
+		path := filepath.Join(destPath, name)
+		if info, err := os.Stat(path); err == nil {
+			if info.IsDir() {
+				if err := os.RemoveAll(path); err != nil {
+					s.logger.Warn("failed to remove directory during cleanup", "path", path, "error", err)
+				}
+			} else {
+				if err := os.Remove(path); err != nil {
+					s.logger.Warn("failed to remove file during cleanup", "path", path, "error", err)
+				}
+			}
+		}
+	}
+
+	// Sync filesystem to ensure cleanup is persisted
+	if f, err := os.Open(destPath); err == nil {
+		f.Sync()
+		f.Close()
+	}
+
+	s.logger.Info("export cleanup completed", "path", destPath)
 }
 
 // writeFileSync writes data to a file and ensures it's flushed to disk.

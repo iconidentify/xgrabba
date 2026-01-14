@@ -5029,9 +5029,38 @@
         }
 
         .usb-drive-meta {
-            font-size: 11px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+        }
+
+        .usb-drive-meta-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .usb-drive-meta-label {
             color: var(--text-muted);
-            margin-top: 2px;
+            font-size: 11px;
+        }
+
+        .usb-drive-space-bar {
+            width: 60px;
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-left: 4px;
+        }
+
+        .usb-drive-space-bar-fill {
+            height: 100%;
+            background: var(--accent-primary);
+            border-radius: 2px;
         }
 
         .usb-drive-actions {
@@ -10734,7 +10763,9 @@
                 const label = drive.label || deviceName;
                 const size = formatExportBytes(drive.size_bytes);
                 const free = formatExportBytes(drive.free_bytes);
+                const used = drive.size_bytes > 0 ? Math.round(((drive.size_bytes - drive.free_bytes) / drive.size_bytes) * 100) : 0;
                 const isSelected = selectedUSBDrive && selectedUSBDrive.device === drive.device;
+                const driveDescription = `${drive.vendor || ''} ${drive.model || ''}`.trim() || 'USB Drive';
 
                 return `
                     <div class="usb-drive-item ${isSelected ? 'selected' : ''}" onclick="selectUSBDrive('${drive.device}')">
@@ -10750,7 +10781,11 @@
                                     ${drive.is_mounted ? '<span class="usb-mounted-badge">MOUNTED</span>' : ''}
                                 </div>
                                 <div class="usb-drive-meta">
-                                    ${drive.vendor || ''} ${drive.model || ''} - ${size} (${free} free)
+                                    <span class="usb-drive-meta-item">${driveDescription}</span>
+                                    <span class="usb-drive-meta-item"><span class="usb-drive-meta-label">Size:</span> ${size}</span>
+                                    ${drive.is_mounted ? `<span class="usb-drive-meta-item"><span class="usb-drive-meta-label">Free:</span> ${free}
+                                        <span class="usb-drive-space-bar"><span class="usb-drive-space-bar-fill" style="width: ${used}%"></span></span>
+                                    </span>` : ''}
                                 </div>
                             </div>
                             <div class="usb-drive-actions" onclick="event.stopPropagation()">
@@ -10759,7 +10794,7 @@
                                     : `<button class="usb-drive-action" onclick="mountUSBDrive('${drive.device}')">Mount</button>`
                                 }
                                 <button class="usb-drive-action" onclick="showRenameDialog('${drive.device}', '${deviceName}', '${(drive.label || '').replace(/'/g, "\\'")}')">Rename</button>
-                                <button class="usb-drive-action danger" onclick="showFormatConfirm('${drive.device}', '${deviceName}')">Format</button>
+                                <button class="usb-drive-action danger" onclick="showFormatConfirm(usbDrives.find(d => d.device === '${drive.device}'))">Format</button>
                             </div>
                         </div>
                     </div>
@@ -10823,24 +10858,38 @@
         }
 
         let formatConfirmDevice = null;
-        function showFormatConfirm(device, deviceName) {
-            formatConfirmDevice = { device, deviceName };
+        function showFormatConfirm(drive) {
+            const deviceName = drive.device.replace('/dev/', '');
+            const label = drive.label || deviceName;
+            const size = formatExportBytes(drive.size_bytes);
+            const vendor = drive.vendor || '';
+            const model = drive.model || '';
+            const driveDescription = `${vendor} ${model}`.trim() || 'USB Drive';
+
+            formatConfirmDevice = { device: drive.device, deviceName };
             const html = `
                 <div class="usb-format-confirm" id="formatConfirmOverlay" onclick="if(event.target===this)closeFormatConfirm()">
                     <div class="usb-format-confirm-box">
                         <h4 style="margin: 0 0 16px; font-size: 16px;">Format USB Drive</h4>
+
+                        <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                            <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${label}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${driveDescription}</div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${size} • /dev/${deviceName}</div>
+                        </div>
+
                         <div class="usb-format-warning">
                             <svg viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                             </svg>
-                            <p>This will <strong>ERASE ALL DATA</strong> on ${deviceName}. This cannot be undone.</p>
+                            <p>This will <strong>ERASE ALL DATA</strong> on this drive. This cannot be undone.</p>
                         </div>
                         <div class="usb-format-input">
-                            <label>Type "${deviceName}" to confirm:</label>
-                            <input type="text" id="formatConfirmInput" placeholder="${deviceName}" autocomplete="off">
+                            <label>Type "FORMAT" to confirm:</label>
+                            <input type="text" id="formatConfirmInput" placeholder="FORMAT" autocomplete="off" style="text-transform: uppercase;">
                         </div>
                         <div class="usb-format-input">
-                            <label>New drive label (optional):</label>
+                            <label>New drive label:</label>
                             <input type="text" id="formatLabelInput" placeholder="XGRABBA" value="XGRABBA" maxlength="11">
                         </div>
                         <div class="usb-format-actions">
@@ -10863,14 +10912,14 @@
         async function confirmFormat() {
             const input = document.getElementById('formatConfirmInput');
             const labelInput = document.getElementById('formatLabelInput');
-            if (!formatConfirmDevice || input.value !== formatConfirmDevice.deviceName) {
-                alert('Please type the device name correctly to confirm.');
+            if (!formatConfirmDevice || input.value.toUpperCase() !== 'FORMAT') {
+                alert('Please type FORMAT to confirm.');
                 return;
             }
 
             const label = labelInput.value.trim() || 'XGRABBA';
             const deviceName = formatConfirmDevice.deviceName;
-            const confirmToken = `erase-all-data-on-${deviceName}`;
+            const confirmToken = 'FORMAT';
 
             closeFormatConfirm();
             showFormatProgress(deviceName, label);

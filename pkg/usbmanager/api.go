@@ -167,11 +167,10 @@ func (h *APIHandler) FormatDrive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate confirm token
-	expectedToken := "erase-all-data-on-" + filepath.Base(device)
-	if req.ConfirmToken != expectedToken {
+	// Validate confirm token - user must type "FORMAT" to confirm
+	if req.ConfirmToken != "FORMAT" {
 		h.writeError(w, http.StatusBadRequest, ErrCodeInvalidToken,
-			"Invalid confirmation token. Expected: "+expectedToken)
+			"Invalid confirmation. Please type FORMAT to confirm.")
 		return
 	}
 
