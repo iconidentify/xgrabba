@@ -41,6 +41,32 @@ func (c *Client) SetBrowserCredentials(creds BrowserCredentials) {
 	credsStore.mu.Lock()
 	defer credsStore.mu.Unlock()
 
+	// Merge behavior (important):
+	// - The extension may send credentials frequently, sometimes without query_ids/feature_flags
+	//   (e.g. content-script cookie sync). We must NOT wipe previously captured GraphQL metadata
+	//   in those cases.
+	prev := credsStore.creds
+	if prev != nil && prev.IsValid() {
+		// Merge query IDs (union). Incoming values win for the same key.
+		if len(creds.QueryIDs) == 0 {
+			creds.QueryIDs = prev.QueryIDs
+		} else if len(prev.QueryIDs) > 0 {
+			if creds.QueryIDs == nil {
+				creds.QueryIDs = map[string]string{}
+			}
+			for k, v := range prev.QueryIDs {
+				if _, ok := creds.QueryIDs[k]; !ok {
+					creds.QueryIDs[k] = v
+				}
+			}
+		}
+
+		// Preserve feature flags if the incoming payload doesn't include them.
+		if len(creds.FeatureFlags) == 0 && len(prev.FeatureFlags) > 0 {
+			creds.FeatureFlags = prev.FeatureFlags
+		}
+	}
+
 	// Set expiry to 1 hour from now (credentials refresh on each page load)
 	if creds.ExpiresAt.IsZero() {
 		creds.ExpiresAt = time.Now().Add(1 * time.Hour)
