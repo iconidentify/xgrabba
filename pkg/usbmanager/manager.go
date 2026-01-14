@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // Manager handles USB drive detection, mounting, and formatting.
@@ -299,33 +300,47 @@ func (m *Manager) Mount(ctx context.Context, device string, mountAs string) (str
 
 // Unmount safely unmounts a USB drive.
 func (m *Manager) Unmount(ctx context.Context, device string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	// Get drive info while holding lock, then release before running commands
+	// This prevents deadlock if sync/umount hangs
+	m.mu.RLock()
 	drive, ok := m.drives[device]
 	if !ok {
+		m.mu.RUnlock()
 		return fmt.Errorf("device not found: %s", device)
 	}
 
 	if !drive.IsMounted {
+		m.mu.RUnlock()
 		return nil // Already unmounted
 	}
 
+	mountPoint := drive.MountPoint
+	m.mu.RUnlock()
+
+	// Create a timeout context for sync/umount commands (30 second max)
+	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	// Sync first to flush buffers
-	cmd := exec.CommandContext(ctx, "sync")
+	cmd := exec.CommandContext(cmdCtx, "sync")
 	_ = cmd.Run()
 
 	// Unmount
-	cmd = exec.CommandContext(ctx, "umount", drive.MountPoint)
+	cmd = exec.CommandContext(cmdCtx, "umount", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("unmount failed: %s: %w", string(output), err)
 	}
 
 	// Remove mount point directory
-	_ = os.Remove(drive.MountPoint)
+	_ = os.Remove(mountPoint)
 
-	drive.MountPoint = ""
-	drive.IsMounted = false
+	// Re-acquire lock to update state
+	m.mu.Lock()
+	if d, ok := m.drives[device]; ok {
+		d.MountPoint = ""
+		d.IsMounted = false
+	}
+	m.mu.Unlock()
 
 	m.logger.Info("unmounted drive", "device", device)
 	return nil
