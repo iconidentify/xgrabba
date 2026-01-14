@@ -28,6 +28,8 @@ type BookmarksMonitor interface {
 	Resume()
 	CheckNow()
 	Activity() *bookmarks.ActivityLog
+	FailedCache() bookmarks.FailedCacheSnapshot
+	ClearFailedCache()
 }
 
 type BookmarksOAuthHandler struct {
@@ -443,5 +445,34 @@ func (h *BookmarksOAuthHandler) CheckNowMonitor(w http.ResponseWriter, r *http.R
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 	})
+}
+
+// FailedCacheStatus returns the permanent failure cache snapshot used by the bookmarks monitor.
+func (h *BookmarksOAuthHandler) FailedCacheStatus(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "monitor not running")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, mon.FailedCache())
+}
+
+// ClearFailedCache clears the permanent failure cache used by the bookmarks monitor.
+func (h *BookmarksOAuthHandler) ClearFailedCache(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+
+	if mon == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "monitor not running")
+		return
+	}
+
+	mon.ClearFailedCache()
+	h.writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 

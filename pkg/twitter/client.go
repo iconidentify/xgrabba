@@ -326,6 +326,13 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 			}
 		}
 
+		// Optional enrichment pass: keep the normal syndication flow as the primary source,
+		// but attempt to fill in missing fields from GraphQL when available.
+		//
+		// This is intentionally best-effort and should never cause the tweet to fail if
+		// GraphQL is blocked/rate-limited.
+		c.enrichFromGraphQL(ctx, tweetID, tweet)
+
 		// Best-effort: if author handle is missing (NSFW/visibility edge cases),
 		// derive it from the URL so the archive remains human-friendly.
 		applyAuthorFromURL(tweet, tweetURL)
@@ -341,6 +348,54 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	}
 
 	return nil, fmt.Errorf("failed to fetch tweet (syndication: %v, graphql: %v)", err, graphqlErr)
+}
+
+// enrichFromGraphQL fills in missing tweet fields from GraphQL without changing the primary
+// syndication-based flow. It only runs when syndication succeeded.
+func (c *Client) enrichFromGraphQL(ctx context.Context, tweetID string, base *domain.Tweet) {
+	if base == nil || tweetID == "" {
+		return
+	}
+	// Only attempt if browser credentials are available (guest token is often insufficient for restricted tweets).
+	if !c.HasBrowserCredentials() {
+		return
+	}
+
+	// Only attempt if we have obvious gaps to fill.
+	needs := base.Metrics.Views == 0 || base.Author.AvatarURL == "" || base.Author.DisplayName == "" || len(base.Media) == 0
+	if !needs {
+		return
+	}
+
+	// Keep this bounded so we don't regress the fast path.
+	enrichCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
+	gqlTweet, err := c.fetchFromGraphQLWithRetry(enrichCtx, tweetID, false)
+	if err != nil || gqlTweet == nil {
+		return
+	}
+
+	// Merge fields conservatively.
+	if base.Metrics.Views == 0 && gqlTweet.Metrics.Views != 0 {
+		base.Metrics.Views = gqlTweet.Metrics.Views
+	}
+	if base.Author.AvatarURL == "" && gqlTweet.Author.AvatarURL != "" {
+		base.Author.AvatarURL = gqlTweet.Author.AvatarURL
+	}
+	if (base.Author.DisplayName == "" || base.Author.DisplayName == "unknown" || strings.HasPrefix(base.Author.DisplayName, "user_")) && gqlTweet.Author.DisplayName != "" {
+		base.Author.DisplayName = gqlTweet.Author.DisplayName
+	}
+	if (base.Author.Username == "" || base.Author.Username == "unknown" || strings.HasPrefix(base.Author.Username, "user_")) && gqlTweet.Author.Username != "" {
+		base.Author.Username = gqlTweet.Author.Username
+	}
+	if base.Author.ID == "" && gqlTweet.Author.ID != "" {
+		base.Author.ID = gqlTweet.Author.ID
+	}
+	if len(base.Media) == 0 && len(gqlTweet.Media) > 0 {
+		base.Media = gqlTweet.Media
+		base.MediaTotal = len(gqlTweet.Media)
+	}
 }
 
 // applyAuthorFromURL fills in missing author fields using the tweet URL path.

@@ -67,6 +67,9 @@ func NewRouter(
 			// Enhanced status and monitor control
 			r.Get("/bookmarks/status", bookmarksOAuthHandler.EnhancedStatus)
 			r.Get("/bookmarks/activity", bookmarksOAuthHandler.Activity)
+			// Permanent-failure cache visibility/reset
+			r.Get("/bookmarks/failed-cache", bookmarksOAuthHandler.FailedCacheStatus)
+			r.Post("/bookmarks/failed-cache/clear", bookmarksOAuthHandler.ClearFailedCache)
 			r.Post("/bookmarks/pause", bookmarksOAuthHandler.PauseMonitor)
 			r.Post("/bookmarks/resume", bookmarksOAuthHandler.ResumeMonitor)
 			r.Post("/bookmarks/check-now", bookmarksOAuthHandler.CheckNowMonitor)
