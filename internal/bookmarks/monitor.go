@@ -31,6 +31,30 @@ type rateLimitState struct {
 	ResetAt time.Time `json:"reset_at"`
 }
 
+// failedTweetsCache persists tweet IDs that permanently failed archiving.
+// This prevents re-queueing tweets from suspended/deleted accounts every poll.
+type failedTweetsCache struct {
+	// FailedIDs maps tweet ID to failure reason and timestamp
+	FailedIDs map[string]failedTweetEntry `json:"failed_ids"`
+}
+
+type failedTweetEntry struct {
+	Reason    string    `json:"reason"`
+	FailedAt  time.Time `json:"failed_at"`
+	Attempts  int       `json:"attempts"`
+}
+
+// permanentFailureReasons are error substrings that indicate a tweet will never succeed.
+var permanentFailureReasons = []string{
+	"author data unavailable",
+	"account suspended",
+	"account is suspended",
+	"tweet not found",
+	"tweet has been deleted",
+	"protected tweets",
+	"User not found",
+}
+
 // MonitorState represents the current state of the bookmark monitor.
 type MonitorState string
 
@@ -48,8 +72,10 @@ type Monitor struct {
 	logger       *slog.Logger
 	eventEmitter domain.EventEmitter
 
-	seen          map[string]time.Time
-	rateLimitFile string
+	seen            map[string]time.Time
+	rateLimitFile   string
+	failedCacheFile string
+	failedCache     *failedTweetsCache
 
 	// State management for pause/resume
 	mu        sync.RWMutex
@@ -63,24 +89,33 @@ type Monitor struct {
 func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc archiver, logger *slog.Logger) *Monitor {
 	// Store rate limit state next to the OAuth file
 	rateLimitFile := ""
+	failedCacheFile := ""
 	activityPath := ""
 	if cfg.OAuthStorePath != "" {
 		dir := filepath.Dir(cfg.OAuthStorePath)
 		rateLimitFile = filepath.Join(dir, ".x_bookmarks_ratelimit.json")
+		failedCacheFile = filepath.Join(dir, ".x_bookmarks_failed.json")
 		activityPath = filepath.Join(dir, ".x_bookmarks_activity.jsonl")
 	}
 
-	return &Monitor{
-		cfg:           cfg,
-		client:        client,
-		arch:          tweetSvc,
-		logger:        logger,
-		seen:          make(map[string]time.Time),
-		rateLimitFile: rateLimitFile,
-		state:         MonitorStateIdle,
-		checkNow:      make(chan struct{}, 1),
-		activity:      NewActivityLog(activityPath, 100),
+	m := &Monitor{
+		cfg:             cfg,
+		client:          client,
+		arch:            tweetSvc,
+		logger:          logger,
+		seen:            make(map[string]time.Time),
+		rateLimitFile:   rateLimitFile,
+		failedCacheFile: failedCacheFile,
+		failedCache:     &failedTweetsCache{FailedIDs: make(map[string]failedTweetEntry)},
+		state:           MonitorStateIdle,
+		checkNow:        make(chan struct{}, 1),
+		activity:        NewActivityLog(activityPath, 100),
 	}
+
+	// Load any persisted failed tweets cache
+	m.loadFailedCache()
+
+	return m
 }
 
 // SetEventEmitter sets the event emitter for the monitor.
@@ -368,6 +403,7 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 	m.pruneSeen(now)
 
 	newIDs := make([]string, 0, len(ids))
+	skippedFailed := 0
 	for _, id := range ids {
 		if id == "" {
 			continue
@@ -375,10 +411,19 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 		if _, ok := m.seen[id]; ok {
 			continue
 		}
+		// Skip tweets that permanently failed (suspended/deleted accounts)
+		if m.isFailedTweet(id) {
+			skippedFailed++
+			continue
+		}
 		newIDs = append(newIDs, id)
 		if len(newIDs) >= m.cfg.MaxNewPerPoll {
 			break
 		}
+	}
+
+	if skippedFailed > 0 {
+		m.logger.Debug("skipped permanently failed tweets", "count", skippedFailed)
 	}
 
 	// Mark all returned IDs as seen so we don't treat them as new on next poll.
@@ -404,9 +449,20 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 	for _, id := range newIDs {
 		// Use placeholder username - the syndication API doesn't require the real username
 		tweetURL := fmt.Sprintf("https://x.com/x/status/%s", id)
-		_, err := m.arch.Archive(ctx, service.ArchiveRequest{TweetURL: tweetURL})
+		resp, err := m.arch.Archive(ctx, service.ArchiveRequest{TweetURL: tweetURL})
 		if err != nil {
 			m.logger.Warn("failed to enqueue bookmark archive", "tweet_id", id, "error", err)
+			// Mark as permanently failed if it's an unrecoverable error
+			if isPermanentFailure(err) {
+				m.markTweetFailed(id, err.Error())
+				m.logger.Info("marked tweet as permanently failed", "tweet_id", id, "reason", err.Error())
+			}
+			continue
+		}
+		// Check if the tweet service returned a permanently failed status
+		if resp != nil && resp.Status == domain.ArchiveStatusFailed {
+			m.markTweetFailed(id, resp.Message)
+			m.logger.Info("tweet permanently unavailable", "tweet_id", id, "reason", resp.Message)
 			continue
 		}
 		archivedIDs = append(archivedIDs, id)
@@ -482,4 +538,113 @@ func (m *Monitor) clearRateLimitState() {
 		return
 	}
 	_ = os.Remove(m.rateLimitFile)
+}
+
+// loadFailedCache loads the persisted failed tweets cache from disk.
+func (m *Monitor) loadFailedCache() {
+	if m.failedCacheFile == "" {
+		return
+	}
+	data, err := os.ReadFile(m.failedCacheFile)
+	if err != nil {
+		return
+	}
+	var cache failedTweetsCache
+	if err := json.Unmarshal(data, &cache); err != nil {
+		m.logger.Warn("failed to parse failed tweets cache", "error", err)
+		return
+	}
+	if cache.FailedIDs != nil {
+		m.failedCache = &cache
+		m.logger.Info("loaded failed tweets cache", "count", len(cache.FailedIDs))
+	}
+}
+
+// saveFailedCache persists the failed tweets cache to disk.
+func (m *Monitor) saveFailedCache() {
+	if m.failedCacheFile == "" {
+		return
+	}
+	data, err := json.Marshal(m.failedCache)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(m.failedCacheFile, data, 0600)
+}
+
+// isFailedTweet checks if a tweet ID is in the permanent failure cache.
+func (m *Monitor) isFailedTweet(id string) bool {
+	if m.failedCache == nil {
+		return false
+	}
+	_, exists := m.failedCache.FailedIDs[id]
+	return exists
+}
+
+// markTweetFailed adds a tweet ID to the permanent failure cache.
+func (m *Monitor) markTweetFailed(id string, reason string) {
+	if m.failedCache == nil {
+		m.failedCache = &failedTweetsCache{FailedIDs: make(map[string]failedTweetEntry)}
+	}
+
+	entry, exists := m.failedCache.FailedIDs[id]
+	if exists {
+		entry.Attempts++
+		entry.Reason = reason
+		m.failedCache.FailedIDs[id] = entry
+	} else {
+		m.failedCache.FailedIDs[id] = failedTweetEntry{
+			Reason:   reason,
+			FailedAt: time.Now(),
+			Attempts: 1,
+		}
+	}
+	m.saveFailedCache()
+}
+
+// isPermanentFailure checks if an error indicates a permanent failure.
+func isPermanentFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	for _, reason := range permanentFailureReasons {
+		if contains(errStr, reason) {
+			return true
+		}
+	}
+	return false
+}
+
+// contains checks if s contains substr (case-insensitive).
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && containsLower(s, substr)))
+}
+
+func containsLower(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if matchesAt(s, i, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAt(s string, pos int, substr string) bool {
+	for j := 0; j < len(substr); j++ {
+		sc := s[pos+j]
+		pc := substr[j]
+		// Simple lowercase for ASCII
+		if sc >= 'A' && sc <= 'Z' {
+			sc += 'a' - 'A'
+		}
+		if pc >= 'A' && pc <= 'Z' {
+			pc += 'a' - 'A'
+		}
+		if sc != pc {
+			return false
+		}
+	}
+	return true
 }

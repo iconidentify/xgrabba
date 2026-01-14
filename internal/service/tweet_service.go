@@ -25,6 +25,32 @@ import (
 
 var ErrAIAlreadyInProgress = errors.New("AI analysis already in progress for this tweet")
 
+// permanentFailurePatterns are error substrings indicating a tweet will never succeed.
+var permanentFailurePatterns = []string{
+	"author data unavailable",
+	"account suspended",
+	"account is suspended",
+	"tweet not found",
+	"tweet has been deleted",
+	"protected tweets",
+	"User not found",
+	"This account doesn't exist",
+}
+
+// isPermanentTweetFailure checks if an error message indicates a permanent failure.
+func isPermanentTweetFailure(errMsg string) bool {
+	if errMsg == "" {
+		return false
+	}
+	errLower := strings.ToLower(errMsg)
+	for _, pattern := range permanentFailurePatterns {
+		if strings.Contains(errLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
+}
+
 // TweetService orchestrates tweet archiving workflow.
 type TweetService struct {
 	twitterClient  *twitter.Client
@@ -468,7 +494,17 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 				Message: "Tweet already being processed",
 			}, nil
 		case domain.ArchiveStatusFailed:
-			// Failed tweets can be re-queued - delete the old one and try again
+			// Check if the failure is permanent (account suspended, deleted, etc.)
+			if isPermanentTweetFailure(existing.Error) {
+				s.tweetsMu.Unlock()
+				s.logger.Info("not re-queueing permanently failed tweet", "tweet_id", tweetID, "error", existing.Error)
+				return &ArchiveResponse{
+					TweetID: existing.ID,
+					Status:  existing.Status,
+					Message: "Tweet permanently unavailable: " + existing.Error,
+				}, nil
+			}
+			// Transient failures can be re-queued - delete the old one and try again
 			s.logger.Info("re-queueing previously failed tweet", "tweet_id", tweetID)
 			delete(s.tweets, existing.ID)
 		}
