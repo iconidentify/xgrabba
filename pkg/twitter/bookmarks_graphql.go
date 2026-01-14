@@ -38,6 +38,9 @@ func (b *GraphQLBookmarksClient) HasBrowserCredentials() bool {
 func (b *GraphQLBookmarksClient) getBookmarksFeatures() string {
 	// X's Bookmarks GraphQL endpoint is strict about certain feature flags not being null.
 	// We defensively ensure they're present and boolean.
+	//
+	// Important: using only browser-observed feature flags can omit required keys, which X treats as null.
+	// So we merge: default feature set (base) + browser-observed overrides.
 	requiredTrue := []string{
 		"responsive_web_media_download_video_enabled",
 		"graphql_timeline_v2_bookmark_timeline",
@@ -57,18 +60,18 @@ func (b *GraphQLBookmarksClient) getBookmarksFeatures() string {
 		return m, true
 	}
 
-	var m map[string]any
-	if ff := b.c.getBrowserFeatureFlags(); len(ff) > 0 {
-		if mm, ok := loadMap(ff); ok {
-			m = mm
-		}
-	}
+	// Base defaults
+	m, _ := loadMap([]byte(defaultGraphQLFeatures))
 	if m == nil {
-		// Fall back to the default feature set used for tweet GraphQL.
-		if mm, ok := loadMap([]byte(defaultGraphQLFeatures)); ok {
-			m = mm
-		} else {
-			m = map[string]any{}
+		m = map[string]any{}
+	}
+
+	// Overlay browser flags (if available)
+	if ff := b.c.getBrowserFeatureFlags(); len(ff) > 0 {
+		if browserM, ok := loadMap(ff); ok {
+			for k, v := range browserM {
+				m[k] = v
+			}
 		}
 	}
 
