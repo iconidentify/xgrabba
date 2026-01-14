@@ -1076,8 +1076,29 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 		}
 
 		// If still no screen_name, fail
+		//
+		// Important: do NOT hard-fail the entire tweet archive if author profile fields
+		// are unavailable. This happens for NSFW/age-restricted tweets, user privacy
+		// settings, and when Cloudflare blocks user lookup from the backend.
+		//
+		// We keep the tweet content and set a stable placeholder author so the archive
+		// remains usable and can be re-synced later if richer author data becomes available.
 		if result.Core.UserResults.Result.Legacy.ScreenName == "" {
-			return nil, fmt.Errorf("tweet author data unavailable (type=%s, user_id=%s)", result.TypeName, userID)
+			placeholder := "unknown"
+			if userID != "" {
+				placeholder = "user_" + userID
+			}
+			c.logger.Warn("author data still unavailable; using placeholder author",
+				"tweet_id", tweetID,
+				"user_id", userID,
+				"placeholder_username", placeholder,
+				"core_type", result.Core.UserResults.Result.TypeName,
+				"reason", result.Core.UserResults.Result.Reason,
+			)
+			result.Core.UserResults.Result.Legacy.ScreenName = placeholder
+			if result.Core.UserResults.Result.Legacy.Name == "" {
+				result.Core.UserResults.Result.Legacy.Name = placeholder
+			}
 		}
 	}
 
@@ -1100,6 +1121,7 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 		Text:     text,
 		PostedAt: postedAt,
 		Author: domain.Author{
+			ID:             user.ID,
 			Username:       user.Legacy.ScreenName,
 			DisplayName:    user.Legacy.Name,
 			AvatarURL:      user.Legacy.ProfileImageURL,
