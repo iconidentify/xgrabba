@@ -1317,93 +1317,166 @@ Export Date:      %s
 
 ================================================================================
 
-HOW TO VIEW THIS ARCHIVE
-------------------------
+QUICK START - VIEW YOUR ARCHIVE
+================================
 
-OPTION 1: Open index.html Directly (Easiest)
-  Simply double-click index.html to open in your web browser.
-  Note: Some features may be limited due to browser security restrictions.
+Choose your operating system below and follow the steps:
 
-OPTION 2: Use the Viewer Application (Recommended)
 
-  Windows:
-    1. Double-click xgrabba-viewer.exe
-    2. Your browser will open automatically to view the archive
+WINDOWS
+-------
+1. Double-click "xgrabba-viewer.exe"
 
-  macOS (Apple Silicon M1/M2/M3):
-    1. Right-click xgrabba-viewer-mac-arm64 and select "Open"
-    2. Click "Open" in the security dialog (first time only)
-    3. Your browser will open automatically
+2. If Windows SmartScreen appears saying "Windows protected your PC":
+   - Click "More info"
+   - Click "Run anyway"
 
-  macOS (Intel):
-    1. Right-click xgrabba-viewer-mac-amd64 and select "Open"
-    2. Click "Open" in the security dialog (first time only)
-    3. Your browser will open automatically
+3. Your default browser will open with your archive. Done!
 
-  Linux:
-    1. Open a terminal in this directory
-    2. Run: chmod +x xgrabba-viewer-linux && ./xgrabba-viewer-linux
-    3. Your browser will open automatically
 
-OPTION 3: Use Python's Built-in Web Server
-  1. Open a terminal/command prompt in this directory
-  2. Run: python -m http.server 8080  (or python3 on some systems)
-  3. Open http://localhost:8080 in your web browser
+MACOS (Apple Silicon - M1/M2/M3/M4)
+-----------------------------------
+1. Find "xgrabba-viewer-mac-arm64" in this folder
 
-================================================================================
+2. RIGHT-CLICK the file and select "Open" from the menu
+   (Important: Don't double-click! You must right-click first)
 
-DIRECTORY STRUCTURE
--------------------
+3. A dialog will appear saying the app is from an unidentified developer:
+   - Click "Open" to proceed
+   - You only need to do this once
 
-README.txt              - This file
-index.html              - The archive viewer (web application)
-tweets-data.json        - All tweet metadata in JSON format
-xgrabba-viewer.exe      - Windows viewer application
-xgrabba-viewer-mac-arm64 - macOS viewer (Apple Silicon)
-xgrabba-viewer-mac-amd64 - macOS viewer (Intel)
-xgrabba-viewer-linux    - Linux viewer application
+4. Your default browser will open with your archive. Done!
 
-data/               - Tweet archives organized by date
-  YYYY/             - Year folder (e.g., 2024)
-    MM/             - Month folder (e.g., 01)
-      username_date_id/   - Individual tweet folder
-        tweet.json        - Tweet metadata
-        README.md         - Human-readable summary
-        media/            - Images, videos, and thumbnails
-        avatar.jpg        - Author's profile picture
+   Not sure if you have Apple Silicon? Click the Apple menu > "About This Mac"
+   If it says "Chip: Apple M1/M2/M3/M4" you have Apple Silicon.
 
-================================================================================
 
-DISCLAIMER
-----------
+MACOS (Intel)
+-------------
+1. Find "xgrabba-viewer-mac-amd64" in this folder
 
-XGrabba is an open-source project for personal archival purposes.
+2. RIGHT-CLICK the file and select "Open" from the menu
+   (Important: Don't double-click! You must right-click first)
 
-This software is provided "as is", without warranty of any kind, express or
-implied. The developers and contributors of XGrabba:
+3. A dialog will appear saying the app is from an unidentified developer:
+   - Click "Open" to proceed
+   - You only need to do this once
 
-  - Are NOT responsible for the content archived using this tool
-  - Are NOT responsible for any data loss, corruption, or misuse
-  - Do NOT endorse or verify the accuracy of archived content
-  - Do NOT provide any guarantee of data integrity or availability
+4. Your default browser will open with your archive. Done!
 
-Users are solely responsible for:
-  - Ensuring they have the right to archive and store content
-  - Complying with applicable laws and platform terms of service
-  - Maintaining backups of important data
-  - The security and privacy of their archived data
+   Not sure if you have Intel? Click the Apple menu > "About This Mac"
+   If it says "Processor: Intel" you have an Intel Mac.
 
-By using this archive, you acknowledge that you understand and accept these
-terms.
+
+LINUX
+-----
+1. Open a terminal in this folder
+
+2. Make the viewer executable and run it:
+   chmod +x xgrabba-viewer-linux
+   ./xgrabba-viewer-linux
+
+3. Your default browser will open with your archive. Done!
+
 
 ================================================================================
 
-MORE INFORMATION
+ALTERNATIVE: JUST OPEN INDEX.HTML
+---------------------------------
+You can also simply double-click "index.html" to view in your browser.
+Note: Some features may not work due to browser security restrictions.
+
+
+ALTERNATIVE: USE PYTHON (Advanced)
+----------------------------------
+If you have Python installed:
+
+1. Open a terminal/command prompt in this folder
+2. Run: python -m http.server 8080
+   (On some systems: python3 -m http.server 8080)
+3. Open your browser to: http://localhost:8080
+
+
+================================================================================
+
+TROUBLESHOOTING
+---------------
+
+Windows - "Windows protected your PC" won't go away:
+  → Make sure you clicked "More info" first, then "Run anyway"
+
+macOS - "Cannot be opened because it is from an unidentified developer":
+  → You must RIGHT-CLICK and select "Open", not double-click
+
+macOS - Still blocked after right-clicking:
+  → Go to System Settings > Privacy & Security > scroll down
+  → Click "Open Anyway" next to the blocked app
+
+Linux - "Permission denied":
+  → Run: chmod +x xgrabba-viewer-linux
+
+Browser shows blank page:
+  → Try a different browser (Chrome, Firefox, Safari, Edge)
+  → Make sure tweets-data.json exists in this folder
+
+
+================================================================================
+
+WHAT'S IN THIS ARCHIVE
+----------------------
+
+README.txt               - This file (you're reading it!)
+index.html               - Web-based archive viewer
+tweets-data.json         - All tweet data in JSON format
+
+xgrabba-viewer.exe       - Windows viewer app
+xgrabba-viewer-mac-arm64 - macOS viewer (Apple Silicon M1/M2/M3/M4)
+xgrabba-viewer-mac-amd64 - macOS viewer (Intel Macs)
+xgrabba-viewer-linux     - Linux viewer app
+
+data/                    - Your archived tweets organized by date
+  └── YYYY/MM/           - Year and month folders
+      └── username_date_id/
+          ├── tweet.json     - Tweet metadata
+          ├── README.md      - Human-readable summary
+          ├── avatar.jpg     - Author's profile picture
+          └── media/         - Images, videos, thumbnails
+
+
+================================================================================
+
+LEGAL DISCLAIMER
 ----------------
 
-Project:     https://github.com/iconidentify/xgrabba
-License:     MIT License
-Issues:      https://github.com/iconidentify/xgrabba/issues
+XGrabba is FREE, OPEN-SOURCE software for personal archival purposes.
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.
+
+The developers and contributors of XGrabba:
+  • Are NOT responsible for the content you archive
+  • Are NOT responsible for any data loss or corruption
+  • Do NOT guarantee the accuracy or completeness of archived content
+  • Do NOT provide technical support or data recovery services
+
+YOU are responsible for:
+  • Having the right to archive the content you save
+  • Following applicable laws and platform terms of service
+  • Keeping backups of your important data
+  • The security and privacy of your archived data
+
+By using this archive, you accept these terms.
+
+
+================================================================================
+
+ABOUT XGRABBA
+-------------
+
+XGrabba is an open-source tweet archival tool.
+
+Website:  https://github.com/iconidentify/xgrabba
+License:  MIT License (free to use and modify)
+Issues:   https://github.com/iconidentify/xgrabba/issues
 
 ================================================================================
 `, tweetCount, sizeStr, time.Now().Format("January 2, 2006 at 3:04:05 PM MST"))
