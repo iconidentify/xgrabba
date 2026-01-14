@@ -5,6 +5,7 @@ class TweetInjector {
   constructor() {
     // Core state
     this.processedTweets = new Set();
+    this.injectingTweets = new Set(); // Guard against concurrent injection
     this.archiveStates = new Map(); // tweetId -> state
     this.archivedTweets = new Set(); // Known archived tweet IDs from backend
 
@@ -24,7 +25,7 @@ class TweetInjector {
 
     // Performance tracking
     this.lastScanTime = 0;
-    this.scanThrottleMs = 50;
+    this.scanThrottleMs = 200; // Increased from 50ms to prevent rapid scans
 
     // Session ID for persistence
     this.sessionId = Date.now().toString(36);
@@ -259,10 +260,15 @@ class TweetInjector {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             const tweet = entry.target;
-            // Inject button when tweet becomes visible
-            if (!this.hasButton(tweet)) {
-              this.injectArchiveButton(tweet);
+            const tweetId = this.getTweetId(tweet);
+
+            // Skip if already being injected or has button
+            if (!tweetId || this.injectingTweets.has(tweetId) || this.hasButton(tweet)) {
+              return;
             }
+
+            // Inject button when tweet becomes visible
+            this.injectArchiveButton(tweet);
           }
         });
       },
@@ -275,6 +281,12 @@ class TweetInjector {
   }
 
   hasButton(tweetElement) {
+    // Check in action bar specifically for more accurate detection
+    const actionBar = this.findActionBar(tweetElement);
+    if (actionBar) {
+      return actionBar.querySelector('.xgrabba-btn-container') !== null;
+    }
+    // Fallback: check anywhere in tweet element
     return tweetElement.querySelector('.xgrabba-btn-container') !== null;
   }
 
@@ -326,6 +338,11 @@ class TweetInjector {
       const tweetId = this.getTweetId(tweet);
       if (!tweetId) return;
 
+      // Skip if currently being injected (concurrent guard)
+      if (this.injectingTweets.has(tweetId)) {
+        return;
+      }
+
       // Skip if already has our button
       if (this.hasButton(tweet)) {
         // But verify button is still correctly attached
@@ -333,11 +350,13 @@ class TweetInjector {
         return;
       }
 
-      // Skip if already processed in this session
+      // Skip if already processed - only re-inject if button is actually missing
+      // (handled by hasButton check above, so no need to re-inject here)
       if (this.processedTweets.has(tweetId)) {
-        // Button might have been removed by Twitter's virtual scrolling
-        // Re-inject if needed
-        this.injectArchiveButton(tweet);
+        // Button was removed by Twitter's virtual scrolling, re-inject
+        if (this.injectArchiveButton(tweet)) {
+          injectedCount++;
+        }
         return;
       }
 
@@ -397,6 +416,11 @@ class TweetInjector {
     const tweetId = this.getTweetId(tweetElement);
     if (!tweetId) return false;
 
+    // Prevent concurrent injection for the same tweet
+    if (this.injectingTweets.has(tweetId)) {
+      return false;
+    }
+
     // Find action bar with fallbacks
     const actionBar = this.findActionBar(tweetElement);
     if (!actionBar) {
@@ -405,31 +429,37 @@ class TweetInjector {
       return false;
     }
 
-    // Don't double-inject
+    // Don't double-inject - check BEFORE marking as injecting
     if (actionBar.querySelector('.xgrabba-btn-container')) {
       return false;
     }
 
+    // Mark as injecting to prevent concurrent attempts
+    this.injectingTweets.add(tweetId);
     this.processedTweets.add(tweetId);
 
-    // Create button using requestAnimationFrame for smooth rendering
-    requestAnimationFrame(() => {
-      const container = this.createButtonContainer(tweetId);
+    // Create and inject button synchronously to prevent race conditions
+    const container = this.createButtonContainer(tweetId);
 
-      // Use insertBefore to place before the last item (usually share button)
-      const lastChild = actionBar.lastElementChild;
-      if (lastChild) {
-        actionBar.insertBefore(container, lastChild);
-      } else {
-        actionBar.appendChild(container);
-      }
+    // Use insertBefore to place before the last item (usually share button)
+    const lastChild = actionBar.lastElementChild;
+    if (lastChild) {
+      actionBar.insertBefore(container, lastChild);
+    } else {
+      actionBar.appendChild(container);
+    }
 
-      // Set initial state
-      if (this.archivedTweets.has(tweetId)) {
-        const button = container.querySelector('button');
-        this.setState(tweetId, button, 'archived');
-      }
-    });
+    // Set initial state
+    if (this.archivedTweets.has(tweetId)) {
+      const button = container.querySelector('button');
+      this.setState(tweetId, button, 'archived');
+    }
+
+    // Remove from injecting set after a short delay
+    // This prevents rapid re-injection attempts
+    setTimeout(() => {
+      this.injectingTweets.delete(tweetId);
+    }, 100);
 
     return true;
   }
