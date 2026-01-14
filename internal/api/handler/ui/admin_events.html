@@ -202,7 +202,8 @@ function renderEvents() {
 function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function connectSSE() {
-    const es = new EventSource('/api/v1/events/stream');
+    // EventSource doesn't support headers, so pass API key as query param
+    const es = new EventSource('/api/v1/events/stream?api_key=' + encodeURIComponent(API_KEY));
     es.onopen = () => { document.getElementById('status').classList.add('connected'); document.getElementById('statusText').textContent = 'Live'; };
     es.onerror = () => { document.getElementById('status').classList.remove('connected'); document.getElementById('statusText').textContent = 'Disconnected'; };
     es.addEventListener('event', (e) => { try { const ev = JSON.parse(e.data); events.unshift(ev); renderEvents(); fetchStats(); } catch {} });

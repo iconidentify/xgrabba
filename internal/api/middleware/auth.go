@@ -19,8 +19,11 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 				}
 			}
 			if key == "" {
-				// Also check query parameter (for media URLs in UI)
+				// Also check query parameter (for media URLs in UI and SSE connections)
 				key = r.URL.Query().Get("key")
+				if key == "" {
+					key = r.URL.Query().Get("api_key")
+				}
 			}
 
 			if key == "" {
