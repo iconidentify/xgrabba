@@ -14,6 +14,7 @@ import (
 type BrowserCredentials struct {
 	AuthToken    string            `json:"auth_token"`     // Session authentication token
 	CT0          string            `json:"ct0"`            // CSRF token
+	Cookies      string            `json:"cookies"`        // Full cookie string (for NSFW/age-restricted content)
 	QueryIDs     map[string]string `json:"query_ids"`      // GraphQL endpoint -> queryId mappings
 	FeatureFlags json.RawMessage   `json:"feature_flags"`  // Current feature flags
 	UpdatedAt    time.Time         `json:"updated_at"`     // When credentials were last updated
@@ -65,6 +66,11 @@ func (c *Client) SetBrowserCredentials(creds BrowserCredentials) {
 		if len(creds.FeatureFlags) == 0 && len(prev.FeatureFlags) > 0 {
 			creds.FeatureFlags = prev.FeatureFlags
 		}
+
+		// Preserve full cookies if the incoming payload doesn't include them.
+		if creds.Cookies == "" && prev.Cookies != "" {
+			creds.Cookies = prev.Cookies
+		}
 	}
 
 	// Set expiry to 1 hour from now (credentials refresh on each page load)
@@ -90,12 +96,16 @@ func (c *Client) SetBrowserCredentials(creds BrowserCredentials) {
 	sort.Strings(queryIDKeys)
 	ffBytes := len(creds.FeatureFlags)
 	hasFF := ffBytes > 0
+	hasCookies := creds.Cookies != ""
+	cookieLen := len(creds.Cookies)
 	c.logger.Info("browser credentials updated",
 		"has_query_ids", queryIDCount > 0,
 		"query_id_count", queryIDCount,
 		"query_id_keys_sample", queryIDKeys,
 		"has_feature_flags", hasFF,
 		"feature_flags_bytes", ffBytes,
+		"has_full_cookies", hasCookies,
+		"cookie_string_len", cookieLen,
 	)
 }
 
@@ -132,10 +142,17 @@ func (c *Client) getBrowserHeaders() http.Header {
 
 	decodedBearer, _ := url.QueryUnescape(bearerToken)
 
+	// Use full cookie string if available (needed for age-restricted/NSFW content)
+	// Otherwise fall back to minimal auth_token + ct0
+	cookieString := credsStore.creds.Cookies
+	if cookieString == "" {
+		cookieString = "auth_token=" + credsStore.creds.AuthToken + "; ct0=" + credsStore.creds.CT0
+	}
+
 	return http.Header{
 		"Authorization":              []string{"Bearer " + decodedBearer},
 		"x-csrf-token":               []string{credsStore.creds.CT0},
-		"Cookie":                     []string{"auth_token=" + credsStore.creds.AuthToken + "; ct0=" + credsStore.creds.CT0},
+		"Cookie":                     []string{cookieString},
 		"User-Agent":                 []string{c.userAgent},
 		"Content-Type":               []string{"application/json"},
 		"x-twitter-active-user":      []string{"yes"},
@@ -191,6 +208,8 @@ type BrowserCredentialsDebugStatus struct {
 	QueryIDKeysSample []string `json:"query_id_keys_sample,omitempty"`
 	HasFeatureFlags   bool     `json:"has_feature_flags"`
 	FeatureFlagsBytes int      `json:"feature_flags_bytes"`
+	HasFullCookies    bool     `json:"has_full_cookies"`
+	CookieStringLen   int      `json:"cookie_string_len"`
 }
 
 func (c *Client) GetBrowserCredentialsDebugStatus() BrowserCredentialsDebugStatus {
@@ -222,17 +241,21 @@ func (c *Client) GetBrowserCredentialsDebugStatus() BrowserCredentialsDebugStatu
 		keys = keys[:12]
 	}
 	ffBytes := 0
+	cookieLen := 0
 	if credsStore.creds != nil {
 		ffBytes = len(credsStore.creds.FeatureFlags)
+		cookieLen = len(credsStore.creds.Cookies)
 	}
 
 	return BrowserCredentialsDebugStatus{
 		BrowserCredentialsStatus: base,
-		HasQueryIDs:             queryIDCount > 0,
-		QueryIDCount:            queryIDCount,
-		QueryIDKeysSample:       keys,
-		HasFeatureFlags:         ffBytes > 0,
-		FeatureFlagsBytes:       ffBytes,
+		HasQueryIDs:              queryIDCount > 0,
+		QueryIDCount:             queryIDCount,
+		QueryIDKeysSample:        keys,
+		HasFeatureFlags:          ffBytes > 0,
+		FeatureFlagsBytes:        ffBytes,
+		HasFullCookies:           cookieLen > 0,
+		CookieStringLen:          cookieLen,
 	}
 }
 
