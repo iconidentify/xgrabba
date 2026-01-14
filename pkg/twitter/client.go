@@ -326,6 +326,9 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 			}
 		}
 
+		// Best-effort: if author handle is missing (NSFW/visibility edge cases),
+		// derive it from the URL so the archive remains human-friendly.
+		applyAuthorFromURL(tweet, tweetURL)
 		return tweet, nil
 	}
 
@@ -333,10 +336,33 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	tweet, graphqlErr := c.fetchFromGraphQL(ctx, tweetID)
 	if graphqlErr == nil {
 		tweet.URL = tweetURL
+		applyAuthorFromURL(tweet, tweetURL)
 		return tweet, nil
 	}
 
 	return nil, fmt.Errorf("failed to fetch tweet (syndication: %v, graphql: %v)", err, graphqlErr)
+}
+
+// applyAuthorFromURL fills in missing author fields using the tweet URL path.
+// This is a pragmatic fallback when GraphQL user lookups are blocked (e.g., Cloudflare)
+// and the tweet result omits screen_name/profile image fields.
+func applyAuthorFromURL(tweet *domain.Tweet, tweetURL string) {
+	if tweet == nil || tweetURL == "" {
+		return
+	}
+	u := ExtractUsernameFromTweetURL(tweetURL)
+	if u == "" {
+		return
+	}
+
+	// If username is missing or a placeholder, prefer the URL-derived handle.
+	if tweet.Author.Username == "" || tweet.Author.Username == "unknown" || strings.HasPrefix(tweet.Author.Username, "user_") {
+		tweet.Author.Username = u
+	}
+	// If display name is missing or placeholder-like, use the handle.
+	if tweet.Author.DisplayName == "" || tweet.Author.DisplayName == "unknown" || strings.HasPrefix(tweet.Author.DisplayName, "user_") {
+		tweet.Author.DisplayName = u
+	}
 }
 
 // isTextTruncated checks if tweet text appears to be truncated (long tweet/note).
@@ -707,6 +733,17 @@ func ExtractTweetID(url string) string {
 	// https://twitter.com/user/status/1234567890
 	// https://x.com/user/status/1234567890?s=20
 	re := regexp.MustCompile(`(?:twitter\.com|x\.com)/\w+/status/(\d+)`)
+	matches := re.FindStringSubmatch(url)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
+// ExtractUsernameFromTweetURL extracts the author handle from a tweet URL.
+// Example: https://x.com/psyop4921/status/123 -> "psyop4921"
+func ExtractUsernameFromTweetURL(url string) string {
+	re := regexp.MustCompile(`(?:twitter\.com|x\.com)/([^/]+)/status/\d+`)
 	matches := re.FindStringSubmatch(url)
 	if len(matches) > 1 {
 		return matches[1]
