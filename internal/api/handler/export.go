@@ -146,7 +146,7 @@ func (h *ExportHandler) Start(w http.ResponseWriter, r *http.Request) {
 func (h *ExportHandler) Status(w http.ResponseWriter, r *http.Request) {
 	status := h.exportSvc.GetExportStatus()
 
-	active := status.Phase == "preparing" || status.Phase == "exporting" || status.Phase == "finalizing"
+	active := status.Phase == "preparing" || status.Phase == "exporting" || status.Phase == "finalizing" || status.Phase == "encrypting"
 	downloadReady := status.Phase == "completed" && status.ZipPath != ""
 
 	w.Header().Set("Content-Type", "application/json")

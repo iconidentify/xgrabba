@@ -379,11 +379,37 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.activeExport.Phase = "exporting"
 	s.mu.Unlock()
 
-	// Create data directory
+	// Set up encryption context if encryption is enabled
+	// This uses streaming encryption - files are encrypted as they're copied,
+	// so unencrypted data never touches the USB drive
+	var encCtx *encryptionContext
+	if opts.Encrypt && opts.Password != "" {
+		s.mu.Lock()
+		s.activeExport.CurrentFile = "Deriving encryption key (AES-256 + Argon2id)..."
+		exportID := s.activeExport.ID
+		s.mu.Unlock()
+
+		s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryEncryption,
+			"Setting up streaming encryption with AES-256-GCM",
+			domain.EventMetadata{"export_id": exportID, "algorithm": "AES-256-GCM", "kdf": "Argon2id"})
+
+		var err error
+		encCtx, err = newEncryptionContext(opts.Password, opts.DestPath)
+		if err != nil {
+			s.setExportError(fmt.Sprintf("setup encryption: %v", err))
+			return
+		}
+		s.logger.Info("streaming encryption initialized", "enc_dir", encCtx.encDir)
+	}
+
+	// Create data directory only if not encrypting
+	// (encrypted files go directly to encrypted/ directory)
 	dataDir := filepath.Join(opts.DestPath, "data")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		s.setExportError(fmt.Sprintf("create data directory: %v", err))
-		return
+	if encCtx == nil {
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			s.setExportError(fmt.Sprintf("create data directory: %v", err))
+			return
+		}
 	}
 
 	// Export tweets and media
@@ -405,10 +431,14 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		// Update progress
 		s.mu.Lock()
 		s.activeExport.ExportedTweets = i
-		s.activeExport.CurrentFile = fmt.Sprintf("%s (@%s)", tweet.AITitle, tweet.Author.Username)
+		if encCtx != nil {
+			s.activeExport.CurrentFile = fmt.Sprintf("Encrypting: %s (@%s)", tweet.AITitle, tweet.Author.Username)
+		} else {
+			s.activeExport.CurrentFile = fmt.Sprintf("%s (@%s)", tweet.AITitle, tweet.Author.Username)
+		}
 		s.mu.Unlock()
 
-		exported, size, _, err := s.exportTweet(ctx, tweet, dataDir)
+		exported, size, _, err := s.exportTweet(ctx, tweet, dataDir, encCtx)
 		if err != nil {
 			s.logger.Warn("failed to export tweet", "tweet_id", tweet.ID, "error", err)
 			continue
@@ -434,8 +464,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		mediaCount += len(t.Media)
 	}
 
-	// Write tweets-data.json with comprehensive metadata
-	tweetsDataPath := filepath.Join(opts.DestPath, "tweets-data.json")
+	// Build tweets data structure
 	exportedAt := time.Now().UTC()
 	tweetsData := map[string]interface{}{
 		"tweets":      exportedTweets,
@@ -461,13 +490,63 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		return
 	}
 
-	s.logger.Info("writing tweets-data.json", "path", tweetsDataPath, "size", len(tweetsJSON))
-	if err := writeFileSync(tweetsDataPath, tweetsJSON, 0644); err != nil {
-		s.setExportError(fmt.Sprintf("write tweets-data.json: %v", err))
-		return
+	// Handle encrypted vs non-encrypted finalization differently
+	if encCtx != nil {
+		// Streaming encryption: write encrypted manifest and data
+		s.mu.Lock()
+		s.activeExport.CurrentFile = "Writing encrypted metadata..."
+		exportID := s.activeExport.ID
+		s.mu.Unlock()
+
+		if err := encCtx.writeManifestAndData(opts.DestPath, tweetsJSON); err != nil {
+			s.setExportError(fmt.Sprintf("write encrypted data: %v", err))
+			return
+		}
+
+		s.logger.Info("encrypted data written",
+			"manifest_entries", len(encCtx.manifest),
+			"data_size", len(tweetsJSON))
+
+		// Emit encryption completed event
+		s.emitEvent(domain.EventSeveritySuccess, domain.EventCategoryEncryption,
+			"Streaming encryption completed",
+			domain.EventMetadata{"export_id": exportID, "files_encrypted": len(encCtx.manifest) + 2})
+
+		// Write encrypted index.html
+		if err := s.writeEncryptedIndexHTML(opts.DestPath); err != nil {
+			s.logger.Warn("failed to write encrypted index.html", "error", err)
+		}
+
+		// Write encrypted README
+		if err := s.writeEncryptedReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
+			s.logger.Warn("failed to write encrypted README", "error", err)
+		}
+	} else {
+		// Non-encrypted: write tweets-data.json normally
+		tweetsDataPath := filepath.Join(opts.DestPath, "tweets-data.json")
+		s.logger.Info("writing tweets-data.json", "path", tweetsDataPath, "size", len(tweetsJSON))
+		if err := writeFileSync(tweetsDataPath, tweetsJSON, 0644); err != nil {
+			s.setExportError(fmt.Sprintf("write tweets-data.json: %v", err))
+			return
+		}
+
+		// Copy offline-capable index.html
+		s.mu.Lock()
+		s.activeExport.CurrentFile = "Copying UI..."
+		s.mu.Unlock()
+
+		if err := s.copyOfflineUI(opts.DestPath); err != nil {
+			s.setExportError(fmt.Sprintf("copy offline UI: %v", err))
+			return
+		}
+
+		// Write regular README.txt
+		if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
+			s.logger.Warn("failed to write README", "error", err)
+		}
 	}
 
-	// Write export-metadata.json (separate file for easy access)
+	// Write export-metadata.json (separate file for easy access - not encrypted)
 	exportMetadata := map[string]interface{}{
 		"export_id":     s.activeExport.ID,
 		"exported_at":   exportedAt.Format(time.RFC3339),
@@ -488,17 +567,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		s.logger.Warn("failed to write export-metadata.json", "error", err)
 	}
 
-	s.mu.Lock()
-	s.activeExport.CurrentFile = "Copying UI..."
-	s.mu.Unlock()
-
-	// Copy offline-capable index.html
-	if err := s.copyOfflineUI(opts.DestPath); err != nil {
-		s.setExportError(fmt.Sprintf("copy offline UI: %v", err))
-		return
-	}
-
-	// Copy viewer binaries if requested
+	// Copy viewer binaries if requested (works for both encrypted and non-encrypted)
 	if opts.IncludeViewers && opts.ViewerBinDir != "" {
 		s.mu.Lock()
 		s.activeExport.CurrentFile = "Copying viewer binaries..."
@@ -506,40 +575,6 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 
 		if err := s.copyViewerBinaries(opts.ViewerBinDir, opts.DestPath); err != nil {
 			s.logger.Warn("failed to copy viewer binaries", "error", err)
-		}
-	}
-
-	// Encrypt archive if requested
-	if opts.Encrypt && opts.Password != "" {
-		s.mu.Lock()
-		s.activeExport.Phase = "encrypting"
-		s.activeExport.CurrentFile = "Encrypting archive..."
-		exportID := s.activeExport.ID
-		s.mu.Unlock()
-
-		// Emit encryption started event
-		s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryEncryption,
-			"Encrypting export with AES-256-GCM",
-			domain.EventMetadata{"export_id": exportID, "algorithm": "AES-256-GCM", "kdf": "Argon2id"})
-
-		if err := s.encryptExport(opts.DestPath, opts.Password); err != nil {
-			s.setExportError(fmt.Sprintf("encrypt archive: %v", err))
-			return
-		}
-
-		// Emit encryption completed event
-		s.emitEvent(domain.EventSeveritySuccess, domain.EventCategoryEncryption,
-			"Archive encryption completed",
-			domain.EventMetadata{"export_id": exportID})
-
-		// Write encrypted README (different from regular README)
-		if err := s.writeEncryptedReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
-			s.logger.Warn("failed to write encrypted README", "error", err)
-		}
-	} else {
-		// Write regular README.txt
-		if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
-			s.logger.Warn("failed to write README", "error", err)
 		}
 	}
 
@@ -1227,7 +1262,7 @@ func (s *ExportService) runDownloadExportAsync(ctx context.Context, opts ExportO
 		s.activeExport.CurrentFile = fmt.Sprintf("%s (@%s)", tweet.AITitle, tweet.Author.Username)
 		s.mu.Unlock()
 
-		exported, size, _, err := s.exportTweet(ctx, tweet, dataDir)
+		exported, size, _, err := s.exportTweet(ctx, tweet, dataDir, nil)
 		if err != nil {
 			s.logger.Warn("failed to export tweet", "tweet_id", tweet.ID, "error", err)
 			continue
@@ -1600,7 +1635,7 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 			s.logger.Info("export progress", "exported", i, "total", len(tweets))
 		}
 
-		exported, size, count, err := s.exportTweet(ctx, tweet, dataDir)
+		exported, size, count, err := s.exportTweet(ctx, tweet, dataDir, nil)
 		if err != nil {
 			s.logger.Warn("failed to export tweet", "tweet_id", tweet.ID, "error", err)
 			continue
@@ -1702,7 +1737,8 @@ func (s *ExportService) filterTweets(tweets []*domain.Tweet, opts ExportOptions)
 }
 
 // exportTweet exports a single tweet and its media, returning the exported data and stats.
-func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, dataDir string) (*ExportedTweet, int64, int, error) {
+// If encCtx is provided, files are encrypted as they're copied using streaming encryption.
+func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, dataDir string, encCtx *encryptionContext) (*ExportedTweet, int64, int, error) {
 	// Build relative archive path (YYYY/MM/username_date_tweetID)
 	year := tweet.PostedAt.Format("2006")
 	month := tweet.PostedAt.Format("01")
@@ -1714,9 +1750,12 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 	relArchivePath := filepath.Join(year, month, folderName)
 	destArchivePath := filepath.Join(dataDir, relArchivePath)
 
-	// Create archive directory
-	if err := os.MkdirAll(filepath.Join(destArchivePath, "media"), 0755); err != nil {
-		return nil, 0, 0, fmt.Errorf("create archive directory: %w", err)
+	// Create archive directory only if not encrypting
+	// (encrypted files go directly to encrypted/ directory)
+	if encCtx == nil {
+		if err := os.MkdirAll(filepath.Join(destArchivePath, "media"), 0755); err != nil {
+			return nil, 0, 0, fmt.Errorf("create archive directory: %w", err)
+		}
 	}
 
 	var totalSize int64
@@ -1725,7 +1764,7 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 	// Copy media files
 	exportedMedia := make([]ExportedMedia, 0, len(tweet.Media))
 	for _, media := range tweet.Media {
-		exported, size, err := s.exportMedia(ctx, &media, tweet.ArchivePath, destArchivePath, relArchivePath)
+		exported, size, err := s.exportMedia(ctx, &media, tweet.ArchivePath, destArchivePath, relArchivePath, encCtx)
 		if err != nil {
 			s.logger.Warn("failed to export media", "media_id", media.ID, "error", err)
 			continue
@@ -1739,10 +1778,21 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 	var avatarPath string
 	srcAvatarPath := filepath.Join(tweet.ArchivePath, "avatar.jpg")
 	if _, err := os.Stat(srcAvatarPath); err == nil {
-		destAvatarPath := filepath.Join(destArchivePath, "avatar.jpg")
-		if size, err := copyFile(srcAvatarPath, destAvatarPath); err == nil {
-			avatarPath = filepath.Join("data", relArchivePath, "avatar.jpg")
-			totalSize += size
+		relAvatarPath := filepath.Join("data", relArchivePath, "avatar.jpg")
+
+		if encCtx != nil {
+			// Streaming encryption for avatar
+			if size, err := encCtx.encryptingCopyFile(ctx, srcAvatarPath, relAvatarPath); err == nil {
+				avatarPath = relAvatarPath
+				totalSize += size
+			}
+		} else {
+			// No encryption: copy normally
+			destAvatarPath := filepath.Join(destArchivePath, "avatar.jpg")
+			if size, err := copyFile(srcAvatarPath, destAvatarPath); err == nil {
+				avatarPath = relAvatarPath
+				totalSize += size
+			}
 		}
 	}
 
@@ -1779,7 +1829,8 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 }
 
 // exportMedia exports a single media file.
-func (s *ExportService) exportMedia(ctx context.Context, media *domain.Media, srcArchivePath, destArchivePath, relArchivePath string) (*ExportedMedia, int64, error) {
+// If encCtx is provided, files are encrypted as they're copied using streaming encryption.
+func (s *ExportService) exportMedia(ctx context.Context, media *domain.Media, srcArchivePath, destArchivePath, relArchivePath string, encCtx *encryptionContext) (*ExportedMedia, int64, error) {
 	var totalSize int64
 
 	exported := &ExportedMedia{
@@ -1798,27 +1849,49 @@ func (s *ExportService) exportMedia(ctx context.Context, media *domain.Media, sr
 	if media.LocalPath != "" {
 		filename := filepath.Base(media.LocalPath)
 		srcPath := media.LocalPath
-		destPath := filepath.Join(destArchivePath, "media", filename)
+		relPath := filepath.Join("data", relArchivePath, "media", filename)
 
-		if size, err := copyFile(srcPath, destPath); err == nil {
-			exported.LocalPath = filepath.Join("data", relArchivePath, "media", filename)
-			totalSize += size
+		if encCtx != nil {
+			// Streaming encryption: encrypt as we copy, file goes directly to encrypted/
+			if size, err := encCtx.encryptingCopyFile(ctx, srcPath, relPath); err == nil {
+				exported.LocalPath = relPath
+				totalSize += size
+			} else {
+				s.logger.Warn("failed to encrypt media file", "src", srcPath, "error", err)
+			}
 		} else {
-			s.logger.Warn("failed to copy media file", "src", srcPath, "error", err)
+			// No encryption: copy normally
+			destPath := filepath.Join(destArchivePath, "media", filename)
+			if size, err := copyFile(srcPath, destPath); err == nil {
+				exported.LocalPath = relPath
+				totalSize += size
+			} else {
+				s.logger.Warn("failed to copy media file", "src", srcPath, "error", err)
+			}
 		}
 	}
 
 	// Copy thumbnail for videos
 	if media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF {
-		// Check for thumbnail at the PreviewURL path (which may have been updated to local path)
 		thumbFilename := fmt.Sprintf("%s_thumb.jpg", media.ID)
 		srcThumbPath := filepath.Join(srcArchivePath, "media", thumbFilename)
 
 		if _, err := os.Stat(srcThumbPath); err == nil {
-			destThumbPath := filepath.Join(destArchivePath, "media", thumbFilename)
-			if size, err := copyFile(srcThumbPath, destThumbPath); err == nil {
-				exported.ThumbnailPath = filepath.Join("data", relArchivePath, "media", thumbFilename)
-				totalSize += size
+			relThumbPath := filepath.Join("data", relArchivePath, "media", thumbFilename)
+
+			if encCtx != nil {
+				// Streaming encryption for thumbnail
+				if size, err := encCtx.encryptingCopyFile(ctx, srcThumbPath, relThumbPath); err == nil {
+					exported.ThumbnailPath = relThumbPath
+					totalSize += size
+				}
+			} else {
+				// No encryption: copy normally
+				destThumbPath := filepath.Join(destArchivePath, "media", thumbFilename)
+				if size, err := copyFile(srcThumbPath, destThumbPath); err == nil {
+					exported.ThumbnailPath = relThumbPath
+					totalSize += size
+				}
 			}
 		}
 	}
@@ -1878,6 +1951,86 @@ func copyFile(src, dst string) (int64, error) {
 	}
 
 	return srcSize, nil
+}
+
+// encryptionContext holds state for streaming encryption during export.
+// This allows encrypting files as they're copied, so unencrypted data never touches the USB.
+type encryptionContext struct {
+	encryptor *crypto.Encryptor
+	encDir    string                     // Directory for encrypted files
+	manifest  map[string]string          // Maps original relative path to encrypted filename
+	mu        sync.Mutex                 // Protects manifest
+}
+
+// newEncryptionContext creates a new encryption context for streaming encryption.
+func newEncryptionContext(password, destPath string) (*encryptionContext, error) {
+	enc, err := crypto.NewEncryptor(password)
+	if err != nil {
+		return nil, fmt.Errorf("create encryptor: %w", err)
+	}
+
+	encDir := filepath.Join(destPath, "encrypted")
+	if err := os.MkdirAll(encDir, 0755); err != nil {
+		return nil, fmt.Errorf("create encrypted directory: %w", err)
+	}
+
+	return &encryptionContext{
+		encryptor: enc,
+		encDir:    encDir,
+		manifest:  make(map[string]string),
+	}, nil
+}
+
+// encryptingCopyFile copies a file while encrypting it using streaming encryption.
+// The encrypted file is written to the encrypted directory with an obfuscated name.
+// Returns the number of source bytes read (not encrypted bytes written).
+func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPath string) (int64, error) {
+	// Generate obfuscated name based on hash of path
+	hash := sha256.Sum256([]byte(relPath))
+	encName := hex.EncodeToString(hash[:8]) + ".enc"
+	dst := filepath.Join(ec.encDir, encName)
+
+	// Stream-encrypt the file
+	written, err := crypto.EncryptFileStream(ctx, src, dst, ec.encryptor)
+	if err != nil {
+		return 0, err
+	}
+
+	// Add to manifest
+	ec.mu.Lock()
+	ec.manifest[relPath] = encName
+	ec.mu.Unlock()
+
+	return written, nil
+}
+
+// writeManifestAndData writes the encrypted manifest and data files.
+func (ec *encryptionContext) writeManifestAndData(destPath string, tweetsData []byte) error {
+	// Encrypt and write tweets-data.json as data.enc
+	encryptedData, err := ec.encryptor.Encrypt(tweetsData)
+	if err != nil {
+		return fmt.Errorf("encrypt tweets data: %w", err)
+	}
+	if err := writeFileSync(filepath.Join(destPath, "data.enc"), encryptedData, 0644); err != nil {
+		return fmt.Errorf("write data.enc: %w", err)
+	}
+
+	// Encrypt and write manifest
+	manifestData, err := json.Marshal(ec.manifest)
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+
+	encryptedManifest, err := ec.encryptor.Encrypt(manifestData)
+	if err != nil {
+		return fmt.Errorf("encrypt manifest: %w", err)
+	}
+
+	if err := writeFileSync(filepath.Join(destPath, "manifest.enc"), encryptedManifest, 0644); err != nil {
+		return fmt.Errorf("write manifest.enc: %w", err)
+	}
+
+	return nil
 }
 
 // copyOfflineUI generates the offline-capable index.html.

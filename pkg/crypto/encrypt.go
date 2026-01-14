@@ -2,6 +2,7 @@
 package crypto
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -20,7 +21,8 @@ const (
 	MagicBytes = "XGCR" // XGrabba CRypto
 
 	// Version of the encryption format
-	FormatVersion = 1
+	FormatVersion   = 1 // Legacy: full-file encryption
+	FormatVersionV2 = 2 // Streaming: chunked encryption
 
 	// Argon2id parameters (OWASP recommended)
 	Argon2Time    = 3
@@ -34,12 +36,20 @@ const (
 
 	// Header size: magic(4) + version(4) + salt(32) + nonce(12) = 52 bytes
 	HeaderSize = 4 + 4 + SaltSize + NonceSize
+
+	// V2 streaming constants
+	DefaultChunkSize = 1024 * 1024 // 1MB chunks for streaming
+	GCMTagSize       = 16          // GCM authentication tag size
+
+	// V2 Header size: magic(4) + version(4) + salt(32) + nonce(12) + chunkSize(4) = 56 bytes
+	HeaderSizeV2 = 4 + 4 + SaltSize + NonceSize + 4
 )
 
 var (
 	ErrInvalidMagic   = errors.New("invalid file format: not an encrypted xgrabba archive")
 	ErrInvalidVersion = errors.New("unsupported encryption format version")
 	ErrDecryptFailed  = errors.New("decryption failed: wrong password or corrupted data")
+	ErrCancelled      = errors.New("encryption cancelled")
 )
 
 // Encryptor provides fast bulk encryption with a pre-derived key.
@@ -74,7 +84,7 @@ func (e *Encryptor) Salt() []byte {
 	return e.salt
 }
 
-// Encrypt encrypts data using the pre-derived key.
+// Encrypt encrypts data using the pre-derived key (v1 format).
 // This is much faster than the standalone Encrypt function for bulk operations.
 func (e *Encryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(e.key)
@@ -143,6 +153,211 @@ func (e *Encryptor) Decrypt(data []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// EncryptStream encrypts data from reader to writer using chunked GCM (v2 format).
+// This enables streaming encryption with constant memory usage regardless of file size.
+// Each chunk is individually authenticated with GCM, using a unique nonce derived from
+// the base nonce XORed with the chunk counter.
+func (e *Encryptor) EncryptStream(reader io.Reader, writer io.Writer) (int64, error) {
+	return e.EncryptStreamWithContext(context.Background(), reader, writer)
+}
+
+// EncryptStreamWithContext encrypts data with cancellation support.
+func (e *Encryptor) EncryptStreamWithContext(ctx context.Context, reader io.Reader, writer io.Writer) (int64, error) {
+	block, err := aes.NewCipher(e.key)
+	if err != nil {
+		return 0, fmt.Errorf("create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return 0, fmt.Errorf("create GCM: %w", err)
+	}
+
+	// Generate random base nonce
+	baseNonce := make([]byte, NonceSize)
+	if _, err := io.ReadFull(rand.Reader, baseNonce); err != nil {
+		return 0, fmt.Errorf("generate nonce: %w", err)
+	}
+
+	// Write v2 header: magic + version + salt + nonce + chunkSize
+	header := make([]byte, HeaderSizeV2)
+	copy(header[0:4], MagicBytes)
+	binary.LittleEndian.PutUint32(header[4:8], FormatVersionV2)
+	copy(header[8:8+SaltSize], e.salt)
+	copy(header[8+SaltSize:8+SaltSize+NonceSize], baseNonce)
+	binary.LittleEndian.PutUint32(header[8+SaltSize+NonceSize:], DefaultChunkSize)
+
+	if _, err := writer.Write(header); err != nil {
+		return 0, fmt.Errorf("write header: %w", err)
+	}
+
+	var totalWritten int64
+	chunkBuf := make([]byte, DefaultChunkSize)
+	chunkNonce := make([]byte, NonceSize)
+	chunkNum := uint64(0)
+
+	for {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return totalWritten, fmt.Errorf("%w: %v", ErrCancelled, ctx.Err())
+		default:
+		}
+
+		// Read chunk
+		n, err := io.ReadFull(reader, chunkBuf)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			return totalWritten, fmt.Errorf("read chunk: %w", err)
+		}
+
+		if n == 0 {
+			break // End of file
+		}
+
+		// Derive unique nonce for this chunk by XORing with chunk counter
+		copy(chunkNonce, baseNonce)
+		counterBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(counterBytes, chunkNum)
+		for i := 0; i < 8 && i < NonceSize; i++ {
+			chunkNonce[i] ^= counterBytes[i]
+		}
+
+		// Write chunk length (4 bytes, little-endian)
+		lenBuf := make([]byte, 4)
+		binary.LittleEndian.PutUint32(lenBuf, uint32(n))
+		if _, err := writer.Write(lenBuf); err != nil {
+			return totalWritten, fmt.Errorf("write chunk length: %w", err)
+		}
+
+		// Encrypt and write chunk (ciphertext includes GCM tag)
+		ciphertext := gcm.Seal(nil, chunkNonce, chunkBuf[:n], nil)
+		if _, err := writer.Write(ciphertext); err != nil {
+			return totalWritten, fmt.Errorf("write ciphertext: %w", err)
+		}
+
+		totalWritten += int64(n)
+		chunkNum++
+
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			break
+		}
+	}
+
+	// Write end marker (zero-length chunk)
+	endMarker := make([]byte, 4)
+	if _, err := writer.Write(endMarker); err != nil {
+		return totalWritten, fmt.Errorf("write end marker: %w", err)
+	}
+
+	return totalWritten, nil
+}
+
+// DecryptStream decrypts v2 chunked data from reader to writer.
+func DecryptStream(reader io.Reader, writer io.Writer, password string) (int64, error) {
+	return DecryptStreamWithContext(context.Background(), reader, writer, password)
+}
+
+// DecryptStreamWithContext decrypts v2 chunked data with cancellation support.
+func DecryptStreamWithContext(ctx context.Context, reader io.Reader, writer io.Writer, password string) (int64, error) {
+	// Read header
+	header := make([]byte, HeaderSizeV2)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return 0, fmt.Errorf("read header: %w", err)
+	}
+
+	// Verify magic
+	if string(header[0:4]) != MagicBytes {
+		return 0, ErrInvalidMagic
+	}
+
+	// Check version
+	version := binary.LittleEndian.Uint32(header[4:8])
+	if version != FormatVersionV2 {
+		return 0, ErrInvalidVersion
+	}
+
+	// Extract salt, nonce, and chunk size
+	salt := header[8 : 8+SaltSize]
+	baseNonce := header[8+SaltSize : 8+SaltSize+NonceSize]
+	chunkSize := binary.LittleEndian.Uint32(header[8+SaltSize+NonceSize:])
+
+	// Derive key
+	key := DeriveKey(password, salt)
+
+	// Create cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return 0, fmt.Errorf("create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return 0, fmt.Errorf("create GCM: %w", err)
+	}
+
+	var totalRead int64
+	chunkNonce := make([]byte, NonceSize)
+	chunkNum := uint64(0)
+	lenBuf := make([]byte, 4)
+
+	for {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return totalRead, fmt.Errorf("%w: %v", ErrCancelled, ctx.Err())
+		default:
+		}
+
+		// Read chunk length
+		if _, err := io.ReadFull(reader, lenBuf); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return totalRead, fmt.Errorf("read chunk length: %w", err)
+		}
+
+		plainLen := binary.LittleEndian.Uint32(lenBuf)
+		if plainLen == 0 {
+			break // End marker
+		}
+
+		if plainLen > chunkSize {
+			return totalRead, fmt.Errorf("invalid chunk length: %d > %d", plainLen, chunkSize)
+		}
+
+		// Derive unique nonce for this chunk
+		copy(chunkNonce, baseNonce)
+		counterBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(counterBytes, chunkNum)
+		for i := 0; i < 8 && i < NonceSize; i++ {
+			chunkNonce[i] ^= counterBytes[i]
+		}
+
+		// Read ciphertext (plainLen + GCM tag)
+		ciphertextLen := plainLen + GCMTagSize
+		ciphertext := make([]byte, ciphertextLen)
+		if _, err := io.ReadFull(reader, ciphertext); err != nil {
+			return totalRead, fmt.Errorf("read ciphertext: %w", err)
+		}
+
+		// Decrypt chunk
+		plaintext, err := gcm.Open(nil, chunkNonce, ciphertext, nil)
+		if err != nil {
+			return totalRead, ErrDecryptFailed
+		}
+
+		// Write plaintext
+		if _, err := writer.Write(plaintext); err != nil {
+			return totalRead, fmt.Errorf("write plaintext: %w", err)
+		}
+
+		totalRead += int64(len(plaintext))
+		chunkNum++
+	}
+
+	return totalRead, nil
+}
+
 // DeriveKey derives an AES-256 key from a password using Argon2id.
 func DeriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey(
@@ -175,7 +390,8 @@ func Encrypt(plaintext []byte, password string) ([]byte, error) {
 	return enc.Encrypt(plaintext)
 }
 
-// Decrypt decrypts data that was encrypted with Encrypt.
+// Decrypt decrypts data that was encrypted with Encrypt (v1) or EncryptStream (v2).
+// Automatically detects the format version and handles accordingly.
 func Decrypt(data []byte, password string) ([]byte, error) {
 	if len(data) < HeaderSize {
 		return nil, ErrInvalidMagic
@@ -186,12 +402,20 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 		return nil, ErrInvalidMagic
 	}
 
-	// Check version
+	// Check version and dispatch to appropriate handler
 	version := binary.LittleEndian.Uint32(data[4:8])
-	if version != FormatVersion {
+	switch version {
+	case FormatVersion:
+		return decryptV1(data, password)
+	case FormatVersionV2:
+		return decryptV2(data, password)
+	default:
 		return nil, ErrInvalidVersion
 	}
+}
 
+// decryptV1 handles legacy full-file encryption format.
+func decryptV1(data []byte, password string) ([]byte, error) {
 	// Extract salt and nonce
 	salt := data[8 : 8+SaltSize]
 	nonce := data[8+SaltSize : HeaderSize]
@@ -221,7 +445,83 @@ func Decrypt(data []byte, password string) ([]byte, error) {
 	return plaintext, nil
 }
 
-// EncryptFile encrypts a file and writes it to the destination.
+// decryptV2 handles chunked streaming format (in-memory for small files).
+func decryptV2(data []byte, password string) ([]byte, error) {
+	if len(data) < HeaderSizeV2 {
+		return nil, ErrInvalidMagic
+	}
+
+	// Extract salt, nonce, and chunk size
+	salt := data[8 : 8+SaltSize]
+	baseNonce := data[8+SaltSize : 8+SaltSize+NonceSize]
+	chunkSize := binary.LittleEndian.Uint32(data[8+SaltSize+NonceSize:])
+
+	// Derive key
+	key := DeriveKey(password, salt)
+
+	// Create cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create GCM: %w", err)
+	}
+
+	// Decrypt chunks
+	var result []byte
+	chunkNonce := make([]byte, NonceSize)
+	chunkNum := uint64(0)
+	pos := HeaderSizeV2
+
+	for pos < len(data) {
+		// Read chunk length
+		if pos+4 > len(data) {
+			return nil, fmt.Errorf("truncated chunk header at position %d", pos)
+		}
+		plainLen := binary.LittleEndian.Uint32(data[pos : pos+4])
+		pos += 4
+
+		if plainLen == 0 {
+			break // End marker
+		}
+
+		if plainLen > chunkSize {
+			return nil, fmt.Errorf("invalid chunk length: %d > %d", plainLen, chunkSize)
+		}
+
+		// Derive unique nonce for this chunk
+		copy(chunkNonce, baseNonce)
+		counterBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(counterBytes, chunkNum)
+		for i := 0; i < 8 && i < NonceSize; i++ {
+			chunkNonce[i] ^= counterBytes[i]
+		}
+
+		// Read ciphertext
+		ciphertextLen := int(plainLen) + GCMTagSize
+		if pos+ciphertextLen > len(data) {
+			return nil, fmt.Errorf("truncated ciphertext at position %d", pos)
+		}
+		ciphertext := data[pos : pos+ciphertextLen]
+		pos += ciphertextLen
+
+		// Decrypt chunk
+		plaintext, err := gcm.Open(nil, chunkNonce, ciphertext, nil)
+		if err != nil {
+			return nil, ErrDecryptFailed
+		}
+
+		result = append(result, plaintext...)
+		chunkNum++
+	}
+
+	return result, nil
+}
+
+// EncryptFile encrypts a file and writes it to the destination (v1 format, in-memory).
 func EncryptFile(srcPath, dstPath, password string) error {
 	// Read source file
 	plaintext, err := os.ReadFile(srcPath)
@@ -241,6 +541,72 @@ func EncryptFile(srcPath, dstPath, password string) error {
 	}
 
 	return nil
+}
+
+// EncryptFileStream encrypts a file using streaming (v2 format, constant memory).
+// This is the recommended method for large files as it doesn't load the entire file into memory.
+func EncryptFileStream(ctx context.Context, srcPath, dstPath string, enc *Encryptor) (int64, error) {
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return 0, fmt.Errorf("open source: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return 0, fmt.Errorf("create destination: %w", err)
+	}
+
+	written, err := enc.EncryptStreamWithContext(ctx, srcFile, dstFile)
+	if err != nil {
+		dstFile.Close()
+		os.Remove(dstPath) // Clean up partial file
+		return written, err
+	}
+
+	// Sync to ensure data is written to disk (critical for USB drives)
+	if err := dstFile.Sync(); err != nil {
+		dstFile.Close()
+		return written, fmt.Errorf("sync destination: %w", err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return written, fmt.Errorf("close destination: %w", err)
+	}
+
+	return written, nil
+}
+
+// DecryptFileStream decrypts a file using streaming (v2 format).
+func DecryptFileStream(ctx context.Context, srcPath, dstPath, password string) (int64, error) {
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return 0, fmt.Errorf("open source: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return 0, fmt.Errorf("create destination: %w", err)
+	}
+
+	written, err := DecryptStreamWithContext(ctx, srcFile, dstFile, password)
+	if err != nil {
+		dstFile.Close()
+		os.Remove(dstPath) // Clean up partial file
+		return written, err
+	}
+
+	if err := dstFile.Sync(); err != nil {
+		dstFile.Close()
+		return written, fmt.Errorf("sync destination: %w", err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return written, fmt.Errorf("close destination: %w", err)
+	}
+
+	return written, nil
 }
 
 // DecryptFile decrypts a file and returns its contents.
@@ -279,10 +645,10 @@ func IsEncryptedFile(path string) bool {
 
 // EncryptionJob represents a file to be encrypted
 type EncryptionJob struct {
-	SourcePath  string
-	DestPath    string
-	RelPath     string // Relative path for manifest
-	EncName     string // Encrypted filename
+	SourcePath string
+	DestPath   string
+	RelPath    string // Relative path for manifest
+	EncName    string // Encrypted filename
 }
 
 // EncryptionResult represents the result of an encryption job
@@ -293,9 +659,9 @@ type EncryptionResult struct {
 
 // ParallelEncryptor encrypts multiple files in parallel using a shared key.
 type ParallelEncryptor struct {
-	encryptor   *Encryptor
-	workers     int
-	progressFn  func(completed, total int, currentFile string)
+	encryptor  *Encryptor
+	workers    int
+	progressFn func(completed, total int, currentFile string)
 }
 
 // NewParallelEncryptor creates a parallel encryptor with the specified number of workers.
@@ -333,7 +699,7 @@ func (p *ParallelEncryptor) EncryptFiles(jobs []EncryptionJob) (map[string]strin
 
 	manifest := make(map[string]string)
 	var manifestMu sync.Mutex
-	var errors []error
+	var errs []error
 	var errorsMu sync.Mutex
 
 	jobChan := make(chan EncryptionJob, len(jobs))
@@ -352,7 +718,7 @@ func (p *ParallelEncryptor) EncryptFiles(jobs []EncryptionJob) (map[string]strin
 				data, err := os.ReadFile(job.SourcePath)
 				if err != nil {
 					errorsMu.Lock()
-					errors = append(errors, fmt.Errorf("read %s: %w", job.SourcePath, err))
+					errs = append(errs, fmt.Errorf("read %s: %w", job.SourcePath, err))
 					errorsMu.Unlock()
 					continue
 				}
@@ -361,7 +727,7 @@ func (p *ParallelEncryptor) EncryptFiles(jobs []EncryptionJob) (map[string]strin
 				encrypted, err := p.encryptor.Encrypt(data)
 				if err != nil {
 					errorsMu.Lock()
-					errors = append(errors, fmt.Errorf("encrypt %s: %w", job.SourcePath, err))
+					errs = append(errs, fmt.Errorf("encrypt %s: %w", job.SourcePath, err))
 					errorsMu.Unlock()
 					continue
 				}
@@ -369,7 +735,7 @@ func (p *ParallelEncryptor) EncryptFiles(jobs []EncryptionJob) (map[string]strin
 				// Write encrypted file
 				if err := os.WriteFile(job.DestPath, encrypted, 0644); err != nil {
 					errorsMu.Lock()
-					errors = append(errors, fmt.Errorf("write %s: %w", job.DestPath, err))
+					errs = append(errs, fmt.Errorf("write %s: %w", job.DestPath, err))
 					errorsMu.Unlock()
 					continue
 				}
@@ -399,5 +765,5 @@ func (p *ParallelEncryptor) EncryptFiles(jobs []EncryptionJob) (map[string]strin
 	// Wait for completion
 	wg.Wait()
 
-	return manifest, errors
+	return manifest, errs
 }
