@@ -753,7 +753,9 @@ type graphQLResponse struct {
 type graphQLTweetResult struct {
 	TypeName string `json:"__typename"`
 	RestID   string `json:"rest_id"`
-	Core     struct {
+	// Tweet field is used when __typename is "TweetWithVisibilityResults" (age-restricted/sensitive content)
+	Tweet *graphQLTweetResult `json:"tweet,omitempty"`
+	Core  struct {
 		UserResults struct {
 			Result struct {
 				Legacy struct {
@@ -1034,6 +1036,12 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	// Handle "TweetTombstone" (deleted) or other non-tweet types
 	if result.TypeName == "TweetTombstone" {
 		return nil, fmt.Errorf("tweet is unavailable (deleted or protected)")
+	}
+
+	// Handle "TweetWithVisibilityResults" - age-restricted/sensitive content wrapper
+	// The actual tweet data is nested inside the "tweet" field
+	if result.TypeName == "TweetWithVisibilityResults" && result.Tweet != nil {
+		result = result.Tweet
 	}
 
 	// Parse created_at
