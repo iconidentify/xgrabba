@@ -309,13 +309,29 @@ func (m *Manager) Unmount(ctx context.Context, device string) error {
 		return fmt.Errorf("device not found: %s", device)
 	}
 
-	if !drive.IsMounted {
+	// Check actual mount status from /proc/mounts (not just cached state)
+	// This handles cases where mount state changed outside our control
+	partition := drive.Partition
+	if partition == "" {
+		partition = device
+	}
+	actualMountPoint, actuallyMounted := m.getMountPoint(partition)
+
+	if !actuallyMounted && !drive.IsMounted {
 		m.mu.RUnlock()
 		return nil // Already unmounted
 	}
 
-	mountPoint := drive.MountPoint
+	// Use actual mount point if found, otherwise cached
+	mountPoint := actualMountPoint
+	if mountPoint == "" {
+		mountPoint = drive.MountPoint
+	}
 	m.mu.RUnlock()
+
+	if mountPoint == "" {
+		return nil // No mount point to unmount
+	}
 
 	// Create a timeout context for sync/umount commands (10 second max for sync)
 	syncCtx, syncCancel := context.WithTimeout(ctx, 10*time.Second)
