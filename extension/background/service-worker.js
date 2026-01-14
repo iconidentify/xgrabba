@@ -37,8 +37,80 @@ const GRAPHQL_CAPTURE = {
   queryIds: {},
   featureFlags: null,
   lastSync: 0,
-  syncInterval: 60000 // at most once per minute
+  syncInterval: 60000, // at most once per minute
+  lastMainJsFetch: 0,
+  mainJsFetchInterval: 3600000 // fetch main.js every hour
 };
+
+// Proactively fetch query IDs from X's main.js bundle
+// This ensures we have TweetResultByRestId even if user hasn't viewed a tweet
+async function fetchQueryIdsFromMainJs() {
+  const now = Date.now();
+  if (now - GRAPHQL_CAPTURE.lastMainJsFetch < GRAPHQL_CAPTURE.mainJsFetchInterval) {
+    return; // Rate limit
+  }
+
+  try {
+    // Fetch X.com homepage to find main.js URL
+    const homeResp = await fetch('https://x.com', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+    });
+    const homeHtml = await homeResp.text();
+
+    // Find main.js URL (pattern: https://abs.twimg.com/responsive-web/client-web/main.XXXXX.js)
+    const mainJsMatch = homeHtml.match(/https:\/\/abs\.twimg\.com\/responsive-web\/client-web[^"]*?main\.[a-zA-Z0-9]+\.js/);
+    if (!mainJsMatch) {
+      console.debug('[XGrabba] Could not find main.js URL');
+      return;
+    }
+
+    // Fetch main.js
+    const jsResp = await fetch(mainJsMatch[0]);
+    const jsContent = await jsResp.text();
+
+    // Extract query IDs using regex patterns
+    const patterns = [
+      /queryId:"([a-zA-Z0-9_-]+)",operationName:"TweetResultByRestId"/,
+      /queryId:"([a-zA-Z0-9_-]+)",operationName:"UserByRestId"/,
+      /queryId:"([a-zA-Z0-9_-]+)",operationName:"UsersByRestIds"/,
+      /queryId:"([a-zA-Z0-9_-]+)",operationName:"Bookmarks"/,
+      /operationName:"TweetResultByRestId"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
+      /operationName:"UserByRestId"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
+      /operationName:"UsersByRestIds"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
+      /operationName:"Bookmarks"[^}]*queryId:"([a-zA-Z0-9_-]+)"/
+    ];
+
+    const operations = ['TweetResultByRestId', 'UserByRestId', 'UsersByRestIds', 'Bookmarks'];
+    let foundCount = 0;
+
+    for (let i = 0; i < patterns.length; i++) {
+      const match = jsContent.match(patterns[i]);
+      if (match && match[1]) {
+        const opName = operations[i % 4];
+        const prev = GRAPHQL_CAPTURE.queryIds[opName];
+        if (prev !== match[1]) {
+          GRAPHQL_CAPTURE.queryIds[opName] = match[1];
+          console.debug('[XGrabba] Fetched queryId from main.js', { operationName: opName, queryId: match[1] });
+          foundCount++;
+        }
+      }
+    }
+
+    GRAPHQL_CAPTURE.lastMainJsFetch = now;
+    console.debug('[XGrabba] main.js fetch complete', { foundQueryIds: foundCount, total: Object.keys(GRAPHQL_CAPTURE.queryIds).length });
+
+    // Sync to backend if we found new IDs
+    if (foundCount > 0) {
+      void maybeSyncGraphQLCapture();
+    }
+  } catch (e) {
+    console.debug('[XGrabba] Failed to fetch main.js:', e.message);
+  }
+}
+
+// Fetch query IDs on startup and periodically
+fetchQueryIdsFromMainJs();
+setInterval(fetchQueryIdsFromMainJs, 3600000); // Every hour
 
 // Observe X GraphQL requests and capture queryId/operationName/features.
 // This keeps the backend resilient to X rotating query IDs and feature flags.
