@@ -377,7 +377,8 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		return
 	}
 
-	if err := os.WriteFile(tweetsDataPath, tweetsJSON, 0644); err != nil {
+	s.logger.Info("writing tweets-data.json", "path", tweetsDataPath, "size", len(tweetsJSON))
+	if err := writeFileSync(tweetsDataPath, tweetsJSON, 0644); err != nil {
 		s.setExportError(fmt.Sprintf("write tweets-data.json: %v", err))
 		return
 	}
@@ -404,7 +405,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	}
 
 	// Write README.txt
-	if err := s.writeReadme(opts.DestPath, len(exportedTweets)); err != nil {
+	if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
 		s.logger.Warn("failed to write README", "error", err)
 	}
 
@@ -428,6 +429,29 @@ func (s *ExportService) setExportError(err string) {
 		s.activeExport.Phase = "failed"
 		s.activeExport.Error = err
 	}
+}
+
+// writeFileSync writes data to a file and ensures it's flushed to disk.
+// This is important for USB drives (especially exFAT) which may not flush immediately.
+func writeFileSync(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(data)
+	if err != nil {
+		f.Close()
+		return err
+	}
+
+	// Sync to ensure data is written to disk
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+
+	return f.Close()
 }
 
 // GetExportStatus returns the current export status.
@@ -624,7 +648,7 @@ func (s *ExportService) runDownloadExportAsync(ctx context.Context, opts ExportO
 	}
 
 	// Write README.txt
-	if err := s.writeReadme(tempDir, len(exportedTweets)); err != nil {
+	if err := s.writeReadme(tempDir, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
 		s.logger.Warn("failed to write README", "error", err)
 	}
 
@@ -983,7 +1007,7 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 	}
 
 	// Write README.txt
-	if err := s.writeReadme(opts.DestPath, len(exportedTweets)); err != nil {
+	if err := s.writeReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
 		s.logger.Warn("failed to write README", "error", err)
 	}
 
@@ -1204,13 +1228,14 @@ func (s *ExportService) copyOfflineUI(destPath string) error {
 	if err == nil {
 		// Successfully read source - inject offline data loader script
 		offlineHTML := injectOfflineDataLoader(string(srcHTML))
-		return os.WriteFile(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
+		s.logger.Info("writing index.html from source", "path", destPath)
+		return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
 	}
 
 	// Fallback: generate a standalone offline viewer if source not available
 	s.logger.Info("source index.html not found, using standalone offline viewer")
 	offlineHTML := generateOfflineHTML()
-	return os.WriteFile(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
+	return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
 }
 
 // injectOfflineDataLoader modifies the HTML to load tweets-data.json synchronously before main script
@@ -1275,44 +1300,118 @@ func (s *ExportService) copyViewerBinaries(binDir, destPath string) error {
 }
 
 // writeReadme writes the README.txt file.
-func (s *ExportService) writeReadme(destPath string, tweetCount int) error {
-	readme := fmt.Sprintf(`XGrabba Archive Export
-======================
+func (s *ExportService) writeReadme(destPath string, tweetCount int, totalBytes int64) error {
+	sizeStr := formatBytes(totalBytes)
 
-This archive contains %d archived tweets from X.com (Twitter).
+	readme := fmt.Sprintf(`================================================================================
+                         XGRABBA ARCHIVE EXPORT
+================================================================================
 
-How to View
------------
+ARCHIVE STATISTICS
+------------------
+Tweets Archived:  %d
+Total Data Size:  %s
+Export Date:      %s
 
-Option 1: Use the Viewer Application (Recommended)
-- Windows: Double-click xgrabba-viewer.exe
-- macOS: Double-click xgrabba-viewer-mac (you may need to right-click and select Open)
-- Linux: Run ./xgrabba-viewer-linux from terminal
+================================================================================
 
-The viewer will start a local server and open your browser automatically.
+HOW TO VIEW THIS ARCHIVE
+------------------------
 
-Option 2: Use Any Web Server
-- Run a local web server in this directory
-- For example with Python: python -m http.server 8080
-- Then open http://localhost:8080 in your browser
+OPTION 1: Open index.html Directly (Easiest)
+  Simply double-click index.html to open in your web browser.
+  Note: Some features may be limited due to browser security restrictions.
 
-Directory Structure
+OPTION 2: Use the Viewer Application (Recommended)
+
+  Windows:
+    1. Double-click xgrabba-viewer.exe
+    2. Your browser will open automatically to view the archive
+
+  macOS:
+    1. Right-click xgrabba-viewer-mac and select "Open"
+    2. Click "Open" in the security dialog (first time only)
+    3. Your browser will open automatically
+
+  Linux:
+    1. Open a terminal in this directory
+    2. Run: chmod +x xgrabba-viewer-linux && ./xgrabba-viewer-linux
+    3. Your browser will open automatically
+
+OPTION 3: Use Python's Built-in Web Server
+  1. Open a terminal/command prompt in this directory
+  2. Run: python -m http.server 8080  (or python3 on some systems)
+  3. Open http://localhost:8080 in your web browser
+
+================================================================================
+
+DIRECTORY STRUCTURE
 -------------------
 
-index.html          - The archive viewer application
+README.txt          - This file
+index.html          - The archive viewer (web application)
 tweets-data.json    - All tweet metadata in JSON format
+
 data/               - Tweet archives organized by date
-  YYYY/MM/          - Year and month folders
-    username_date_id/ - Individual tweet archives
-      media/        - Images, videos, thumbnails
-      avatar.jpg    - Author profile picture
+  YYYY/             - Year folder (e.g., 2024)
+    MM/             - Month folder (e.g., 01)
+      username_date_id/   - Individual tweet folder
+        tweet.json        - Tweet metadata
+        README.md         - Human-readable summary
+        media/            - Images, videos, and thumbnails
+        avatar.jpg        - Author's profile picture
 
-Exported: %s
+================================================================================
 
-For more information, visit: https://github.com/iconidentify/xgrabba
-`, tweetCount, time.Now().Format("January 2, 2006 at 3:04 PM"))
+DISCLAIMER
+----------
 
-	return os.WriteFile(filepath.Join(destPath, "README.txt"), []byte(readme), 0644)
+XGrabba is an open-source project for personal archival purposes.
+
+This software is provided "as is", without warranty of any kind, express or
+implied. The developers and contributors of XGrabba:
+
+  - Are NOT responsible for the content archived using this tool
+  - Are NOT responsible for any data loss, corruption, or misuse
+  - Do NOT endorse or verify the accuracy of archived content
+  - Do NOT provide any guarantee of data integrity or availability
+
+Users are solely responsible for:
+  - Ensuring they have the right to archive and store content
+  - Complying with applicable laws and platform terms of service
+  - Maintaining backups of important data
+  - The security and privacy of their archived data
+
+By using this archive, you acknowledge that you understand and accept these
+terms.
+
+================================================================================
+
+MORE INFORMATION
+----------------
+
+Project:     https://github.com/iconidentify/xgrabba
+License:     MIT License
+Issues:      https://github.com/iconidentify/xgrabba/issues
+
+================================================================================
+`, tweetCount, sizeStr, time.Now().Format("January 2, 2006 at 3:04:05 PM MST"))
+
+	return writeFileSync(filepath.Join(destPath, "README.txt"), []byte(readme), 0644)
+}
+
+// formatBytes converts bytes to human-readable format.
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // generateOfflineHTML generates the offline viewer HTML.
