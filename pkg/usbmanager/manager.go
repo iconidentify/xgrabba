@@ -379,6 +379,168 @@ func (m *Manager) Unmount(ctx context.Context, device string) error {
 	return nil
 }
 
+// ForceUnmount forcefully unmounts a USB drive using an escalating strategy.
+// This will kill any processes using the mount point if necessary.
+// Use this when normal unmount fails and user explicitly requests force.
+func (m *Manager) ForceUnmount(ctx context.Context, device string) error {
+	m.mu.RLock()
+	drive, ok := m.drives[device]
+	if !ok {
+		m.mu.RUnlock()
+		return fmt.Errorf("device not found: %s", device)
+	}
+
+	partition := drive.Partition
+	if partition == "" {
+		partition = device
+	}
+	actualMountPoint, actuallyMounted := m.getMountPoint(partition)
+
+	if !actuallyMounted && !drive.IsMounted {
+		m.mu.RUnlock()
+		return nil // Already unmounted
+	}
+
+	mountPoint := actualMountPoint
+	if mountPoint == "" {
+		mountPoint = drive.MountPoint
+	}
+	m.mu.RUnlock()
+
+	if mountPoint == "" {
+		return nil // No mount point to unmount
+	}
+
+	m.logger.Info("starting force unmount", "device", device, "mount_point", mountPoint)
+
+	// Step 1: Sync (best effort, short timeout)
+	syncCtx, syncCancel := context.WithTimeout(ctx, 5*time.Second)
+	cmd := exec.CommandContext(syncCtx, "sync")
+	_ = cmd.Run()
+	syncCancel()
+
+	// Step 2: Try normal unmount first
+	umountCtx, umountCancel := context.WithTimeout(ctx, 10*time.Second)
+	cmd = exec.CommandContext(umountCtx, "umount", mountPoint)
+	if err := cmd.Run(); err == nil {
+		umountCancel()
+		m.logger.Info("normal unmount succeeded", "device", device)
+		m.cleanupAfterUnmount(device, mountPoint)
+		return nil
+	}
+	umountCancel()
+	m.logger.Warn("normal unmount failed, escalating", "device", device)
+
+	// Step 3: Try lazy unmount
+	lazyCtx, lazyCancel := context.WithTimeout(ctx, 10*time.Second)
+	cmd = exec.CommandContext(lazyCtx, "umount", "-l", mountPoint)
+	if err := cmd.Run(); err == nil {
+		lazyCancel()
+		m.logger.Info("lazy unmount succeeded", "device", device)
+		time.Sleep(500 * time.Millisecond)
+		m.cleanupAfterUnmount(device, mountPoint)
+		return nil
+	}
+	lazyCancel()
+	m.logger.Warn("lazy unmount failed, trying force", "device", device)
+
+	// Step 4: Try force unmount (may cause data loss)
+	forceCtx, forceCancel := context.WithTimeout(ctx, 10*time.Second)
+	cmd = exec.CommandContext(forceCtx, "umount", "-f", mountPoint)
+	if err := cmd.Run(); err == nil {
+		forceCancel()
+		m.logger.Info("force unmount succeeded", "device", device)
+		time.Sleep(500 * time.Millisecond)
+		m.cleanupAfterUnmount(device, mountPoint)
+		return nil
+	}
+	forceCancel()
+	m.logger.Warn("force unmount failed, killing processes", "device", device)
+
+	// Step 5: Kill processes using the mount point
+	// Try fuser first (preferred)
+	killCtx, killCancel := context.WithTimeout(ctx, 10*time.Second)
+	cmd = exec.CommandContext(killCtx, "fuser", "-km", mountPoint)
+	fuserErr := cmd.Run()
+	killCancel()
+
+	if fuserErr != nil {
+		// fuser may not be available, try lsof + kill
+		m.logger.Debug("fuser failed or unavailable, trying lsof", "error", fuserErr)
+		m.killProcessesUsingPath(ctx, mountPoint)
+	}
+
+	// Give processes time to die
+	time.Sleep(1 * time.Second)
+
+	// Step 6: Final lazy unmount after killing processes
+	finalCtx, finalCancel := context.WithTimeout(ctx, 10*time.Second)
+	cmd = exec.CommandContext(finalCtx, "umount", "-l", mountPoint)
+	_ = cmd.Run() // Ignore error, we'll check mount status
+	finalCancel()
+
+	// Give it a moment
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify unmount succeeded
+	if _, stillMounted := m.getMountPoint(partition); stillMounted {
+		m.logger.Error("force unmount failed after all attempts", "device", device, "mount_point", mountPoint)
+		// Still update state - user explicitly requested force
+		m.cleanupAfterUnmount(device, mountPoint)
+		return fmt.Errorf("force unmount failed: mount point still active")
+	}
+
+	m.cleanupAfterUnmount(device, mountPoint)
+	m.logger.Info("force unmount completed", "device", device)
+	return nil
+}
+
+// cleanupAfterUnmount updates state and removes mount point directory.
+func (m *Manager) cleanupAfterUnmount(device, mountPoint string) {
+	// Remove mount point directory
+	_ = os.Remove(mountPoint)
+
+	// Update state
+	m.mu.Lock()
+	if d, ok := m.drives[device]; ok {
+		d.MountPoint = ""
+		d.IsMounted = false
+	}
+	m.mu.Unlock()
+}
+
+// killProcessesUsingPath finds and kills processes using a path (fallback if fuser unavailable).
+func (m *Manager) killProcessesUsingPath(ctx context.Context, mountPoint string) {
+	// Use lsof to find processes
+	lsofCtx, lsofCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer lsofCancel()
+
+	cmd := exec.CommandContext(lsofCtx, "lsof", "-t", mountPoint)
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.Debug("lsof failed or no processes found", "error", err)
+		return
+	}
+
+	// Parse PIDs and kill them
+	pids := strings.Fields(string(output))
+	for _, pidStr := range pids {
+		pid, err := strconv.Atoi(strings.TrimSpace(pidStr))
+		if err != nil || pid <= 1 {
+			continue
+		}
+
+		m.logger.Info("killing process using mount point", "pid", pid, "mount_point", mountPoint)
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			continue
+		}
+
+		// Send SIGKILL
+		_ = proc.Kill()
+	}
+}
+
 // Format formats a USB drive with the specified filesystem.
 func (m *Manager) Format(ctx context.Context, device, fsType, label, confirmToken string) error {
 	// Validate confirmation token - user must type "FORMAT" to confirm

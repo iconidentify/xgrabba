@@ -749,3 +749,125 @@ func TestCopyViewerBinaries_Service(t *testing.T) {
 		t.Logf("PASS: %s - %d bytes, mode %v", name, stat.Size(), stat.Mode())
 	}
 }
+
+func TestExportService_IsExportUsingPath(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	svc := NewExportService(nil, logger, nil)
+
+	// No active export
+	if svc.IsExportUsingPath("/Volumes/USB") {
+		t.Error("expected false when no active export")
+	}
+
+	// Simulate an active export
+	svc.mu.Lock()
+	svc.activeExport = &ActiveExport{
+		ID:         "test-export",
+		DestPath:   "/Volumes/USB/xgrabba-archive",
+		MountPoint: "/Volumes/USB",
+		Phase:      "exporting",
+	}
+	svc.mu.Unlock()
+
+	// Test matching mount point
+	if !svc.IsExportUsingPath("/Volumes/USB") {
+		t.Error("expected true for matching mount point")
+	}
+
+	// Test non-matching mount point
+	if svc.IsExportUsingPath("/Volumes/OtherDrive") {
+		t.Error("expected false for non-matching mount point")
+	}
+
+	// Test path prefix match (no explicit MountPoint set)
+	svc.mu.Lock()
+	svc.activeExport.MountPoint = ""
+	svc.mu.Unlock()
+
+	if !svc.IsExportUsingPath("/Volumes/USB") {
+		t.Error("expected true for path prefix match")
+	}
+
+	// Test with completed export (should return false)
+	svc.mu.Lock()
+	svc.activeExport.Phase = "completed"
+	svc.mu.Unlock()
+
+	if svc.IsExportUsingPath("/Volumes/USB") {
+		t.Error("expected false for completed export")
+	}
+
+	// Cleanup
+	svc.mu.Lock()
+	svc.activeExport = nil
+	svc.mu.Unlock()
+}
+
+func TestExportService_CancelExportForPath(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	svc := NewExportService(nil, logger, nil)
+
+	// No active export - should return false
+	if svc.CancelExportForPath("/Volumes/USB") {
+		t.Error("expected false when no active export")
+	}
+
+	// Simulate an active export with cancel func
+	cancelled := false
+	svc.mu.Lock()
+	svc.activeExport = &ActiveExport{
+		ID:         "test-export",
+		DestPath:   "/Volumes/USB/xgrabba-archive",
+		MountPoint: "/Volumes/USB",
+		Phase:      "exporting",
+		cancelFunc: func() { cancelled = true },
+	}
+	svc.mu.Unlock()
+
+	// Cancel for non-matching path - should return false
+	if svc.CancelExportForPath("/Volumes/OtherDrive") {
+		t.Error("expected false for non-matching path")
+	}
+	if cancelled {
+		t.Error("cancel func should not have been called")
+	}
+
+	// Cancel for matching path - should return true
+	if !svc.CancelExportForPath("/Volumes/USB") {
+		t.Error("expected true for matching path")
+	}
+	if !cancelled {
+		t.Error("cancel func should have been called")
+	}
+
+	// Verify export was marked as cancelled
+	svc.mu.Lock()
+	phase := svc.activeExport.Phase
+	errMsg := svc.activeExport.Error
+	svc.mu.Unlock()
+
+	if phase != "cancelled" {
+		t.Errorf("expected phase 'cancelled', got %q", phase)
+	}
+	if errMsg == "" {
+		t.Error("expected error message to be set")
+	}
+
+	// Cleanup
+	svc.mu.Lock()
+	svc.activeExport = nil
+	svc.mu.Unlock()
+}
+
+func TestActiveExport_MountPointField(t *testing.T) {
+	ae := ActiveExport{
+		ID:         "exp_123",
+		DestPath:   "/Volumes/USB/archive",
+		MountPoint: "/Volumes/USB",
+		Phase:      "exporting",
+	}
+
+	if ae.MountPoint != "/Volumes/USB" {
+		t.Errorf("expected mount point '/Volumes/USB', got %q", ae.MountPoint)
+	}
+}

@@ -163,6 +163,25 @@ func (c *Client) UnmountDrive(ctx context.Context, device string) error {
 	return nil
 }
 
+// ForceUnmountDrive forcefully unmounts a USB drive, killing processes if necessary.
+func (c *Client) ForceUnmountDrive(ctx context.Context, device string) error {
+	deviceName := device
+	if strings.HasPrefix(device, "/dev/") {
+		deviceName = strings.TrimPrefix(device, "/dev/")
+	}
+
+	var resp UnmountResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/api/v1/usb/drives/"+deviceName+"/unmount?force=true", nil, &resp); err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("force unmount failed: %s", resp.Message)
+	}
+
+	return nil
+}
+
 // FormatDrive formats a USB drive.
 func (c *Client) FormatDrive(ctx context.Context, device, filesystem, label, confirmToken string) error {
 	deviceName := device

@@ -126,12 +126,21 @@ func (h *APIHandler) MountDrive(w http.ResponseWriter, r *http.Request) {
 }
 
 // UnmountDrive safely unmounts a USB drive.
+// Use ?force=true to forcefully unmount even if processes are using the drive.
 func (h *APIHandler) UnmountDrive(w http.ResponseWriter, r *http.Request) {
 	device := "/dev/" + chi.URLParam(r, "device")
+	force := r.URL.Query().Get("force") == "true"
 
-	err := h.manager.Unmount(r.Context(), device)
+	var err error
+	if force {
+		h.logger.Info("force unmount requested", "device", device)
+		err = h.manager.ForceUnmount(r.Context(), device)
+	} else {
+		err = h.manager.Unmount(r.Context(), device)
+	}
+
 	if err != nil {
-		h.logger.Error("failed to unmount drive", "device", device, "error", err)
+		h.logger.Error("failed to unmount drive", "device", device, "force", force, "error", err)
 		if strings.Contains(err.Error(), "not found") {
 			h.writeError(w, http.StatusNotFound, ErrCodeDeviceNotFound, err.Error())
 		} else if strings.Contains(err.Error(), "busy") {
@@ -142,9 +151,14 @@ func (h *APIHandler) UnmountDrive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	message := "Drive safely unmounted. You can now remove the USB drive."
+	if force {
+		message = "Drive forcefully unmounted. You can now remove the USB drive."
+	}
+
 	h.writeJSON(w, http.StatusOK, UnmountResponse{
 		Success: true,
-		Message: "Drive safely unmounted. You can now remove the USB drive.",
+		Message: message,
 	})
 }
 

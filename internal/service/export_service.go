@@ -36,7 +36,8 @@ type ExportService struct {
 type ActiveExport struct {
 	ID             string             `json:"export_id"`
 	DestPath       string             `json:"dest_path"`
-	Phase          string             `json:"phase"` // preparing, exporting, finalizing, completed, failed, cancelled
+	MountPoint     string             `json:"mount_point,omitempty"` // USB mount point if exporting to USB
+	Phase          string             `json:"phase"`                 // preparing, exporting, finalizing, completed, failed, cancelled
 	TotalTweets    int                `json:"total_tweets"`
 	ExportedTweets int                `json:"exported_tweets"`
 	BytesWritten   int64              `json:"bytes_written"`
@@ -229,6 +230,7 @@ func (s *ExportService) StartExportAsync(opts ExportOptions) (string, error) {
 	s.activeExport = &ActiveExport{
 		ID:         exportID,
 		DestPath:   opts.DestPath,
+		MountPoint: opts.MountPoint,
 		Phase:      "preparing",
 		StartedAt:  time.Now(),
 		cancelFunc: cancel,
@@ -238,7 +240,7 @@ func (s *ExportService) StartExportAsync(opts ExportOptions) (string, error) {
 	// Emit export started event
 	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryExport,
 		fmt.Sprintf("Export started to %s", opts.DestPath),
-		domain.EventMetadata{"export_id": exportID, "dest_path": opts.DestPath, "encrypted": opts.Encrypt})
+		domain.EventMetadata{"export_id": exportID, "dest_path": opts.DestPath, "mount_point": opts.MountPoint, "encrypted": opts.Encrypt})
 
 	// Start export in background
 	go s.runExportAsync(ctx, opts)
@@ -1029,6 +1031,7 @@ func (s *ExportService) GetExportStatus() *ActiveExport {
 	return &ActiveExport{
 		ID:             s.activeExport.ID,
 		DestPath:       s.activeExport.DestPath,
+		MountPoint:     s.activeExport.MountPoint,
 		Phase:          s.activeExport.Phase,
 		TotalTweets:    s.activeExport.TotalTweets,
 		ExportedTweets: s.activeExport.ExportedTweets,
@@ -1058,6 +1061,72 @@ func (s *ExportService) CancelExport() error {
 	}
 
 	return nil
+}
+
+// IsExportUsingPath checks if an active export is writing to a path under the given mount point.
+func (s *ExportService) IsExportUsingPath(mountPoint string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.activeExport == nil {
+		return false
+	}
+
+	// Check if export is in an active phase
+	phase := s.activeExport.Phase
+	if phase != "preparing" && phase != "exporting" && phase != "finalizing" && phase != "encrypting" {
+		return false
+	}
+
+	// Check if mount point matches
+	if s.activeExport.MountPoint != "" && s.activeExport.MountPoint == mountPoint {
+		return true
+	}
+
+	// Also check if DestPath starts with the mount point
+	if strings.HasPrefix(s.activeExport.DestPath, mountPoint) {
+		return true
+	}
+
+	return false
+}
+
+// CancelExportForPath cancels any export that is using the given mount point.
+// Returns true if an export was cancelled.
+func (s *ExportService) CancelExportForPath(mountPoint string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.activeExport == nil {
+		return false
+	}
+
+	// Check if export is in an active phase
+	phase := s.activeExport.Phase
+	if phase != "preparing" && phase != "exporting" && phase != "finalizing" && phase != "encrypting" {
+		return false
+	}
+
+	// Check if this export is using the mount point
+	isUsing := false
+	if s.activeExport.MountPoint != "" && s.activeExport.MountPoint == mountPoint {
+		isUsing = true
+	} else if strings.HasPrefix(s.activeExport.DestPath, mountPoint) {
+		isUsing = true
+	}
+
+	if !isUsing {
+		return false
+	}
+
+	// Cancel the export
+	if s.activeExport.cancelFunc != nil {
+		s.activeExport.cancelFunc()
+	}
+	s.activeExport.Phase = "cancelled"
+	s.activeExport.Error = "Cancelled due to USB drive unmount"
+
+	return true
 }
 
 // StartDownloadExportAsync starts an export that creates a downloadable zip file.
@@ -1356,14 +1425,15 @@ func getFreeDiskSpace(path string) int64 {
 
 // ExportOptions configures the export process.
 type ExportOptions struct {
-	DestPath        string   // Destination directory (e.g., USB drive path)
-	IncludeViewers  bool     // Include cross-platform viewer binaries
-	ViewerBinDir    string   // Directory containing viewer binaries
-	DateRange       *DateRange // Optional date filter
-	Authors         []string // Optional author filter
-	SearchQuery     string   // Optional search filter
-	Encrypt         bool     // Enable AES-256-GCM encryption
-	Password        string   // Password for encryption (required if Encrypt is true)
+	DestPath       string     // Destination directory (e.g., USB drive path)
+	MountPoint     string     // USB mount point (for tracking which drive is in use)
+	IncludeViewers bool       // Include cross-platform viewer binaries
+	ViewerBinDir   string     // Directory containing viewer binaries
+	DateRange      *DateRange // Optional date filter
+	Authors        []string   // Optional author filter
+	SearchQuery    string     // Optional search filter
+	Encrypt        bool       // Enable AES-256-GCM encryption
+	Password       string     // Password for encryption (required if Encrypt is true)
 }
 
 // DateRange filters tweets by date.
