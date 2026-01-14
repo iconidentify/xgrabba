@@ -100,6 +100,10 @@ func (b *GraphQLBookmarksClient) getBookmarksFeatures() string {
 // ListBookmarks returns bookmark tweet IDs for a user (most recent first).
 // userID is ignored for GraphQL mode (session determines the user).
 func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID string, maxResults int, paginationToken string) (ids []string, nextToken string, err error) {
+	return b.listBookmarksWithRetry(ctx, userID, maxResults, paginationToken, false)
+}
+
+func (b *GraphQLBookmarksClient) listBookmarksWithRetry(ctx context.Context, userID string, maxResults int, paginationToken string, isRetry bool) (ids []string, nextToken string, err error) {
 	if b == nil || b.c == nil {
 		return nil, "", fmt.Errorf("client is nil")
 	}
@@ -116,10 +120,7 @@ func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID strin
 		return nil, "", fmt.Errorf("browser credentials not available (enable forwarding in extension and visit x.com)")
 	}
 
-	queryID := b.c.getBrowserQueryID("Bookmarks")
-	if queryID == "" {
-		queryID = defaultBookmarksQueryID
-	}
+	queryID, queryIDSource := b.c.getBookmarksQueryIDWithSource()
 
 	vars := map[string]any{
 		"count":                 maxResults,
@@ -168,6 +169,13 @@ func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID strin
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
+		// If we got a 400 while using a default/cached query ID, it may have gone stale.
+		// Try refreshing from main.js once.
+		if resp.StatusCode == http.StatusBadRequest && !isRetry && (queryIDSource == "default" || queryIDSource == "cached") {
+			if _, refreshErr := b.c.refreshBookmarksQueryID(ctx); refreshErr == nil {
+				return b.listBookmarksWithRetry(ctx, userID, maxResults, paginationToken, true)
+			}
+		}
 		return nil, "", fmt.Errorf("bookmarks graphql error: %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 

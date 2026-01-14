@@ -46,6 +46,11 @@ type Client struct {
 	graphQLQueryID       string
 	graphQLQueryIDExpiry time.Time
 	graphQLQueryIDMu     sync.Mutex
+
+	// Bookmarks GraphQL query ID (separate operation; also may change)
+	bookmarksQueryID       string
+	bookmarksQueryIDExpiry time.Time
+	bookmarksQueryIDMu     sync.Mutex
 }
 
 // NewClient creates a new Twitter client.
@@ -74,6 +79,23 @@ func (c *Client) getGraphQLQueryIDWithSource() (queryID string, source string) {
 		return c.graphQLQueryID, "cached"
 	}
 	return defaultTweetResultByRestIDQueryID, "default"
+}
+
+// getBookmarksQueryIDWithSource returns the current Bookmarks query ID,
+// plus where that value came from (browser|cached|default).
+func (c *Client) getBookmarksQueryIDWithSource() (queryID string, source string) {
+	// Prefer browser-observed query IDs when present.
+	if qid := c.getBrowserQueryID("Bookmarks"); qid != "" {
+		return qid, "browser"
+	}
+
+	c.bookmarksQueryIDMu.Lock()
+	defer c.bookmarksQueryIDMu.Unlock()
+
+	if c.bookmarksQueryID != "" && time.Now().Before(c.bookmarksQueryIDExpiry) {
+		return c.bookmarksQueryID, "cached"
+	}
+	return defaultBookmarksQueryID, "default"
 }
 
 // getGraphQLFeaturesWithSource returns the features JSON blob plus where it came from (browser|default).
@@ -147,6 +169,70 @@ func (c *Client) refreshGraphQLQueryID(ctx context.Context) (string, error) {
 	c.graphQLQueryID = newQueryID
 	c.graphQLQueryIDExpiry = time.Now().Add(24 * time.Hour)
 	c.graphQLQueryIDMu.Unlock()
+
+	return newQueryID, nil
+}
+
+// refreshBookmarksQueryID fetches the current Bookmarks query ID from X's main.js.
+func (c *Client) refreshBookmarksQueryID(ctx context.Context) (string, error) {
+	c.logger.Info("attempting to refresh Bookmarks GraphQL query ID from X.com")
+
+	// Fetch X.com's homepage to find the main.js URL
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://x.com", nil)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch x.com: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+
+	mainJSRegex := regexp.MustCompile(`https://abs\.twimg\.com/responsive-web/client-web[^"]*main\.[a-zA-Z0-9]+\.js`)
+	mainJSMatch := mainJSRegex.FindString(string(body))
+	if mainJSMatch == "" {
+		return "", fmt.Errorf("could not find main.js URL in X.com response")
+	}
+
+	req, err = http.NewRequestWithContext(ctx, "GET", mainJSMatch, nil)
+	if err != nil {
+		return "", fmt.Errorf("create main.js request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err = c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch main.js: %w", err)
+	}
+	defer resp.Body.Close()
+
+	jsBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read main.js: %w", err)
+	}
+
+	// Find Bookmarks query ID (format: queryId:"XXXXX",operationName:"Bookmarks")
+	queryIDRegex := regexp.MustCompile(`queryId:"([a-zA-Z0-9_-]+)",operationName:"Bookmarks"`)
+	queryIDMatch := queryIDRegex.FindSubmatch(jsBody)
+	if queryIDMatch == nil {
+		return "", fmt.Errorf("could not find Bookmarks query ID in main.js")
+	}
+
+	newQueryID := string(queryIDMatch[1])
+	c.logger.Info("found new Bookmarks GraphQL query ID", "query_id", newQueryID)
+
+	// Cache for 24 hours
+	c.bookmarksQueryIDMu.Lock()
+	c.bookmarksQueryID = newQueryID
+	c.bookmarksQueryIDExpiry = time.Now().Add(24 * time.Hour)
+	c.bookmarksQueryIDMu.Unlock()
 
 	return newQueryID, nil
 }
