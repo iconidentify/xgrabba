@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -51,6 +52,15 @@ type Client struct {
 	bookmarksQueryID       string
 	bookmarksQueryIDExpiry time.Time
 	bookmarksQueryIDMu     sync.Mutex
+}
+
+func normalizeTweetText(s string) string {
+	// X responses can occasionally include HTML entity encoding (e.g. "&amp;").
+	// Normalize so stored/searchable text matches what the UI expects.
+	if strings.IndexByte(s, '&') == -1 {
+		return s
+	}
+	return html.UnescapeString(s)
 }
 
 // NewClient creates a new Twitter client.
@@ -300,12 +310,14 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	if err == nil {
 		tweet := result.Tweet
 		tweet.URL = tweetURL
+		tweet.Text = normalizeTweetText(tweet.Text)
 
 		// For note tweets (long-form), syndication text is definitely truncated.
 		// We MUST fetch full text via GraphQL. For regular tweets, try GraphQL but don't require it.
 		fullText, gqlErr := c.fetchFullTextFromGraphQL(ctx, tweetID)
 
 		if gqlErr == nil && fullText != "" {
+			fullText = normalizeTweetText(fullText)
 			if len(fullText) > len(tweet.Text) {
 				c.logger.Info("GraphQL returned longer text, using it", "tweet_id", tweetID, "syndication_len", len(tweet.Text), "graphql_len", len(fullText), "is_note_tweet", result.IsNoteTweet)
 				tweet.Text = fullText
@@ -336,6 +348,7 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// Best-effort: if author handle is missing (NSFW/visibility edge cases),
 		// derive it from the URL so the archive remains human-friendly.
 		applyAuthorFromURL(tweet, tweetURL)
+		tweet.Text = normalizeTweetText(tweet.Text)
 		return tweet, nil
 	}
 
@@ -347,6 +360,7 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// If we still don't have an avatar URL, try a profile-page fallback.
 		// This is useful when API endpoints are blocked but the public profile HTML loads.
 		c.enrichAvatarFromProfilePage(ctx, tweet)
+		tweet.Text = normalizeTweetText(tweet.Text)
 		return tweet, nil
 	}
 
