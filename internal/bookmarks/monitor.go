@@ -180,6 +180,30 @@ func (m *Monitor) Start(ctx context.Context) {
 	m.state = MonitorStateRunning
 	m.mu.Unlock()
 
+	// Browser-credentials mode UX: as soon as credentials arrive, trigger an immediate poll.
+	// Otherwise the UI can show a stale "credentials not available" error until the next poll interval.
+	if m.cfg.UseBrowserCredentials {
+		if probe, ok := m.client.(interface{ HasBrowserCredentials() bool }); ok {
+			go func() {
+				t := time.NewTicker(2 * time.Second)
+				defer t.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+						if probe.HasBrowserCredentials() {
+							m.logger.Info("browser credentials detected; triggering immediate bookmarks poll")
+							m.setLastError("")
+							m.CheckNow()
+							return
+						}
+					}
+				}
+			}()
+		}
+	}
+
 	m.logger.Info("starting bookmarks monitor",
 		"user_id", m.cfg.UserID,
 		"poll_interval", m.cfg.PollInterval.String(),

@@ -26,6 +26,15 @@ func NewGraphQLBookmarksClient(c *Client) *GraphQLBookmarksClient {
 	return &GraphQLBookmarksClient{c: c}
 }
 
+// HasBrowserCredentials reports whether the wrapped twitter client currently has valid browser credentials.
+// Used by the bookmarks monitor to trigger an immediate poll when credentials first appear.
+func (b *GraphQLBookmarksClient) HasBrowserCredentials() bool {
+	if b == nil || b.c == nil {
+		return false
+	}
+	return b.c.HasBrowserCredentials()
+}
+
 // ListBookmarks returns bookmark tweet IDs for a user (most recent first).
 // userID is ignored for GraphQL mode (session determines the user).
 func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID string, maxResults int, paginationToken string) (ids []string, nextToken string, err error) {
