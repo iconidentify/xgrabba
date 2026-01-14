@@ -16,6 +16,7 @@ import (
 
 	"github.com/iconidentify/xgrabba/internal/bookmarks"
 	"github.com/iconidentify/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/pkg/twitter"
 )
 
 // BookmarksMonitor is the interface for interacting with the bookmarks monitor.
@@ -33,6 +34,7 @@ type BookmarksOAuthHandler struct {
 	cfg    config.BookmarksConfig
 	apiKey string
 	logger *slog.Logger
+	twitterClient *twitter.Client
 
 	// X API token exchange and user lookup
 	tokenURL string
@@ -53,13 +55,14 @@ type pkceState struct {
 	CreatedAt   time.Time
 }
 
-func NewBookmarksOAuthHandler(cfg config.BookmarksConfig, apiKey string, logger *slog.Logger) *BookmarksOAuthHandler {
+func NewBookmarksOAuthHandler(cfg config.BookmarksConfig, apiKey string, logger *slog.Logger, twitterClient *twitter.Client) *BookmarksOAuthHandler {
 	return &BookmarksOAuthHandler{
-		cfg:     cfg,
-		apiKey:  apiKey,
-		logger:  logger,
-		tokenURL: cfg.TokenURL,
-		states:  make(map[string]pkceState),
+		cfg:          cfg,
+		apiKey:       apiKey,
+		logger:       logger,
+		twitterClient: twitterClient,
+		tokenURL:      cfg.TokenURL,
+		states:       make(map[string]pkceState),
 	}
 }
 
@@ -319,10 +322,25 @@ func (h *BookmarksOAuthHandler) EnhancedStatus(w http.ResponseWriter, r *http.Re
 		"monitor_state": string(bookmarks.MonitorStateIdle),
 	}
 
-	if err == nil && store != nil {
-		response["connected"] = store.RefreshToken != "" && store.UserID != ""
-		response["user_id"] = store.UserID
-		response["updated_at"] = store.UpdatedAt
+	// Determine auth mode and connection state.
+	// - oauth: based on refresh token store
+	// - browser: based on forwarded browser credentials (auth_token + ct0)
+	if h.cfg.UseBrowserCredentials {
+		response["auth_mode"] = "browser"
+		if h.twitterClient != nil {
+			st := h.twitterClient.GetBrowserCredentialsStatus()
+			response["browser_credentials"] = st
+			response["connected"] = st.HasCredentials && !st.IsExpired
+		} else {
+			response["connected"] = false
+		}
+	} else {
+		response["auth_mode"] = "oauth"
+		if err == nil && store != nil {
+			response["connected"] = store.RefreshToken != "" && store.UserID != ""
+			response["user_id"] = store.UserID
+			response["updated_at"] = store.UpdatedAt
+		}
 	}
 
 	h.mu.Lock()

@@ -5,7 +5,9 @@
   "description": "Archive tweets and videos from X.com with one click. AI-powered organization and search.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "cookies",
+    "webRequest"
   ],
   "host_permissions": [
     "https://x.com/*",
@@ -32,7 +34,7 @@
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["content/extractor.js", "content/injector.js"],
+      "js": ["content/credentials.js", "content/extractor.js", "content/injector.js"],
       "css": ["content/styles.css"],
       "run_at": "document_idle"
     }

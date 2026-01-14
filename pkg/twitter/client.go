@@ -27,6 +27,10 @@ const (
 	defaultTweetResultByRestIDQueryID = "geNbknbFuVk6S2dpb8lr2Q"
 )
 
+// defaultGraphQLFeatures is used when we don't have browser-observed feature flags.
+// Keep this as a fallback so GraphQL continues to work even without extension forwarding.
+const defaultGraphQLFeatures = `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false,"tweetypie_unmention_optimization_enabled":true,"responsive_web_grok_analysis_button_from_backend":false,"premium_content_api_read_enabled":false,"post_ctas_fetch_enabled":false,"profile_label_improvements_pcf_label_in_post_enabled":false,"responsive_web_grok_image_annotation_enabled":false,"responsive_web_grok_community_note_auto_translation_is_enabled":false,"responsive_web_grok_show_grok_translated_post":false,"responsive_web_profile_redirect_enabled":false,"responsive_web_jetfuel_frame":false,"responsive_web_grok_analyze_button_fetch_trends_enabled":false,"responsive_web_grok_annotations_enabled":false,"responsive_web_grok_imagine_annotation_enabled":false,"responsive_web_grok_analyze_post_followups_enabled":false,"responsive_web_grok_share_attachment_enabled":false}`
+
 // Client fetches tweet data from X.com.
 type Client struct {
 	httpClient *http.Client
@@ -58,6 +62,12 @@ func NewClient(logger *slog.Logger) *Client {
 // getGraphQLQueryID returns the current TweetResultByRestId query ID.
 // Uses cached value if valid, otherwise returns default.
 func (c *Client) getGraphQLQueryID() string {
+	// Prefer browser-observed query IDs when present.
+	// This avoids scraping main.js and reduces breakage when X rotates query IDs.
+	if qid := c.getBrowserQueryID("TweetResultByRestId"); qid != "" {
+		return qid
+	}
+
 	c.graphQLQueryIDMu.Lock()
 	defer c.graphQLQueryIDMu.Unlock()
 
@@ -65,6 +75,15 @@ func (c *Client) getGraphQLQueryID() string {
 		return c.graphQLQueryID
 	}
 	return defaultTweetResultByRestIDQueryID
+}
+
+// getGraphQLFeatures returns the GraphQL "features" JSON blob to send on requests.
+// Prefer browser-observed flags; fall back to a baked-in set.
+func (c *Client) getGraphQLFeatures() string {
+	if ff := c.getBrowserFeatureFlags(); len(ff) > 0 {
+		return string(ff)
+	}
+	return defaultGraphQLFeatures
 }
 
 // refreshGraphQLQueryID fetches the current query ID from X's main.js.
@@ -684,24 +703,62 @@ type graphQLTweetResult struct {
 	} `json:"views"`
 }
 
+// authSource indicates where authentication came from for logging/debugging.
+type authSource string
+
+const (
+	authSourceBrowser authSource = "browser"
+	authSourceGuest   authSource = "guest"
+)
+
+// getGraphQLAuthHeaders returns headers for GraphQL requests.
+// Priority: browser credentials (if available) > guest token.
+// Returns the headers and the auth source used.
+func (c *Client) getGraphQLAuthHeaders(ctx context.Context) (http.Header, authSource, error) {
+	// Try browser credentials first
+	if browserHeaders := c.getBrowserHeaders(); browserHeaders != nil {
+		c.logger.Debug("using browser credentials for GraphQL")
+		return browserHeaders, authSourceBrowser, nil
+	}
+
+	// Fall back to guest token
+	guestToken, err := c.getGuestToken(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("get guest token: %w", err)
+	}
+
+	decodedBearer, _ := url.QueryUnescape(bearerToken)
+	headers := http.Header{
+		"Authorization":             []string{"Bearer " + decodedBearer},
+		"x-guest-token":             []string{guestToken},
+		"User-Agent":                []string{c.userAgent},
+		"Content-Type":              []string{"application/json"},
+		"x-twitter-active-user":     []string{"yes"},
+		"x-twitter-client-language": []string{"en"},
+	}
+
+	return headers, authSourceGuest, nil
+}
+
 // fetchFullTextFromGraphQL fetches just the full text for a tweet using GraphQL.
 // This is used as a fallback when syndication API returns truncated text.
 // Automatically refreshes the query ID if it detects a stale ID error.
+// Uses browser credentials if available, otherwise falls back to guest token.
 func (c *Client) fetchFullTextFromGraphQL(ctx context.Context, tweetID string) (string, error) {
 	return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, false)
 }
 
 func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID string, isRetry bool) (string, error) {
-	guestToken, err := c.getGuestToken(ctx)
+	headers, source, err := c.getGraphQLAuthHeaders(ctx)
 	if err != nil {
-		return "", fmt.Errorf("get guest token: %w", err)
+		return "", err
 	}
 
 	queryID := c.getGraphQLQueryID()
 
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
-	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false,"tweetypie_unmention_optimization_enabled":true,"responsive_web_grok_analysis_button_from_backend":false,"premium_content_api_read_enabled":false,"post_ctas_fetch_enabled":false,"profile_label_improvements_pcf_label_in_post_enabled":false,"responsive_web_grok_image_annotation_enabled":false,"responsive_web_grok_community_note_auto_translation_is_enabled":false,"responsive_web_grok_show_grok_translated_post":false,"responsive_web_profile_redirect_enabled":false,"responsive_web_jetfuel_frame":false,"responsive_web_grok_analyze_button_fetch_trends_enabled":false,"responsive_web_grok_annotations_enabled":false,"responsive_web_grok_imagine_annotation_enabled":false,"responsive_web_grok_analyze_post_followups_enabled":false,"responsive_web_grok_share_attachment_enabled":false}`
+	features := c.getGraphQLFeatures()
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
 		queryID,
@@ -713,13 +770,11 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 		return "", fmt.Errorf("create graphql request: %w", err)
 	}
 
-	decodedBearer, _ := url.QueryUnescape(bearerToken)
-	req.Header.Set("Authorization", "Bearer "+decodedBearer)
-	req.Header.Set("x-guest-token", guestToken)
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-twitter-active-user", "yes")
-	req.Header.Set("x-twitter-client-language", "en")
+	// Copy headers to request
+	for k, v := range headers {
+		req.Header[k] = v
+	}
+	_ = source // Used for logging if needed
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -729,12 +784,15 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		// If we get a 403, the guest token might be stale/rate-limited; clear it and retry once
+		// If we get a 403, credentials might be stale/rate-limited; clear and retry once
 		if resp.StatusCode == http.StatusForbidden && !isRetry {
-			c.logger.Warn("GraphQL got 403, clearing guest token and retrying", "tweet_id", tweetID)
-			c.guestTokenMu.Lock()
-			c.guestToken = ""
-			c.guestTokenMu.Unlock()
+			c.logger.Warn("GraphQL got 403, clearing credentials and retrying", "tweet_id", tweetID, "auth_source", source)
+			if source == authSourceGuest {
+				c.guestTokenMu.Lock()
+				c.guestToken = ""
+				c.guestTokenMu.Unlock()
+			}
+			// Browser credentials don't need clearing - they'll be refreshed by extension
 			return c.fetchFullTextFromGraphQLWithRetry(ctx, tweetID, true)
 		}
 		return "", fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
@@ -791,21 +849,22 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 
 // fetchFromGraphQL fetches complete tweet data using X's GraphQL API.
 // This is used as a fallback when the syndication API fails entirely.
+// Uses browser credentials if available, otherwise falls back to guest token.
 func (c *Client) fetchFromGraphQL(ctx context.Context, tweetID string) (*domain.Tweet, error) {
 	return c.fetchFromGraphQLWithRetry(ctx, tweetID, false)
 }
 
 func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, isRetry bool) (*domain.Tweet, error) {
-	guestToken, err := c.getGuestToken(ctx)
+	headers, source, err := c.getGraphQLAuthHeaders(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("get guest token: %w", err)
+		return nil, err
 	}
 
 	queryID := c.getGraphQLQueryID()
 
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
-	features := `{"creator_subscriptions_tweet_preview_api_enabled":true,"communities_web_enable_tweet_community_results_fetch":true,"c9s_tweet_anatomy_moderator_badge_enabled":true,"articles_preview_enabled":true,"responsive_web_edit_tweet_api_enabled":true,"graphql_is_translatable_rweb_tweet_is_translatable_enabled":true,"view_counts_everywhere_api_enabled":true,"longform_notetweets_consumption_enabled":true,"responsive_web_twitter_article_tweet_consumption_enabled":true,"tweet_awards_web_tipping_enabled":false,"creator_subscriptions_quote_tweet_preview_enabled":false,"freedom_of_speech_not_reach_fetch_enabled":true,"standardized_nudges_misinfo":true,"tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled":true,"rweb_video_timestamps_enabled":true,"longform_notetweets_rich_text_read_enabled":true,"longform_notetweets_inline_media_enabled":true,"rweb_tipjar_consumption_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true,"responsive_web_enhance_cards_enabled":false,"tweetypie_unmention_optimization_enabled":true,"responsive_web_grok_analysis_button_from_backend":false,"premium_content_api_read_enabled":false,"post_ctas_fetch_enabled":false,"profile_label_improvements_pcf_label_in_post_enabled":false,"responsive_web_grok_image_annotation_enabled":false,"responsive_web_grok_community_note_auto_translation_is_enabled":false,"responsive_web_grok_show_grok_translated_post":false,"responsive_web_profile_redirect_enabled":false,"responsive_web_jetfuel_frame":false,"responsive_web_grok_analyze_button_fetch_trends_enabled":false,"responsive_web_grok_annotations_enabled":false,"responsive_web_grok_imagine_annotation_enabled":false,"responsive_web_grok_analyze_post_followups_enabled":false,"responsive_web_grok_share_attachment_enabled":false}`
+	features := c.getGraphQLFeatures()
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
 		queryID,
@@ -817,13 +876,10 @@ func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, 
 		return nil, fmt.Errorf("create graphql request: %w", err)
 	}
 
-	decodedBearer, _ := url.QueryUnescape(bearerToken)
-	req.Header.Set("Authorization", "Bearer "+decodedBearer)
-	req.Header.Set("x-guest-token", guestToken)
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-twitter-active-user", "yes")
-	req.Header.Set("x-twitter-client-language", "en")
+	// Copy headers to request
+	for k, v := range headers {
+		req.Header[k] = v
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -833,12 +889,14 @@ func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		// If we get a 403, the guest token might be stale/rate-limited; clear it and retry once
+		// If we get a 403, credentials might be stale/rate-limited; clear and retry once
 		if resp.StatusCode == http.StatusForbidden && !isRetry {
-			c.logger.Warn("GraphQL got 403, clearing guest token and retrying", "tweet_id", tweetID)
-			c.guestTokenMu.Lock()
-			c.guestToken = ""
-			c.guestTokenMu.Unlock()
+			c.logger.Warn("GraphQL got 403, clearing credentials and retrying", "tweet_id", tweetID, "auth_source", source)
+			if source == authSourceGuest {
+				c.guestTokenMu.Lock()
+				c.guestToken = ""
+				c.guestTokenMu.Unlock()
+			}
 			return c.fetchFromGraphQLWithRetry(ctx, tweetID, true)
 		}
 		return nil, fmt.Errorf("graphql error (status %d): %s", resp.StatusCode, string(body))
@@ -908,8 +966,9 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	// Parse view count if available
 	if result.Views.Count != "" {
 		var views int
-		fmt.Sscanf(result.Views.Count, "%d", &views)
-		tweet.Metrics.Views = views
+		if _, err := fmt.Sscanf(result.Views.Count, "%d", &views); err == nil {
+			tweet.Metrics.Views = views
+		}
 	}
 
 	// Set reply/quote references

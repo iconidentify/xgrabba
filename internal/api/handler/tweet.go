@@ -942,13 +942,6 @@ func (h *TweetHandler) writeError(w http.ResponseWriter, status int, message str
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func truncateText(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}
-
 // isTextPotentiallyTruncated is deprecated - we now always fetch full text via GraphQL.
 // Kept for API compatibility but always returns false.
 func isTextPotentiallyTruncated(text string) bool {

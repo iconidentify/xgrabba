@@ -145,7 +145,7 @@ func getArchiveStats(storagePath string) (videoBytes int64, videoCount int, imag
 	// Track unique tweet directories
 	tweetDirs := make(map[string]bool)
 
-	filepath.Walk(storagePath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(storagePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

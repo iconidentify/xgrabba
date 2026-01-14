@@ -5,7 +5,8 @@ const STORAGE_KEYS = {
   BACKEND_URL: 'backendUrl',
   API_KEY: 'apiKey',
   HISTORY: 'archiveHistory',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  CREDENTIALS_STATUS: 'credentialsStatus'
 };
 
 // Normalize URL by removing trailing slashes to prevent double-slash issues
@@ -28,6 +29,86 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
 });
+
+// ============================================================================
+// GraphQL interception (auto-sync query IDs / feature flags)
+// ============================================================================
+const GRAPHQL_CAPTURE = {
+  queryIds: {},
+  featureFlags: null,
+  lastSync: 0,
+  syncInterval: 60000 // at most once per minute
+};
+
+// Observe X GraphQL requests and capture queryId/operationName/features.
+// This keeps the backend resilient to X rotating query IDs and feature flags.
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    try {
+      recordGraphQLRequest(details.url);
+    } catch (e) {
+      // best-effort only
+    }
+  },
+  {
+    urls: [
+      'https://x.com/i/api/graphql/*',
+      'https://twitter.com/i/api/graphql/*'
+    ]
+  }
+);
+
+function recordGraphQLRequest(requestUrl) {
+  const u = new URL(requestUrl);
+  const parts = u.pathname.split('/').filter(Boolean);
+  const gqlIdx = parts.indexOf('graphql');
+  if (gqlIdx === -1 || parts.length < gqlIdx + 3) return;
+
+  const queryId = parts[gqlIdx + 1];
+  const operationName = parts[gqlIdx + 2];
+  if (!queryId || !operationName) return;
+
+  const prev = GRAPHQL_CAPTURE.queryIds[operationName];
+  if (prev !== queryId) {
+    GRAPHQL_CAPTURE.queryIds[operationName] = queryId;
+  }
+
+  const featuresParam = u.searchParams.get('features');
+  if (featuresParam) {
+    // searchParams already decodes; parse to ensure it's valid JSON.
+    try {
+      GRAPHQL_CAPTURE.featureFlags = JSON.parse(featuresParam);
+    } catch (e) {
+      // ignore malformed features
+    }
+  }
+
+  // Best-effort sync (rate-limited) if forwarding enabled.
+  void maybeSyncGraphQLCapture();
+}
+
+async function maybeSyncGraphQLCapture() {
+  const now = Date.now();
+  if (now - GRAPHQL_CAPTURE.lastSync < GRAPHQL_CAPTURE.syncInterval) return;
+
+  const resp = await getSettings().catch(() => null);
+  if (!resp?.settings?.forwardCredentials) return;
+
+  const auth = await getAuthToken();
+  const ct0 = await getCT0Token();
+  if (!auth?.authToken || !ct0?.ct0) return;
+
+  const result = await syncCredentials({
+    authToken: auth.authToken,
+    ct0: ct0.ct0,
+    queryIds: GRAPHQL_CAPTURE.queryIds,
+    featureFlags: GRAPHQL_CAPTURE.featureFlags
+  });
+
+  if (result?.success) {
+    GRAPHQL_CAPTURE.lastSync = now;
+  }
+}
 
 // Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -60,6 +141,15 @@ async function handleMessage(message, sender) {
 
     case 'OPEN_UI':
       return await openUI(message.payload);
+
+    case 'GET_AUTH_TOKEN':
+      return await getAuthToken();
+
+    case 'SYNC_CREDENTIALS':
+      return await syncCredentials(message.payload);
+
+    case 'GET_CREDENTIALS_STATUS':
+      return await getCredentialsStatus();
 
     default:
       return { error: 'Unknown message type' };
@@ -408,6 +498,164 @@ async function retryArchive(payload) {
   }
 
   return { success: false, error: 'Could not retry - original request data not found' };
+}
+
+// ============================================================================
+// Browser Credentials Management
+// ============================================================================
+
+// Get auth_token cookie from X.com using cookies API
+async function getAuthToken() {
+  try {
+    const cookie = await chrome.cookies.get({
+      url: 'https://x.com',
+      name: 'auth_token'
+    });
+
+    if (cookie && cookie.value) {
+      return { authToken: cookie.value };
+    }
+
+    // Try twitter.com as fallback
+    const twitterCookie = await chrome.cookies.get({
+      url: 'https://twitter.com',
+      name: 'auth_token'
+    });
+
+    if (twitterCookie && twitterCookie.value) {
+      return { authToken: twitterCookie.value };
+    }
+
+    return { authToken: null };
+  } catch (error) {
+    console.error('Failed to get auth_token:', error);
+    return { authToken: null, error: error.message };
+  }
+}
+
+// Get ct0 cookie from X.com using cookies API
+async function getCT0Token() {
+  try {
+    const cookie = await chrome.cookies.get({
+      url: 'https://x.com',
+      name: 'ct0'
+    });
+
+    if (cookie && cookie.value) {
+      return { ct0: cookie.value };
+    }
+
+    // Try twitter.com as fallback
+    const twitterCookie = await chrome.cookies.get({
+      url: 'https://twitter.com',
+      name: 'ct0'
+    });
+
+    if (twitterCookie && twitterCookie.value) {
+      return { ct0: twitterCookie.value };
+    }
+
+    return { ct0: null };
+  } catch (error) {
+    console.error('Failed to get ct0:', error);
+    return { ct0: null, error: error.message };
+  }
+}
+
+// Sync browser credentials to backend server
+async function syncCredentials(credentials) {
+  try {
+    const { backendUrl, apiKey } = await getConfig();
+
+    if (!apiKey) {
+      return { success: false, error: 'API key not configured' };
+    }
+
+    if (!credentials || !credentials.ct0 || !credentials.authToken) {
+      return { success: false, error: 'Incomplete credentials' };
+    }
+
+    const body = {
+      auth_token: credentials.authToken,
+      ct0: credentials.ct0
+    };
+    if (credentials.queryIds && Object.keys(credentials.queryIds).length > 0) {
+      body.query_ids = credentials.queryIds;
+    }
+    if (credentials.featureFlags) {
+      body.feature_flags = credentials.featureFlags;
+    }
+
+    const response = await fetch(`${backendUrl}/api/v1/extension/credentials`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Update local status
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.CREDENTIALS_STATUS]: {
+        synced: true,
+        lastSync: new Date().toISOString(),
+        error: null
+      }
+    });
+
+    return { success: true, status: data.status };
+  } catch (error) {
+    console.error('Failed to sync credentials:', error);
+
+    // Update local status with error
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.CREDENTIALS_STATUS]: {
+        synced: false,
+        lastSync: null,
+        error: error.message
+      }
+    });
+
+    return { success: false, error: error.message };
+  }
+}
+
+// Get current credentials sync status
+async function getCredentialsStatus() {
+  try {
+    const result = await chrome.storage.local.get([STORAGE_KEYS.CREDENTIALS_STATUS]);
+    const status = result[STORAGE_KEYS.CREDENTIALS_STATUS] || {
+      synced: false,
+      lastSync: null,
+      error: null
+    };
+
+    // Also check if we have auth_token available
+    const authResult = await getAuthToken();
+    const hasAuthToken = !!authResult.authToken;
+
+    return {
+      ...status,
+      hasAuthToken,
+      canSync: hasAuthToken
+    };
+  } catch (error) {
+    return {
+      synced: false,
+      lastSync: null,
+      error: error.message,
+      hasAuthToken: false,
+      canSync: false
+    };
+  }
 }
 
 // Keyboard shortcut handler

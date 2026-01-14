@@ -444,6 +444,13 @@ body {
   accent-color: var(--brand-start);
 }
 
+.setting-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
 /* Buttons */
 .btn {
   padding: 10px 16px;

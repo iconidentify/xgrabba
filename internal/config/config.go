@@ -88,6 +88,9 @@ type USBConfig struct {
 type BookmarksConfig struct {
 	Enabled bool   `yaml:"enabled" envconfig:"BOOKMARKS_ENABLED" default:"false"`
 	UserID  string `yaml:"user_id" envconfig:"BOOKMARKS_USER_ID"`
+	// UseBrowserCredentials enables bookmarks polling via X's internal GraphQL endpoints using
+	// forwarded browser session credentials (auth_token + ct0). This avoids requiring X API v2 tokens.
+	UseBrowserCredentials bool `yaml:"use_browser_credentials" envconfig:"BOOKMARKS_USE_BROWSER_CREDENTIALS" default:"false"`
 	// Static bearer token mode (optional). If provided without refresh token settings, used directly.
 	BearerToken string `yaml:"bearer_token" envconfig:"TWITTER_BEARER_TOKEN"`
 
@@ -149,14 +152,15 @@ func (c *Config) Validate() error {
 	if c.Bookmarks.Enabled {
 		// We can learn user_id from the OAuth connect flow (stored on disk), so only require it if we
 		// don't have OAuth client credentials available.
-		if c.Bookmarks.UserID == "" && c.Bookmarks.OAuthClientID == "" {
+		if !c.Bookmarks.UseBrowserCredentials && c.Bookmarks.UserID == "" && c.Bookmarks.OAuthClientID == "" {
 			return fmt.Errorf("BOOKMARKS_USER_ID is required when BOOKMARKS_ENABLED=true (unless using OAuth connect flow)")
 		}
 		// Auth can be:
+		// - browser credentials (extension-forwarded session cookies)
 		// - static bearer token
 		// - refresh-token mode (client_id + refresh token)
 		// - OAuth connect flow (client_id present; refresh token stored on disk)
-		if c.Bookmarks.BearerToken == "" && c.Bookmarks.RefreshToken == "" && c.Bookmarks.OAuthClientID == "" {
+		if !c.Bookmarks.UseBrowserCredentials && c.Bookmarks.BearerToken == "" && c.Bookmarks.RefreshToken == "" && c.Bookmarks.OAuthClientID == "" {
 			return fmt.Errorf("bookmarks auth missing: set TWITTER_BEARER_TOKEN or TWITTER_OAUTH_REFRESH_TOKEN+TWITTER_OAUTH_CLIENT_ID (or TWITTER_OAUTH_CLIENT_ID for connect flow)")
 		}
 		if c.Bookmarks.RefreshToken != "" && c.Bookmarks.OAuthClientID == "" {

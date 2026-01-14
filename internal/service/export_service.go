@@ -625,7 +625,7 @@ func (s *ExportService) cleanupExport(destPath string) {
 
 	// Sync filesystem to ensure cleanup is persisted
 	if f, err := os.Open(destPath); err == nil {
-		f.Sync()
+		_ = f.Sync()
 		f.Close()
 	}
 
@@ -717,8 +717,11 @@ func (s *ExportService) encryptExport(destPath, password string) error {
 		}
 		s.mu.Unlock()
 
-		filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+		if err := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
 				return nil
 			}
 
@@ -736,7 +739,9 @@ func (s *ExportService) encryptExport(destPath, password string) error {
 				EncName:    encName,
 			})
 			return nil
-		})
+		}); err != nil {
+			return fmt.Errorf("scan media files: %w", err)
+		}
 
 		s.logger.Info("encrypting media files", "count", len(jobs), "workers", numWorkers)
 
@@ -1857,7 +1862,9 @@ func (s *ExportService) copyViewerBinaries(binDir, destPath string) error {
 		}
 
 		// Make executable on Unix
-		os.Chmod(dstPath, 0755)
+		if err := os.Chmod(dstPath, 0755); err != nil {
+			s.logger.Warn("failed to chmod viewer binary", "dst", dstPath, "error", err)
+		}
 		s.logger.Info("copied viewer binary", "src", bin.src, "size", srcStat.Size())
 	}
 

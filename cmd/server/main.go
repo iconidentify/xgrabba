@@ -136,11 +136,32 @@ func main() {
 	// Resume incomplete archives (tweets saved mid-processing before restart)
 	go tweetSvc.ResumeIncompleteArchives(context.Background())
 
+	// Twitter client (shared). Used for extension credential storage and optional GraphQL access.
+	twitterClient := twitter.NewClient(logger)
+
 	// Start bookmarks monitor (optional) to auto-archive newly bookmarked tweets (mobile-friendly).
 	bookmarksCtx, cancelBookmarks := context.WithCancel(context.Background())
-	var bookmarkMonitor *bookmarks.Monitor                   // Will be set if monitor starts successfully
 	var bookmarksOAuthHandler *handler.BookmarksOAuthHandler // Declared here so watching goroutine can access it
+
+	// Bookmarks handler provides status + monitor control endpoints.
+	// OAuth connect routes will return an error if TWITTER_OAUTH_CLIENT_ID isn't configured.
+	if cfg.Bookmarks.Enabled || cfg.Bookmarks.OAuthClientID != "" {
+		bookmarksOAuthHandler = handler.NewBookmarksOAuthHandler(cfg.Bookmarks, cfg.Server.APIKey, logger, twitterClient)
+	}
+
 	if cfg.Bookmarks.Enabled {
+		if cfg.Bookmarks.UseBrowserCredentials {
+			logger.Info("bookmarks auth: browser credentials (GraphQL) enabled")
+			gqlClient := twitter.NewGraphQLBookmarksClient(twitterClient)
+			mon := bookmarks.NewMonitor(cfg.Bookmarks, gqlClient, tweetSvc, logger)
+			mon.SetEventEmitter(eventSvc)
+			if bookmarksOAuthHandler != nil {
+				bookmarksOAuthHandler.SetMonitor(mon)
+			}
+			go mon.Start(bookmarksCtx)
+			goto handlers
+		}
+
 		ua := "xgrabba-bookmarks-monitor/" + Version
 
 		// Allow "configured forever" mode: if refresh token / user id are not provided via env/secret,
@@ -256,26 +277,20 @@ func main() {
 			})
 			mon := bookmarks.NewMonitor(bmCfg, bmClient, tweetSvc, logger)
 			mon.SetEventEmitter(eventSvc)
-			bookmarkMonitor = mon
+			if bookmarksOAuthHandler != nil {
+				bookmarksOAuthHandler.SetMonitor(mon)
+			}
 			go mon.Start(bookmarksCtx)
 		}
 	}
 
+handlers:
 	// Initialize handlers
 	videoHandler := handler.NewVideoHandler(videoSvc, logger)
 	tweetHandler := handler.NewTweetHandler(tweetSvc, logger)
 	healthHandler := handler.NewHealthHandler(jobRepo)
 	uiHandler := handler.NewUIHandler()
 	exportHandler := handler.NewExportHandler(exportSvc, logger)
-
-	// Bookmarks OAuth connect handler (optional). Lets you do a one-time browser auth to store refresh token on disk.
-	if cfg.Bookmarks.OAuthClientID != "" {
-		bookmarksOAuthHandler = handler.NewBookmarksOAuthHandler(cfg.Bookmarks, cfg.Server.APIKey, logger)
-		// Register monitor if it was created synchronously above
-		if bookmarkMonitor != nil {
-			bookmarksOAuthHandler.SetMonitor(bookmarkMonitor)
-		}
-	}
 
 	// USB handler (optional). Enables USB drive export when USB Manager is running.
 	var usbHandler *handler.USBHandler
@@ -287,8 +302,11 @@ func main() {
 
 	eventHandler := handler.NewEventHandler(eventSvc, logger)
 
+	// Extension handler (browser GraphQL passthrough)
+	extensionHandler := handler.NewExtensionHandler(twitterClient)
+
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, eventHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, eventHandler, extensionHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

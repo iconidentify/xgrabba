@@ -135,8 +135,12 @@ func (a *ActivityLog) writeEntriesLocked(entries []ActivityEvent) error {
 		if err != nil {
 			continue
 		}
-		f.Write(data)
-		f.WriteString("\n")
+		if _, err := f.Write(data); err != nil {
+			return err
+		}
+		if _, err := f.WriteString("\n"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

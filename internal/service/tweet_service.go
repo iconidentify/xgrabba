@@ -187,8 +187,11 @@ func (s *TweetService) RecoverOrphanedArchives(ctx context.Context) {
 
 	var orphans []string
 
-	filepath.Walk(s.cfg.BasePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || !info.IsDir() {
+	if err := filepath.Walk(s.cfg.BasePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
 			return nil
 		}
 
@@ -210,7 +213,9 @@ func (s *TweetService) RecoverOrphanedArchives(ctx context.Context) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		s.logger.Warn("failed to scan for orphaned archives", "error", err)
+	}
 
 	if len(orphans) == 0 {
 		s.logger.Info("no orphaned archives found")
@@ -510,7 +515,9 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 		logger.Error("phase 1 failed", "error", err)
 		tweet.Status = domain.ArchiveStatusFailed
 		tweet.Error = err.Error()
-		s.saveTweetMetadata(tweet) // Save failure state
+		if saveErr := s.saveTweetMetadata(tweet); saveErr != nil {
+			logger.Warn("failed to save failure state", "error", saveErr)
+		}
 
 		// Emit error event
 		s.emitEvent(domain.EventSeverityError, domain.EventCategoryTweet,
@@ -608,14 +615,18 @@ func (s *TweetService) processPhase2Download(ctx context.Context, tweet *domain.
 		now := time.Now()
 		tweet.DownloadedAt = &now
 		tweet.Status = domain.ArchiveStatusDownloaded
-		s.saveTweetMetadata(tweet)
+		if err := s.saveTweetMetadata(tweet); err != nil {
+			logger.Warn("failed to save metadata", "error", err)
+		}
 		logger.Info("phase 2 skipped - no media")
 		return nil
 	}
 
 	logger.Info("phase 2: downloading media", "count", len(tweet.Media))
 	tweet.Status = domain.ArchiveStatusDownloading
-	s.saveTweetMetadata(tweet)
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		logger.Warn("failed to save metadata", "error", err)
+	}
 
 	var downloadErrors []string
 
@@ -635,7 +646,9 @@ func (s *TweetService) processPhase2Download(ctx context.Context, tweet *domain.
 		)
 
 		// Save after each successful download for incremental UI updates
-		s.saveTweetMetadata(tweet)
+		if err := s.saveTweetMetadata(tweet); err != nil {
+			logger.Warn("failed to save metadata", "error", err)
+		}
 	}
 
 	// Download author avatar
@@ -652,7 +665,9 @@ func (s *TweetService) processPhase2Download(ctx context.Context, tweet *domain.
 	now := time.Now()
 	tweet.DownloadedAt = &now
 	tweet.Status = domain.ArchiveStatusDownloaded
-	s.saveTweetMetadata(tweet)
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		logger.Warn("failed to save metadata", "error", err)
+	}
 
 	logger.Info("phase 2 complete - media downloaded", "downloaded", tweet.MediaDownloaded, "total", tweet.MediaTotal)
 
@@ -680,7 +695,9 @@ func (s *TweetService) processPhase3Analyze(ctx context.Context, tweet *domain.T
 	}()
 
 	tweet.Status = domain.ArchiveStatusAnalyzing
-	s.saveTweetMetadata(tweet)
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		logger.Warn("failed to save metadata", "error", err)
+	}
 
 	// Run Whisper transcription for videos (if enabled)
 	if s.whisperEnabled && tweet.HasVideo() {
@@ -1452,71 +1469,6 @@ func (s *TweetService) buildArchivePath(tweet *domain.Tweet) string {
 	)
 
 	return filepath.Join(s.cfg.BasePath, year, month, folderName)
-}
-
-func (s *TweetService) downloadMedia(ctx context.Context, tweet *domain.Tweet, media *domain.Media, archivePath string) error {
-	// Determine filename
-	var filename string
-	switch media.Type {
-	case domain.MediaTypeImage:
-		ext := ".jpg"
-		if strings.Contains(media.URL, ".png") {
-			ext = ".png"
-		} else if strings.Contains(media.URL, ".webp") {
-			ext = ".webp"
-		}
-		filename = fmt.Sprintf("%s%s", media.ID, ext)
-	case domain.MediaTypeVideo, domain.MediaTypeGIF:
-		filename = fmt.Sprintf("%s.mp4", media.ID)
-	}
-
-	localPath := filepath.Join(archivePath, "media", filename)
-
-	// Download main media file
-	content, _, err := s.downloader.Download(ctx, media.URL)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	defer content.Close()
-
-	// Save to file
-	f, err := os.Create(localPath)
-	if err != nil {
-		return fmt.Errorf("create file: %w", err)
-	}
-	defer f.Close()
-
-	if _, err := io.Copy(f, content); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-
-	media.LocalPath = localPath
-	media.Downloaded = true
-
-	// For videos, also download the thumbnail/preview image
-	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && media.PreviewURL != "" {
-		thumbPath := filepath.Join(archivePath, "media", fmt.Sprintf("%s_thumb.jpg", media.ID))
-		if err := s.downloadThumbnail(ctx, media.PreviewURL, thumbPath); err != nil {
-			s.logger.Warn("failed to download video thumbnail", "media_id", media.ID, "error", err)
-			// Continue anyway - thumbnail is optional
-		} else {
-			// Update PreviewURL to point to local path for later reference
-			media.PreviewURL = thumbPath
-		}
-	}
-
-	// For videos, extract keyframes and transcribe audio
-	if (media.Type == domain.MediaTypeVideo || media.Type == domain.MediaTypeGIF) && s.whisperEnabled {
-		s.processVideoForTranscription(ctx, media, archivePath)
-	}
-
-	// Per-media analysis after media is locally available (and transcript/keyframes if applicable).
-	// This supports the new paradigm: each media gets its own caption/tags/topics/content_type.
-	if tweet != nil {
-		s.analyzeMedia(ctx, tweet, media)
-	}
-
-	return nil
 }
 
 // processVideoForTranscription extracts keyframes and audio from a video and transcribes it.

@@ -24,6 +24,7 @@ data:
   WHISPER_MODEL: {{ .Values.config.whisper.model | quote }}
   AI_REGENERATE_TIMEOUT: {{ .Values.config.ai.regenerateTimeout | quote }}
   BOOKMARKS_ENABLED: {{ .Values.config.bookmarks.enabled | quote }}
+  BOOKMARKS_USE_BROWSER_CREDENTIALS: {{ .Values.config.bookmarks.useBrowserCredentials | quote }}
   BOOKMARKS_USER_ID: {{ .Values.config.bookmarks.userId | quote }}
   BOOKMARKS_BASE_URL: {{ .Values.config.bookmarks.baseUrl | quote }}
   BOOKMARKS_POLL_INTERVAL: {{ .Values.config.bookmarks.pollInterval | quote }}

@@ -130,7 +130,7 @@ func (m *Monitor) Pause() {
 	if m.state == MonitorStateRunning {
 		m.state = MonitorStatePaused
 		m.logger.Info("bookmarks monitor paused")
-		m.activity.Append(ActivityEvent{Status: "paused"})
+		_ = m.activity.Append(ActivityEvent{Status: "paused"})
 	}
 	m.mu.Unlock()
 }
@@ -141,7 +141,7 @@ func (m *Monitor) Resume() {
 	if m.state == MonitorStatePaused {
 		m.state = MonitorStateRunning
 		m.logger.Info("bookmarks monitor resumed")
-		m.activity.Append(ActivityEvent{Status: "resumed"})
+		_ = m.activity.Append(ActivityEvent{Status: "resumed"})
 	}
 	m.mu.Unlock()
 }
@@ -159,7 +159,7 @@ func (m *Monitor) CheckNow() {
 	select {
 	case m.checkNow <- struct{}{}:
 		m.logger.Info("check-now triggered")
-		m.activity.Append(ActivityEvent{Status: "check_now"})
+		_ = m.activity.Append(ActivityEvent{Status: "check_now"})
 	default:
 		// Channel full, poll already pending
 	}
@@ -305,7 +305,7 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 
 			m.logger.Warn("bookmarks rate limited; backing off", "sleep", sleepFor.Round(time.Second).String())
 			m.setLastError("rate limited")
-			m.activity.Append(ActivityEvent{
+			_ = m.activity.Append(ActivityEvent{
 				Status:         "rate_limited",
 				Error:          "rate limited by X API",
 				RateLimitReset: &resetTime,
@@ -329,7 +329,7 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 
 		m.logger.Warn("bookmarks poll failed", "error", err)
 		m.setLastError(err.Error())
-		m.activity.Append(ActivityEvent{
+		_ = m.activity.Append(ActivityEvent{
 			Status: "failed",
 			Error:  err.Error(),
 		})
@@ -365,7 +365,7 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 
 	if len(newIDs) == 0 {
 		m.logger.Info("bookmark poll complete", "total_bookmarks", len(ids), "new", 0)
-		m.activity.Append(ActivityEvent{
+		_ = m.activity.Append(ActivityEvent{
 			Status:         "success",
 			TotalBookmarks: len(ids),
 			NewBookmarks:   0,
@@ -389,7 +389,7 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 	}
 
 	// Log success with new bookmarks
-	m.activity.Append(ActivityEvent{
+	_ = m.activity.Append(ActivityEvent{
 		Status:         "success",
 		TotalBookmarks: len(ids),
 		NewBookmarks:   len(newIDs),

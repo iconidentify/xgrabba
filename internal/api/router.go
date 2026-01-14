@@ -20,6 +20,7 @@ func NewRouter(
 	bookmarksOAuthHandler *handler.BookmarksOAuthHandler,
 	usbHandler *handler.USBHandler,
 	eventHandler *handler.EventHandler,
+	extensionHandler *handler.ExtensionHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -125,6 +126,13 @@ func NewRouter(
 			r.Get("/events/stream", eventHandler.Stream)
 			r.Get("/events/categories", eventHandler.Categories)
 			r.Get("/events/severities", eventHandler.Severities)
+		}
+
+		// Extension credential sync (browser GraphQL passthrough)
+		if extensionHandler != nil {
+			r.Post("/extension/credentials", extensionHandler.SyncCredentials)
+			r.Get("/extension/credentials/status", extensionHandler.CredentialsStatus)
+			r.Post("/extension/credentials/clear", extensionHandler.ClearCredentials)
 		}
 	})
 

@@ -211,7 +211,7 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 			goto verify
 		case <-ctx.Done():
 			if cmd.Process != nil {
-				cmd.Process.Kill()
+				_ = cmd.Process.Kill()
 			}
 			op.setError("cancelled")
 			return

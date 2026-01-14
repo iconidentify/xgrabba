@@ -29,6 +29,7 @@ class PopupApp {
       connectionStatus: document.getElementById('connection-status'),
       showToasts: document.getElementById('show-toasts'),
       markArchived: document.getElementById('mark-archived'),
+      forwardCredentials: document.getElementById('forward-credentials'),
       saveSettings: document.getElementById('save-settings'),
       clearHistory: document.getElementById('clear-history'),
       viewAllLink: document.getElementById('view-all-link'),
@@ -90,6 +91,7 @@ class PopupApp {
     this.elements.apiKey.value = this.apiKey;
     this.elements.showToasts.checked = response.settings?.showToasts !== false;
     this.elements.markArchived.checked = response.settings?.markArchivedTweets !== false;
+    this.elements.forwardCredentials.checked = response.settings?.forwardCredentials === true;
   }
 
   async saveSettings() {
@@ -101,7 +103,8 @@ class PopupApp {
       apiKey: this.apiKey,
       settings: {
         showToasts: this.elements.showToasts.checked,
-        markArchivedTweets: this.elements.markArchived.checked
+        markArchivedTweets: this.elements.markArchived.checked,
+        forwardCredentials: this.elements.forwardCredentials.checked
       }
     };
 
