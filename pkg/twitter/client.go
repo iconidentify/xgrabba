@@ -59,22 +59,21 @@ func NewClient(logger *slog.Logger) *Client {
 	}
 }
 
-// getGraphQLQueryID returns the current TweetResultByRestId query ID.
-// Uses cached value if valid, otherwise returns default.
-func (c *Client) getGraphQLQueryID() string {
+// getGraphQLQueryIDWithSource returns the current TweetResultByRestId query ID,
+// plus where that value came from (browser|cached|default). This is for observability.
+func (c *Client) getGraphQLQueryIDWithSource() (queryID string, source string) {
 	// Prefer browser-observed query IDs when present.
-	// This avoids scraping main.js and reduces breakage when X rotates query IDs.
 	if qid := c.getBrowserQueryID("TweetResultByRestId"); qid != "" {
-		return qid
+		return qid, "browser"
 	}
 
 	c.graphQLQueryIDMu.Lock()
 	defer c.graphQLQueryIDMu.Unlock()
 
 	if c.graphQLQueryID != "" && time.Now().Before(c.graphQLQueryIDExpiry) {
-		return c.graphQLQueryID
+		return c.graphQLQueryID, "cached"
 	}
-	return defaultTweetResultByRestIDQueryID
+	return defaultTweetResultByRestIDQueryID, "default"
 }
 
 // getGraphQLFeatures returns the GraphQL "features" JSON blob to send on requests.
@@ -84,6 +83,14 @@ func (c *Client) getGraphQLFeatures() string {
 		return string(ff)
 	}
 	return defaultGraphQLFeatures
+}
+
+// getGraphQLFeaturesWithSource returns the features JSON blob plus where it came from (browser|default).
+func (c *Client) getGraphQLFeaturesWithSource() (features string, source string) {
+	if ff := c.getBrowserFeatureFlags(); len(ff) > 0 {
+		return string(ff), "browser"
+	}
+	return defaultGraphQLFeatures, "default"
 }
 
 // refreshGraphQLQueryID fetches the current query ID from X's main.js.
@@ -754,11 +761,11 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 		return "", err
 	}
 
-	queryID := c.getGraphQLQueryID()
+	queryID, queryIDSource := c.getGraphQLQueryIDWithSource()
 
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
-	features := c.getGraphQLFeatures()
+	features, featuresSource := c.getGraphQLFeaturesWithSource()
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
 		queryID,
@@ -808,6 +815,13 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 	if result != nil {
 		// Prefer note_tweet.text for long-form content
 		if result.NoteTweet.NoteTweetResults.Result.Text != "" {
+			// High-signal observability: long-form is the primary reason we need GraphQL.
+			c.logger.Info("GraphQL note tweet text fetched",
+				"tweet_id", tweetID,
+				"auth_source", source,
+				"query_id_source", queryIDSource,
+				"features_source", featuresSource,
+			)
 			if len(gqlResp.Errors) > 0 {
 				c.logger.Debug("GraphQL returned data with non-fatal errors", "tweet_id", tweetID, "error", gqlResp.Errors[0].Message)
 			}
@@ -816,6 +830,13 @@ func (c *Client) fetchFullTextFromGraphQLWithRetry(ctx context.Context, tweetID 
 
 		// Fall back to legacy full_text
 		if result.Legacy.FullText != "" {
+			// Lower-signal; keep at debug to avoid spamming logs.
+			c.logger.Debug("GraphQL tweet text fetched",
+				"tweet_id", tweetID,
+				"auth_source", source,
+				"query_id_source", queryIDSource,
+				"features_source", featuresSource,
+			)
 			if len(gqlResp.Errors) > 0 {
 				c.logger.Debug("GraphQL returned data with non-fatal errors", "tweet_id", tweetID, "error", gqlResp.Errors[0].Message)
 			}
@@ -860,11 +881,11 @@ func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, 
 		return nil, err
 	}
 
-	queryID := c.getGraphQLQueryID()
+	queryID, queryIDSource := c.getGraphQLQueryIDWithSource()
 
 	// Build GraphQL request
 	variables := fmt.Sprintf(`{"tweetId":"%s","withCommunity":false,"includePromotedContent":false,"withVoice":false}`, tweetID)
-	features := c.getGraphQLFeatures()
+	features, featuresSource := c.getGraphQLFeaturesWithSource()
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetResultByRestId?variables=%s&features=%s",
 		queryID,
@@ -910,6 +931,14 @@ func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, 
 	if len(gqlResp.Errors) > 0 {
 		return nil, fmt.Errorf("graphql API error: %s", gqlResp.Errors[0].Message)
 	}
+
+	// Observability: this path is only used when syndication fails entirely.
+	c.logger.Info("GraphQL tweet fetch succeeded",
+		"tweet_id", tweetID,
+		"auth_source", source,
+		"query_id_source", queryIDSource,
+		"features_source", featuresSource,
+	)
 
 	return c.parseGraphQLResponse(tweetID, &gqlResp)
 }

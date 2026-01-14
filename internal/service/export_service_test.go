@@ -452,7 +452,7 @@ func TestCopyFile_PermissionDenied(t *testing.T) {
 	}
 
 	// Cleanup: restore write permission to delete
-	os.Chmod(readOnlyDir, 0755)
+	_ = os.Chmod(readOnlyDir, 0755)
 }
 
 func TestCopyFile_EmptyFile(t *testing.T) {
