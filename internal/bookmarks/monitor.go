@@ -86,6 +86,13 @@ type Monitor struct {
 	lastError string
 }
 
+// FailedCacheSnapshot is a stable view of the permanent-failure cache.
+// It is used to avoid re-queueing the same permanently failing tweet IDs every poll.
+type FailedCacheSnapshot struct {
+	Count     int                         `json:"count"`
+	FailedIDs map[string]failedTweetEntry `json:"failed_ids"`
+}
+
 func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc archiver, logger *slog.Logger) *Monitor {
 	// Store rate limit state next to the OAuth file
 	rateLimitFile := ""
@@ -203,6 +210,37 @@ func (m *Monitor) CheckNow() {
 // Activity returns the activity log for external access.
 func (m *Monitor) Activity() *ActivityLog {
 	return m.activity
+}
+
+// FailedCache returns a snapshot of the permanent failure cache.
+func (m *Monitor) FailedCache() FailedCacheSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := FailedCacheSnapshot{
+		FailedIDs: map[string]failedTweetEntry{},
+	}
+	if m.failedCache == nil || m.failedCache.FailedIDs == nil {
+		return out
+	}
+	for k, v := range m.failedCache.FailedIDs {
+		out.FailedIDs[k] = v
+	}
+	out.Count = len(out.FailedIDs)
+	return out
+}
+
+// ClearFailedCache clears the permanent failure cache (in-memory and on-disk).
+func (m *Monitor) ClearFailedCache() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.failedCache = &failedTweetsCache{FailedIDs: make(map[string]failedTweetEntry)}
+	if m.failedCacheFile != "" {
+		_ = os.Remove(m.failedCacheFile)
+	}
+	m.logger.Info("cleared failed tweets cache")
+	_ = m.activity.Append(ActivityEvent{Status: "failed_cache_cleared"})
 }
 
 func (m *Monitor) Start(ctx context.Context) {
