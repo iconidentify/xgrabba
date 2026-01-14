@@ -10750,8 +10750,10 @@
         }
 
         async function mountUSBDrive(device) {
+            const deviceName = device.replace('/dev/', '');
+            showNotification('Mounting drive...', 'info');
+
             try {
-                const deviceName = device.replace('/dev/', '');
                 const resp = await fetch(`/api/v1/usb/drives/${deviceName}/mount`, {
                     method: 'POST',
                     headers: { 'X-API-Key': API_KEY }
@@ -10765,13 +10767,15 @@
                 showNotification('Drive mounted successfully', 'success');
             } catch (err) {
                 showNotification('Failed to mount drive: ' + err.message, 'error');
+                await loadUSBDrives();
             }
         }
 
         async function ejectUSBDrive(device) {
-            if (!confirm('Safely eject this drive? Make sure no export is in progress.')) return;
+            const deviceName = device.replace('/dev/', '');
+            showNotification('Ejecting drive...', 'info');
+
             try {
-                const deviceName = device.replace('/dev/', '');
                 const resp = await fetch(`/api/v1/usb/drives/${deviceName}/unmount`, {
                     method: 'POST',
                     headers: { 'X-API-Key': API_KEY }
@@ -10787,6 +10791,8 @@
                 showNotification('Drive safely ejected. You can now remove it.', 'success');
             } catch (err) {
                 showNotification('Failed to eject drive: ' + err.message, 'error');
+                // Refresh drives to show current state
+                await loadUSBDrives();
             }
         }
 
@@ -10841,9 +10847,11 @@
             const confirmToken = `erase-all-data-on-${deviceName}`;
 
             closeFormatConfirm();
+            showFormatProgress(deviceName, label);
 
             try {
-                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/format`, {
+                // Start async format
+                const resp = await fetch(`/api/v1/usb/drives/${deviceName}/format/async`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -10857,12 +10865,76 @@
                 });
                 if (!resp.ok) {
                     const data = await resp.json();
-                    throw new Error(data.message || 'Failed to format drive');
+                    throw new Error(data.message || 'Failed to start format');
                 }
-                showNotification('Drive formatted successfully', 'success');
-                await loadUSBDrives();
+                const result = await resp.json();
+
+                // Poll for progress
+                await pollFormatProgress(result.operation_id);
             } catch (err) {
+                closeFormatProgress();
                 showNotification('Failed to format drive: ' + err.message, 'error');
+            }
+        }
+
+        function showFormatProgress(deviceName, label) {
+            const html = `
+                <div class="usb-format-confirm" id="formatProgressOverlay">
+                    <div class="usb-format-confirm-box">
+                        <h4 style="margin: 0 0 16px; font-size: 16px;">Formatting ${deviceName}</h4>
+                        <div style="margin-bottom: 16px;">
+                            <div style="background: var(--bg-tertiary); border-radius: 4px; height: 8px; overflow: hidden;">
+                                <div id="formatProgressBar" style="background: var(--accent-primary); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                            <div id="formatProgressText" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
+                                Starting format...
+                            </div>
+                        </div>
+                        <p style="font-size: 11px; color: var(--text-muted);">New label: ${label}</p>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function closeFormatProgress() {
+            const overlay = document.getElementById('formatProgressOverlay');
+            if (overlay) overlay.remove();
+        }
+
+        async function pollFormatProgress(operationId) {
+            const progressBar = document.getElementById('formatProgressBar');
+            const progressText = document.getElementById('formatProgressText');
+
+            while (true) {
+                try {
+                    const resp = await fetch(`/api/v1/usb/format/${operationId}`, {
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+                    if (!resp.ok) throw new Error('Failed to get format progress');
+
+                    const progress = await resp.json();
+
+                    if (progressBar) progressBar.style.width = `${progress.percent}%`;
+                    if (progressText) progressText.textContent = progress.phase || `${progress.percent}% complete`;
+
+                    if (progress.status === 'completed') {
+                        closeFormatProgress();
+                        showNotification('Drive formatted successfully', 'success');
+                        await loadUSBDrives();
+                        return;
+                    } else if (progress.status === 'error' || progress.status === 'failed') {
+                        closeFormatProgress();
+                        showNotification('Format failed: ' + (progress.error || 'Unknown error'), 'error');
+                        return;
+                    }
+
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (err) {
+                    closeFormatProgress();
+                    showNotification('Format failed: ' + err.message, 'error');
+                    return;
+                }
             }
         }
 
