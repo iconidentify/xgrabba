@@ -828,6 +828,44 @@ type graphQLTweetResult struct {
 		QuoteCount           int    `json:"quote_count"`
 		InReplyToStatusIDStr string `json:"in_reply_to_status_id_str"`
 		QuotedStatusIDStr    string `json:"quoted_status_id_str"`
+
+		// Media (needed for video/image downloading when syndication API is unavailable)
+		Entities struct {
+			Media []struct {
+				IDStr         string `json:"id_str"`
+				Type          string `json:"type"` // "photo", "video", "animated_gif"
+				MediaURLHTTPS string `json:"media_url_https"`
+				ExtAltText    string `json:"ext_alt_text"`
+				Sizes         struct {
+					Large struct {
+						W int `json:"w"`
+						H int `json:"h"`
+					} `json:"large"`
+				} `json:"sizes"`
+			} `json:"media"`
+		} `json:"entities"`
+		ExtendedEntities struct {
+			Media []struct {
+				IDStr         string `json:"id_str"`
+				Type          string `json:"type"` // "photo", "video", "animated_gif"
+				MediaURLHTTPS string `json:"media_url_https"`
+				ExtAltText    string `json:"ext_alt_text"`
+				Sizes         struct {
+					Large struct {
+						W int `json:"w"`
+						H int `json:"h"`
+					} `json:"large"`
+				} `json:"sizes"`
+				VideoInfo struct {
+					DurationMillis int `json:"duration_millis"`
+					Variants       []struct {
+						Bitrate     int    `json:"bitrate"`
+						ContentType string `json:"content_type"`
+						URL         string `json:"url"`
+					} `json:"variants"`
+				} `json:"video_info"`
+			} `json:"media"`
+		} `json:"extended_entities"`
 	} `json:"legacy"`
 	NoteTweet struct {
 		NoteTweetResults struct {
@@ -1184,6 +1222,10 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 		CreatedAt: time.Now(),
 	}
 
+	// Parse media from GraphQL legacy entities. This is crucial for NSFW/visibility-wrapped
+	// tweets where the syndication API often fails, but GraphQL succeeds.
+	tweet.Media = c.parseGraphQLMedia(result)
+
 	// Parse view count if available
 	if result.Views.Count != "" {
 		var views int
@@ -1206,6 +1248,111 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	// For now, we rely on syndication API for media when possible
 
 	return tweet, nil
+}
+
+// parseGraphQLMedia extracts media (images/videos) from GraphQL legacy entities.
+// For videos/GIFs, it selects the best MP4 variant by bitrate.
+func (c *Client) parseGraphQLMedia(result *graphQLTweetResult) []domain.Media {
+	if result == nil {
+		return nil
+	}
+
+	var out []domain.Media
+	seen := map[string]bool{}
+
+	// Prefer extended_entities because it includes video_info for videos.
+	for _, m := range result.Legacy.ExtendedEntities.Media {
+		switch m.Type {
+		case "photo":
+			if m.MediaURLHTTPS == "" || seen[m.MediaURLHTTPS] {
+				continue
+			}
+			seen[m.MediaURLHTTPS] = true
+			id := m.IDStr
+			if id == "" {
+				id = fmt.Sprintf("photo_%d", len(out))
+			}
+			out = append(out, domain.Media{
+				ID:      id,
+				Type:    domain.MediaTypeImage,
+				URL:     m.MediaURLHTTPS,
+				PreviewURL: "",
+				Width:   m.Sizes.Large.W,
+				Height:  m.Sizes.Large.H,
+				AltText: m.ExtAltText,
+			})
+
+		case "video", "animated_gif":
+			mediaType := domain.MediaTypeVideo
+			if m.Type == "animated_gif" {
+				mediaType = domain.MediaTypeGIF
+			}
+
+			bestURL := ""
+			bestBitrate := -1
+			for _, v := range m.VideoInfo.Variants {
+				// Ignore HLS playlists; we want a direct MP4 for download.
+				if v.ContentType != "video/mp4" || v.URL == "" {
+					continue
+				}
+				b := v.Bitrate
+				if b == 0 {
+					// Some variants don't include bitrate; infer from URL as a fallback.
+					b = extractBitrateFromURL(v.URL)
+				}
+				if b > bestBitrate {
+					bestBitrate = b
+					bestURL = v.URL
+				}
+			}
+			if bestURL == "" {
+				continue
+			}
+
+			id := m.IDStr
+			if id == "" {
+				id = "video_" + fmt.Sprintf("%d", len(out))
+			}
+			out = append(out, domain.Media{
+				ID:         id,
+				Type:       mediaType,
+				URL:        bestURL,
+				PreviewURL: m.MediaURLHTTPS, // thumbnail/poster
+				Width:      m.Sizes.Large.W,
+				Height:     m.Sizes.Large.H,
+				Duration:   m.VideoInfo.DurationMillis / 1000,
+				Bitrate:    bestBitrate,
+				AltText:    m.ExtAltText,
+			})
+		}
+	}
+
+	// If extended_entities had nothing, fall back to entities (usually photos).
+	if len(out) == 0 {
+		for _, m := range result.Legacy.Entities.Media {
+			if m.Type != "photo" {
+				continue
+			}
+			if m.MediaURLHTTPS == "" || seen[m.MediaURLHTTPS] {
+				continue
+			}
+			seen[m.MediaURLHTTPS] = true
+			id := m.IDStr
+			if id == "" {
+				id = fmt.Sprintf("photo_%d", len(out))
+			}
+			out = append(out, domain.Media{
+				ID:      id,
+				Type:    domain.MediaTypeImage,
+				URL:     m.MediaURLHTTPS,
+				Width:   m.Sizes.Large.W,
+				Height:  m.Sizes.Large.H,
+				AltText: m.ExtAltText,
+			})
+		}
+	}
+
+	return out
 }
 
 // userLegacyData holds the user profile fields we need
