@@ -4987,6 +4987,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
         }
 
         .usb-drive-icon {
@@ -5008,6 +5009,7 @@
         .usb-drive-info {
             flex: 1;
             min-width: 0;
+            overflow: hidden;
         }
 
         .usb-drive-name {
@@ -5033,11 +5035,14 @@
             color: var(--text-muted);
             margin-top: 2px;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .usb-drive-actions {
             display: flex;
             gap: 6px;
+            flex-shrink: 0;
         }
 
         .usb-drive-action {
