@@ -4469,7 +4469,7 @@
         }
 
         /* =============================================
-           EXPORT BUTTON WITH PROGRESS RING
+           EXPORT BUTTON
            ============================================= */
         .export-btn {
             width: 36px;
@@ -4497,92 +4497,18 @@
             height: 18px;
         }
 
-        /* Circular progress ring */
-        .export-progress-ring {
-            position: absolute;
-            inset: -3px;
-            width: 42px;
-            height: 42px;
-            transform: rotate(-90deg);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .export-btn.exporting .export-progress-ring {
-            opacity: 1;
-        }
-
-        .export-progress-ring circle {
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-        }
-
-        .export-progress-ring .progress-bg {
-            stroke: var(--border-subtle);
-        }
-
-        .export-progress-ring .progress-bar {
-            stroke: url(#export-progress-gradient);
-            stroke-dasharray: 125.6;
-            stroke-dashoffset: 125.6;
-            transition: stroke-dashoffset 0.3s ease;
-        }
-
         .export-btn.exporting {
-            border-color: var(--brand-start);
-            color: var(--brand-start);
+            color: #14b8a6;
+            border-color: #14b8a6;
         }
 
-        .export-btn.exporting:hover {
-            background: rgba(20, 184, 166, 0.1);
+        .export-btn.exporting svg {
+            animation: exportPulse 1.5s ease-in-out infinite;
         }
 
-        /* Indeterminate spinning */
-        .export-btn.exporting.indeterminate .export-progress-ring {
-            animation: exportSpin 1.5s linear infinite;
-        }
-
-        @keyframes exportSpin {
-            from { transform: rotate(-90deg); }
-            to { transform: rotate(270deg); }
-        }
-
-        /* Progress tooltip */
-        .export-progress-tooltip {
-            position: absolute;
-            top: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--brand-start);
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.15s;
-            pointer-events: none;
-            z-index: 200;
-        }
-
-        .export-progress-tooltip::before {
-            content: '';
-            position: absolute;
-            top: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 5px solid transparent;
-            border-bottom-color: var(--border-color);
-        }
-
-        .export-btn.exporting:hover .export-progress-tooltip {
-            opacity: 1;
-            visibility: visible;
+        @keyframes exportPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
         }
 
         .export-modal-overlay {
@@ -10082,6 +10008,76 @@
             if (diskBar && modalDiskBar) {
                 modalDiskBar.style.width = diskBar.style.width;
             }
+
+            // Update export status in modal
+            updateStatsModalExport();
+
+            // Update bookmarks status
+            refreshBookmarksStatus();
+        }
+
+        async function updateStatsModalExport() {
+            const statusEl = document.getElementById('statsExportStatus');
+            const progressItem = document.getElementById('statsExportProgressItem');
+            const progressEl = document.getElementById('statsExportProgress');
+            const progressBar = document.getElementById('statsExportProgressBar');
+            const currentItem = document.getElementById('statsExportCurrentItem');
+            const currentEl = document.getElementById('statsExportCurrent');
+
+            if (!statusEl) return;
+
+            try {
+                const resp = await fetch('/api/v1/export/status', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (!resp.ok) throw new Error('Failed to fetch export status');
+
+                const data = await resp.json();
+                const activePhases = ['preparing', 'exporting', 'finalizing', 'encrypting'];
+
+                if (activePhases.includes(data.phase)) {
+                    // Export is active
+                    const phaseLabels = {
+                        preparing: 'Preparing...',
+                        exporting: 'Exporting...',
+                        finalizing: 'Finalizing...',
+                        encrypting: 'Encrypting...'
+                    };
+                    statusEl.innerHTML = `<span style="color: #14b8a6;">${phaseLabels[data.phase] || data.phase}</span>`;
+
+                    // Show progress
+                    progressItem.style.display = '';
+                    const pct = data.total_tweets > 0 ? Math.round((data.exported_tweets / data.total_tweets) * 100) : 0;
+                    progressEl.textContent = `${pct}% (${data.exported_tweets}/${data.total_tweets})`;
+                    progressBar.style.width = pct + '%';
+
+                    // Show current file
+                    if (data.current_file) {
+                        currentItem.style.display = '';
+                        currentEl.textContent = data.current_file;
+                        currentEl.title = data.current_file;
+                    } else {
+                        currentItem.style.display = 'none';
+                    }
+                } else if (data.phase === 'completed') {
+                    statusEl.innerHTML = `<span style="color: #00ba7c;">Completed</span><button class="btn btn-secondary" onclick="openExportModal()">New Export</button>`;
+                    progressItem.style.display = 'none';
+                    currentItem.style.display = 'none';
+                } else if (data.phase === 'failed') {
+                    statusEl.innerHTML = `<span style="color: #ef4444;">Failed</span><button class="btn btn-secondary" onclick="openExportModal()">Retry</button>`;
+                    progressItem.style.display = 'none';
+                    currentItem.style.display = 'none';
+                } else {
+                    // Idle
+                    statusEl.innerHTML = `<span style="color: var(--text-muted);">Idle</span><button class="btn btn-secondary" onclick="openExportModal()">Export</button>`;
+                    progressItem.style.display = 'none';
+                    currentItem.style.display = 'none';
+                }
+            } catch {
+                statusEl.innerHTML = `<span style="color: var(--text-muted);">Idle</span><button class="btn btn-secondary" onclick="openExportModal()">Export</button>`;
+                if (progressItem) progressItem.style.display = 'none';
+                if (currentItem) currentItem.style.display = 'none';
+            }
         }
 
         async function copyTranscript(btnId, text) {
@@ -11882,18 +11878,11 @@
 
         function updateExportBtn(exporting, percent = 0, phase = '') {
             const btn = document.getElementById('exportBtn');
-            const progressRing = document.getElementById('headerExportProgressRing');
-            const tooltip = document.getElementById('exportProgressTooltip');
 
             if (exporting) {
                 btn.classList.add('exporting');
 
-                // Update progress ring - circumference = 2 * PI * 20 = 125.6
-                const circumference = 125.6;
-                const offset = circumference - (percent / 100) * circumference;
-                progressRing.style.strokeDashoffset = offset;
-
-                // Update tooltip with phase info
+                // Update button title with phase info
                 const phaseLabels = {
                     preparing: 'Preparing',
                     exporting: 'Exporting',
@@ -11901,19 +11890,9 @@
                     finalizing: 'Finalizing'
                 };
                 const phaseLabel = phaseLabels[phase] || 'Exporting';
-                tooltip.textContent = `${phaseLabel}: ${percent}%`;
                 btn.title = `${phaseLabel}: ${percent}%`;
-
-                // Show indeterminate spinner for preparing/finalizing phases
-                if (phase === 'preparing' || phase === 'finalizing') {
-                    btn.classList.add('indeterminate');
-                    progressRing.style.strokeDashoffset = circumference * 0.75;
-                } else {
-                    btn.classList.remove('indeterminate');
-                }
             } else {
-                btn.classList.remove('exporting', 'indeterminate');
-                progressRing.style.strokeDashoffset = 125.6;
+                btn.classList.remove('exporting');
                 btn.title = 'Export Archive';
                 // Stop background polling when export completes
                 stopBackgroundExportPolling();
