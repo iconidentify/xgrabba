@@ -5030,37 +5030,9 @@
 
         .usb-drive-meta {
             font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px 12px;
-        }
-
-        .usb-drive-meta-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .usb-drive-meta-label {
             color: var(--text-muted);
-            font-size: 11px;
-        }
-
-        .usb-drive-space-bar {
-            width: 60px;
-            height: 4px;
-            background: var(--bg-tertiary);
-            border-radius: 2px;
-            overflow: hidden;
-            margin-left: 4px;
-        }
-
-        .usb-drive-space-bar-fill {
-            height: 100%;
-            background: var(--accent-primary);
-            border-radius: 2px;
+            margin-top: 2px;
+            white-space: nowrap;
         }
 
         .usb-drive-actions {
@@ -10763,7 +10735,6 @@
                 const label = drive.label || deviceName;
                 const size = formatExportBytes(drive.size_bytes);
                 const free = formatExportBytes(drive.free_bytes);
-                const used = drive.size_bytes > 0 ? Math.round(((drive.size_bytes - drive.free_bytes) / drive.size_bytes) * 100) : 0;
                 const isSelected = selectedUSBDrive && selectedUSBDrive.device === drive.device;
                 const driveDescription = `${drive.vendor || ''} ${drive.model || ''}`.trim() || 'USB Drive';
 
@@ -10781,11 +10752,7 @@
                                     ${drive.is_mounted ? '<span class="usb-mounted-badge">MOUNTED</span>' : ''}
                                 </div>
                                 <div class="usb-drive-meta">
-                                    <span class="usb-drive-meta-item">${driveDescription}</span>
-                                    <span class="usb-drive-meta-item"><span class="usb-drive-meta-label">Size:</span> ${size}</span>
-                                    ${drive.is_mounted ? `<span class="usb-drive-meta-item"><span class="usb-drive-meta-label">Free:</span> ${free}
-                                        <span class="usb-drive-space-bar"><span class="usb-drive-space-bar-fill" style="width: ${used}%"></span></span>
-                                    </span>` : ''}
+                                    ${driveDescription} · ${size}${drive.is_mounted ? ` · ${free} free` : ''}
                                 </div>
                             </div>
                             <div class="usb-drive-actions" onclick="event.stopPropagation()">

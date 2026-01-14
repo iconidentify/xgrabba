@@ -336,9 +336,17 @@ func (m *Manager) Unmount(ctx context.Context, device string) error {
 		m.logger.Warn("normal unmount failed, trying lazy unmount", "error", err)
 		cmd = exec.CommandContext(umountCtx, "umount", "-l", mountPoint)
 		if output2, err2 := cmd.CombinedOutput(); err2 != nil {
-			return fmt.Errorf("unmount failed: %s: %w (lazy: %s)", string(output), err, string(output2))
+			// Check if mount is actually gone (maybe already unmounted)
+			if _, stillMounted := m.getMountPoint(drive.Partition); !stillMounted {
+				m.logger.Info("mount already detached, continuing")
+			} else {
+				return fmt.Errorf("unmount failed: %s: %w (lazy: %s)", string(output), err, string(output2))
+			}
 		}
 	}
+
+	// Wait a moment for lazy unmount to complete detachment
+	time.Sleep(500 * time.Millisecond)
 
 	// Remove mount point directory
 	_ = os.Remove(mountPoint)
