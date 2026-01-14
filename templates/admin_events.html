@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Log - xgrabba Admin</title>
+    <link rel="stylesheet" href="/static/css/admin_events.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Header -->
+        <header class="admin-header">
+            <div class="header-left">
+                <h1 class="page-title">
+                    <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Activity Log
+                </h1>
+                <span class="subtitle">System Events & Operations Monitor</span>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+                <button class="btn btn-secondary" id="exportLogsBtn" title="Export logs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Export
+                </button>
+            </div>
+        </header>
+
+        <!-- Status Summary Cards -->
+        <section class="status-summary" id="statusSummary">
+            <div class="summary-card summary-total">
+                <div class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div class="summary-content">
+                    <span class="summary-count" id="totalCount">--</span>
+                    <span class="summary-label">Total Events</span>
+                    <span class="summary-period">Last 24 hours</span>
+                </div>
+            </div>
+            <div class="summary-card summary-errors">
+                <div class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div class="summary-content">
+                    <span class="summary-count" id="errorCount">--</span>
+                    <span class="summary-label">Errors</span>
+                    <span class="summary-period">Requires attention</span>
+                </div>
+            </div>
+            <div class="summary-card summary-warnings">
+                <div class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="summary-content">
+                    <span class="summary-count" id="warningCount">--</span>
+                    <span class="summary-label">Warnings</span>
+                    <span class="summary-period">Last 24 hours</span>
+                </div>
+            </div>
+            <div class="summary-card summary-success">
+                <div class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="summary-content">
+                    <span class="summary-count" id="successCount">--</span>
+                    <span class="summary-label">Successful</span>
+                    <span class="summary-period">Operations completed</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters Bar -->
+        <section class="filters-bar">
+            <div class="filters-left">
+                <!-- Search -->
+                <div class="search-container">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text"
+                           class="search-input"
+                           id="searchInput"
+                           placeholder="Search events..."
+                           autocomplete="off">
+                    <button class="search-clear" id="searchClear" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Category Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">Category</label>
+                    <div class="filter-chips" id="categoryFilters">
+                        <button class="filter-chip active" data-category="all">All</button>
+                        <button class="filter-chip" data-category="export">
+                            <span class="chip-icon export"></span>Export
+                        </button>
+                        <button class="filter-chip" data-category="bookmark">
+                            <span class="chip-icon bookmark"></span>Bookmark
+                        </button>
+                        <button class="filter-chip" data-category="ai">
+                            <span class="chip-icon ai"></span>AI
+                        </button>
+                        <button class="filter-chip" data-category="usb">
+                            <span class="chip-icon usb"></span>USB
+                        </button>
+                        <button class="filter-chip" data-category="system">
+                            <span class="chip-icon system"></span>System
+                        </button>
+                        <button class="filter-chip" data-category="archive">
+                            <span class="chip-icon archive"></span>Archive
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Severity Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">Severity</label>
+                    <div class="filter-chips" id="severityFilters">
+                        <button class="filter-chip active" data-severity="all">All</button>
+                        <button class="filter-chip" data-severity="error">
+                            <span class="severity-dot error"></span>Error
+                        </button>
+                        <button class="filter-chip" data-severity="warning">
+                            <span class="severity-dot warning"></span>Warning
+                        </button>
+                        <button class="filter-chip" data-severity="success">
+                            <span class="severity-dot success"></span>Success
+                        </button>
+                        <button class="filter-chip" data-severity="info">
+                            <span class="severity-dot info"></span>Info
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters-right">
+                <!-- Time Range -->
+                <div class="filter-group">
+                    <label class="filter-label">Time Range</label>
+                    <select class="time-select" id="timeRange">
+                        <option value="1h">Last hour</option>
+                        <option value="6h">Last 6 hours</option>
+                        <option value="24h" selected>Last 24 hours</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d">Last 30 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
+
+                <!-- Refresh Control -->
+                <div class="refresh-control">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="autoRefresh" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Live</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Events List -->
+        <section class="events-section">
+            <div class="events-header">
+                <span class="events-count" id="eventsCount">Loading events...</span>
+                <button class="btn btn-ghost" id="refreshBtn" title="Refresh">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Events Container -->
+            <div class="events-container" id="eventsContainer">
+                <!-- New event indicator -->
+                <div class="new-events-indicator" id="newEventsIndicator" hidden>
+                    <button class="new-events-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 15l7-7 7 7"/>
+                        </svg>
+                        <span id="newEventsCount">0</span> new events
+                    </button>
+                </div>
+
+                <!-- Events list -->
+                <div class="events-list" id="eventsList">
+                    <!-- Events will be rendered here -->
+                </div>
+
+                <!-- Loading indicator -->
+                <div class="loading-indicator" id="loadingIndicator" hidden>
+                    <div class="spinner"></div>
+                    <span>Loading more events...</span>
+                </div>
+
+                <!-- Empty state -->
+                <div class="empty-state" id="emptyState" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                    <h3>No events found</h3>
+                    <p>Try adjusting your filters or time range</p>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" hidden>
+                <button class="pagination-btn" id="prevPage" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </button>
+                <span class="pagination-info">
+                    Page <span id="currentPage">1</span> of <span id="totalPages">1</span>
+                </span>
+                <button class="pagination-btn" id="nextPage">
+                    Next
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Event Detail Modal -->
+    <div class="modal-overlay" id="eventModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Event Details</h2>
+                <button class="modal-close" id="modalClose">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Modal content rendered dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/js/admin_events.js"></script>
+</body>
+</html>

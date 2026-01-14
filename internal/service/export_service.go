@@ -23,8 +23,9 @@ import (
 
 // ExportService handles exporting the archive to portable formats.
 type ExportService struct {
-	tweetSvc *TweetService
-	logger   *slog.Logger
+	tweetSvc     *TweetService
+	logger       *slog.Logger
+	eventEmitter domain.EventEmitter
 
 	// Async export state
 	mu           sync.Mutex
@@ -62,11 +63,27 @@ type Volume struct {
 }
 
 // NewExportService creates a new export service.
-func NewExportService(tweetSvc *TweetService, logger *slog.Logger) *ExportService {
+func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter domain.EventEmitter) *ExportService {
 	return &ExportService{
-		tweetSvc: tweetSvc,
-		logger:   logger,
+		tweetSvc:     tweetSvc,
+		logger:       logger,
+		eventEmitter: eventEmitter,
 	}
+}
+
+// emitEvent emits an event if the event emitter is configured.
+func (s *ExportService) emitEvent(severity domain.EventSeverity, category domain.EventCategory, message string, metadata domain.EventMetadata) {
+	if s.eventEmitter == nil {
+		return
+	}
+	s.eventEmitter.Emit(domain.Event{
+		Timestamp: time.Now(),
+		Severity:  severity,
+		Category:  category,
+		Message:   message,
+		Source:    "ExportService",
+		Metadata:  metadata.ToJSON(),
+	})
 }
 
 // EstimateExport calculates the estimated size and counts for an export.
@@ -112,7 +129,7 @@ func (s *ExportService) EstimateExport(ctx context.Context) (*ExportEstimate, er
 
 // GetAvailableVolumes returns a list of available storage volumes (USB drives, etc.).
 func (s *ExportService) GetAvailableVolumes() []Volume {
-	var volumes []Volume
+	volumes := []Volume{}
 
 	switch runtime.GOOS {
 	case "darwin":
@@ -217,6 +234,11 @@ func (s *ExportService) StartExportAsync(opts ExportOptions) (string, error) {
 		cancelFunc: cancel,
 	}
 	s.mu.Unlock()
+
+	// Emit export started event
+	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryExport,
+		fmt.Sprintf("Export started to %s", opts.DestPath),
+		domain.EventMetadata{"export_id": exportID, "dest_path": opts.DestPath, "encrypted": opts.Encrypt})
 
 	// Start export in background
 	go s.runExportAsync(ctx, opts)
@@ -404,13 +426,31 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.activeExport.CurrentFile = "Writing metadata..."
 	s.mu.Unlock()
 
-	// Write tweets-data.json
+	// Count media files
+	mediaCount := 0
+	for _, t := range exportedTweets {
+		mediaCount += len(t.Media)
+	}
+
+	// Write tweets-data.json with comprehensive metadata
 	tweetsDataPath := filepath.Join(opts.DestPath, "tweets-data.json")
+	exportedAt := time.Now().UTC()
 	tweetsData := map[string]interface{}{
 		"tweets":      exportedTweets,
 		"total":       len(exportedTweets),
-		"exported_at": time.Now().UTC(),
+		"exported_at": exportedAt,
 		"version":     "1.0",
+		"metadata": map[string]interface{}{
+			"tweet_count":    len(exportedTweets),
+			"media_count":    mediaCount,
+			"encrypted":      opts.Encrypt,
+			"export_id":      s.activeExport.ID,
+			"bytes_written":  s.activeExport.BytesWritten,
+			"export_version": "2.0",
+			"exported_at":    exportedAt.Format(time.RFC3339),
+			"exported_date":  exportedAt.Format("January 2, 2006"),
+			"exported_time":  exportedAt.Format("3:04 PM MST"),
+		},
 	}
 
 	tweetsJSON, err := json.MarshalIndent(tweetsData, "", "  ")
@@ -423,6 +463,27 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	if err := writeFileSync(tweetsDataPath, tweetsJSON, 0644); err != nil {
 		s.setExportError(fmt.Sprintf("write tweets-data.json: %v", err))
 		return
+	}
+
+	// Write export-metadata.json (separate file for easy access)
+	exportMetadata := map[string]interface{}{
+		"export_id":     s.activeExport.ID,
+		"exported_at":   exportedAt.Format(time.RFC3339),
+		"tweet_count":   len(exportedTweets),
+		"media_count":   mediaCount,
+		"bytes_written": s.activeExport.BytesWritten,
+		"encrypted":     opts.Encrypt,
+		"encryption": map[string]interface{}{
+			"enabled":   opts.Encrypt,
+			"algorithm": "AES-256-GCM",
+			"kdf":       "Argon2id",
+		},
+		"format_version": "2.0",
+		"app_name":       "xgrabba",
+	}
+	metadataJSON, _ := json.MarshalIndent(exportMetadata, "", "  ")
+	if err := writeFileSync(filepath.Join(opts.DestPath, "export-metadata.json"), metadataJSON, 0644); err != nil {
+		s.logger.Warn("failed to write export-metadata.json", "error", err)
 	}
 
 	s.mu.Lock()
@@ -451,12 +512,23 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		s.mu.Lock()
 		s.activeExport.Phase = "encrypting"
 		s.activeExport.CurrentFile = "Encrypting archive..."
+		exportID := s.activeExport.ID
 		s.mu.Unlock()
+
+		// Emit encryption started event
+		s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryEncryption,
+			"Encrypting export with AES-256-GCM",
+			domain.EventMetadata{"export_id": exportID, "algorithm": "AES-256-GCM", "kdf": "Argon2id"})
 
 		if err := s.encryptExport(opts.DestPath, opts.Password); err != nil {
 			s.setExportError(fmt.Sprintf("encrypt archive: %v", err))
 			return
 		}
+
+		// Emit encryption completed event
+		s.emitEvent(domain.EventSeveritySuccess, domain.EventCategoryEncryption,
+			"Archive encryption completed",
+			domain.EventMetadata{"export_id": exportID})
 
 		// Write encrypted README (different from regular README)
 		if err := s.writeEncryptedReadme(opts.DestPath, len(exportedTweets), s.activeExport.BytesWritten); err != nil {
@@ -473,23 +545,47 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.mu.Lock()
 	s.activeExport.Phase = "completed"
 	s.activeExport.CurrentFile = ""
+	exportID := s.activeExport.ID
+	bytesWritten := s.activeExport.BytesWritten
 	s.mu.Unlock()
+
+	// Emit success event
+	s.emitEvent(domain.EventSeveritySuccess, domain.EventCategoryExport,
+		fmt.Sprintf("Export completed: %d tweets (%s)", len(exportedTweets), formatBytes(bytesWritten)),
+		domain.EventMetadata{
+			"export_id":     exportID,
+			"tweet_count":   len(exportedTweets),
+			"bytes_written": bytesWritten,
+			"encrypted":     opts.Encrypt,
+			"dest_path":     opts.DestPath,
+		})
 
 	s.logger.Info("async export complete",
 		"tweets", len(exportedTweets),
-		"bytes", s.activeExport.BytesWritten,
+		"bytes", bytesWritten,
 		"encrypted", opts.Encrypt,
 	)
 }
 
 // setExportError sets the export error state.
-func (s *ExportService) setExportError(err string) {
+func (s *ExportService) setExportError(errMsg string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.activeExport != nil {
 		s.activeExport.Phase = "failed"
-		s.activeExport.Error = err
+		s.activeExport.Error = errMsg
 	}
+	exportID := ""
+	destPath := ""
+	if s.activeExport != nil {
+		exportID = s.activeExport.ID
+		destPath = s.activeExport.DestPath
+	}
+	s.mu.Unlock()
+
+	// Emit error event
+	s.emitEvent(domain.EventSeverityError, domain.EventCategoryExport,
+		fmt.Sprintf("Export failed: %s", errMsg),
+		domain.EventMetadata{"export_id": exportID, "dest_path": destPath, "error": errMsg})
 }
 
 // cleanupExport removes all xgrabba export files from the destination.
@@ -498,9 +594,13 @@ func (s *ExportService) cleanupExport(destPath string) {
 	// Remove xgrabba export files/directories
 	filesToRemove := []string{
 		"data",
+		"encrypted",
 		"index.html",
 		"README.txt",
 		"tweets-data.json",
+		"export-metadata.json",
+		"data.enc",
+		"manifest.enc",
 		"xgrabba-viewer.exe",
 		"xgrabba-viewer-mac",
 		"xgrabba-viewer-mac-arm64",
@@ -532,21 +632,66 @@ func (s *ExportService) cleanupExport(destPath string) {
 	s.logger.Info("export cleanup completed", "path", destPath)
 }
 
-// encryptExport encrypts all export files in place.
+// encryptExport encrypts all export files in place using parallel processing.
 // It encrypts tweets-data.json → data.enc, and all files in data/ directory.
 // Creates manifest.enc with mapping of original to encrypted file names.
+// Uses AES-256-GCM with Argon2id key derivation for maximum security.
 func (s *ExportService) encryptExport(destPath, password string) error {
 	s.logger.Info("encrypting export", "path", destPath)
+
+	// Create encrypted output directory
+	encDir := filepath.Join(destPath, "encrypted")
+	if err := os.MkdirAll(encDir, 0755); err != nil {
+		return fmt.Errorf("create encrypted directory: %w", err)
+	}
+
+	// Derive encryption key ONCE (this is the slow part - ~1 second)
+	s.mu.Lock()
+	if s.activeExport != nil {
+		s.activeExport.CurrentFile = "Deriving encryption key (AES-256 + Argon2id)..."
+	}
+	s.mu.Unlock()
+
+	// Use parallel encryptor with progress callback
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 2 {
+		numWorkers = 2
+	}
+	if numWorkers > 8 {
+		numWorkers = 8 // Cap to avoid memory issues
+	}
+
+	progressFn := func(completed, total int, currentFile string) {
+		s.mu.Lock()
+		if s.activeExport != nil {
+			pct := (completed * 100) / total
+			s.activeExport.CurrentFile = fmt.Sprintf("Encrypting: %s (%d/%d - %d%%)", filepath.Base(currentFile), completed, total, pct)
+		}
+		s.mu.Unlock()
+	}
+
+	parallelEnc, err := crypto.NewParallelEncryptor(password, numWorkers, progressFn)
+	if err != nil {
+		return fmt.Errorf("create encryptor: %w", err)
+	}
+
+	s.logger.Info("encryption key derived", "workers", numWorkers)
 
 	// 1. Encrypt tweets-data.json → data.enc
 	tweetsDataPath := filepath.Join(destPath, "tweets-data.json")
 	if _, err := os.Stat(tweetsDataPath); err == nil {
+		s.mu.Lock()
+		if s.activeExport != nil {
+			s.activeExport.CurrentFile = "Encrypting tweets-data.json..."
+		}
+		s.mu.Unlock()
+
 		data, err := os.ReadFile(tweetsDataPath)
 		if err != nil {
 			return fmt.Errorf("read tweets-data.json: %w", err)
 		}
 
-		encrypted, err := crypto.Encrypt(data, password)
+		encrypted, err := parallelEnc.Encryptor().Encrypt(data)
 		if err != nil {
 			return fmt.Errorf("encrypt tweets-data.json: %w", err)
 		}
@@ -561,84 +706,91 @@ func (s *ExportService) encryptExport(destPath, password string) error {
 		s.logger.Info("encrypted tweets-data.json", "size", len(data), "encrypted_size", len(encrypted))
 	}
 
-	// 2. Encrypt all files in data/ directory
+	// 2. Collect all files to encrypt from data/ directory
 	dataDir := filepath.Join(destPath, "data")
-	manifest := make(map[string]string) // originalPath -> encryptedName
+	var jobs []crypto.EncryptionJob
 
 	if _, err := os.Stat(dataDir); err == nil {
-		err := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				return nil
-			}
+		s.mu.Lock()
+		if s.activeExport != nil {
+			s.activeExport.CurrentFile = "Scanning media files..."
+		}
+		s.mu.Unlock()
 
-			// Read file
-			data, err := os.ReadFile(path)
-			if err != nil {
-				s.logger.Warn("failed to read file for encryption", "path", path, "error", err)
-				return nil // Continue with other files
+		filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
 			}
 
 			// Generate obfuscated name based on hash of path
 			hash := sha256.Sum256([]byte(path))
 			encName := hex.EncodeToString(hash[:8]) + ".enc"
 
-			// Encrypt
-			encrypted, err := crypto.Encrypt(data, password)
-			if err != nil {
-				s.logger.Warn("failed to encrypt file", "path", path, "error", err)
-				return nil
-			}
-
 			// Get relative path from destPath for manifest
 			relPath, _ := filepath.Rel(destPath, path)
-			manifest[relPath] = encName
 
-			// Write encrypted file to encrypted/ directory
-			encDir := filepath.Join(destPath, "encrypted")
-			os.MkdirAll(encDir, 0755)
-			encPath := filepath.Join(encDir, encName)
-
-			if err := writeFileSync(encPath, encrypted, 0644); err != nil {
-				s.logger.Warn("failed to write encrypted file", "path", encPath, "error", err)
-				return nil
-			}
-
+			jobs = append(jobs, crypto.EncryptionJob{
+				SourcePath: path,
+				DestPath:   filepath.Join(encDir, encName),
+				RelPath:    relPath,
+				EncName:    encName,
+			})
 			return nil
 		})
 
-		if err != nil {
-			s.logger.Warn("error walking data directory", "error", err)
+		s.logger.Info("encrypting media files", "count", len(jobs), "workers", numWorkers)
+
+		// 3. Encrypt all files in parallel
+		manifest, errs := parallelEnc.EncryptFiles(jobs)
+
+		for _, err := range errs {
+			s.logger.Warn("encryption error", "error", err)
 		}
 
 		// Remove original data directory
 		os.RemoveAll(dataDir)
+
+		// 4. Write encrypted manifest
+		s.mu.Lock()
+		if s.activeExport != nil {
+			s.activeExport.CurrentFile = "Finalizing encryption..."
+		}
+		s.mu.Unlock()
+
+		manifestData, err := json.Marshal(manifest)
+		if err != nil {
+			return fmt.Errorf("marshal manifest: %w", err)
+		}
+
+		encManifest, err := parallelEnc.Encryptor().Encrypt(manifestData)
+		if err != nil {
+			return fmt.Errorf("encrypt manifest: %w", err)
+		}
+
+		manifestPath := filepath.Join(destPath, "manifest.enc")
+		if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
+			return fmt.Errorf("write manifest.enc: %w", err)
+		}
+
+		s.logger.Info("encryption complete", "files_encrypted", len(manifest)+1)
+	} else {
+		// No data directory, just write empty manifest
+		manifestData, _ := json.Marshal(map[string]string{})
+		encManifest, err := parallelEnc.Encryptor().Encrypt(manifestData)
+		if err != nil {
+			return fmt.Errorf("encrypt manifest: %w", err)
+		}
+		manifestPath := filepath.Join(destPath, "manifest.enc")
+		if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
+			return fmt.Errorf("write manifest.enc: %w", err)
+		}
 	}
 
-	// 3. Write encrypted manifest
-	manifestData, err := json.Marshal(manifest)
-	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
-	}
-
-	encManifest, err := crypto.Encrypt(manifestData, password)
-	if err != nil {
-		return fmt.Errorf("encrypt manifest: %w", err)
-	}
-
-	manifestPath := filepath.Join(destPath, "manifest.enc")
-	if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
-		return fmt.Errorf("write manifest.enc: %w", err)
-	}
-
-	// 4. Replace index.html with encrypted archive notice
+	// 5. Replace index.html with encrypted archive notice
 	if err := s.writeEncryptedIndexHTML(destPath); err != nil {
 		s.logger.Warn("failed to write encrypted index.html", "error", err)
 	}
 
-	s.logger.Info("encryption complete", "files_encrypted", len(manifest)+1)
 	return nil
 }
 

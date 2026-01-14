@@ -36,9 +36,12 @@ type TweetService struct {
 	aiCfg          config.AIConfig
 	whisperEnabled bool
 	logger         *slog.Logger
+	eventEmitter   domain.EventEmitter
 
 	// In-memory storage (could be replaced with DB)
-	tweets map[domain.TweetID]*domain.Tweet
+	// Protected by tweetsMu - use RLock for reads, Lock for writes
+	tweetsMu sync.RWMutex
+	tweets   map[domain.TweetID]*domain.Tweet
 
 	// Mutex to prevent duplicate AI analysis
 	aiAnalysisLock sync.Mutex
@@ -66,6 +69,7 @@ func NewTweetService(
 	aiCfg config.AIConfig,
 	whisperEnabled bool,
 	logger *slog.Logger,
+	eventEmitter domain.EventEmitter,
 ) *TweetService {
 	// Initialize video processor (ffmpeg)
 	var videoProc *ffmpeg.VideoProcessor
@@ -92,6 +96,7 @@ func NewTweetService(
 		aiCfg:          aiCfg,
 		whisperEnabled: whisperEnabled && whisperClient != nil && videoProc != nil,
 		logger:         logger,
+		eventEmitter:   eventEmitter,
 		tweets:         make(map[domain.TweetID]*domain.Tweet),
 		processingAI:   make(map[domain.TweetID]bool),
 		processingSem:  make(chan struct{}, 2), // Allow 2 concurrent video processes
@@ -103,6 +108,21 @@ func NewTweetService(
 	}
 
 	return svc
+}
+
+// emitEvent emits an event if the event emitter is configured.
+func (s *TweetService) emitEvent(severity domain.EventSeverity, category domain.EventCategory, message string, metadata domain.EventMetadata) {
+	if s.eventEmitter == nil {
+		return
+	}
+	s.eventEmitter.Emit(domain.Event{
+		Timestamp: time.Now(),
+		Severity:  severity,
+		Category:  category,
+		Message:   message,
+		Source:    "TweetService",
+		Metadata:  metadata.ToJSON(),
+	})
 }
 
 func (s *TweetService) GetPipelineDiagnostics() PipelineDiagnostics {
@@ -148,7 +168,9 @@ func (s *TweetService) LoadFromDisk() error {
 
 		// Convert StoredTweet back to Tweet
 		tweet := s.storedTweetToTweet(&stored, filepath.Dir(path))
+		s.tweetsMu.Lock()
 		s.tweets[tweet.ID] = tweet
+		s.tweetsMu.Unlock()
 		count++
 
 		return nil
@@ -419,9 +441,11 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 	}
 
 	// Check if already archived or in progress - no-op for duplicates
+	s.tweetsMu.Lock()
 	if existing, ok := s.tweets[domain.TweetID(tweetID)]; ok {
 		switch existing.Status {
 		case domain.ArchiveStatusCompleted:
+			s.tweetsMu.Unlock()
 			s.logger.Info("duplicate tweet, already archived", "tweet_id", tweetID)
 			return &ArchiveResponse{
 				TweetID: existing.ID,
@@ -431,6 +455,7 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 		case domain.ArchiveStatusPending, domain.ArchiveStatusFetching, domain.ArchiveStatusFetched,
 			domain.ArchiveStatusDownloading, domain.ArchiveStatusDownloaded,
 			domain.ArchiveStatusProcessing, domain.ArchiveStatusAnalyzing:
+			s.tweetsMu.Unlock()
 			s.logger.Info("duplicate tweet, already in progress", "tweet_id", tweetID, "status", existing.Status)
 			return &ArchiveResponse{
 				TweetID: existing.ID,
@@ -452,6 +477,12 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 		CreatedAt: time.Now(),
 	}
 	s.tweets[tweet.ID] = tweet
+	s.tweetsMu.Unlock()
+
+	// Emit event for new archive request
+	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryTweet,
+		fmt.Sprintf("Tweet queued for archiving: %s", tweetID),
+		domain.EventMetadata{"tweet_id": tweetID, "url": req.TweetURL})
 
 	// Process asynchronously with concurrency limit
 	go func() {
@@ -480,12 +511,26 @@ func (s *TweetService) processTweet(ctx context.Context, tweet *domain.Tweet) {
 		tweet.Status = domain.ArchiveStatusFailed
 		tweet.Error = err.Error()
 		s.saveTweetMetadata(tweet) // Save failure state
+
+		// Emit error event
+		s.emitEvent(domain.EventSeverityError, domain.EventCategoryTweet,
+			fmt.Sprintf("Tweet archive failed: %s", err.Error()),
+			domain.EventMetadata{"tweet_id": string(tweet.ID), "phase": "fetch", "error": err.Error()})
 		return
 	}
+
+	// Emit success for phase 1
+	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryTweet,
+		fmt.Sprintf("Tweet metadata fetched: @%s", tweet.Author.Username),
+		domain.EventMetadata{"tweet_id": string(tweet.ID), "author": tweet.Author.Username, "media_count": len(tweet.Media)})
 
 	// Phase 2: Download media (saves after each download for incremental progress)
 	if err := s.processPhase2Download(ctx, tweet); err != nil {
 		logger.Warn("phase 2 partial failure", "error", err)
+		// Emit warning event for partial failure
+		s.emitEvent(domain.EventSeverityWarning, domain.EventCategoryTweet,
+			fmt.Sprintf("Tweet media download partial failure: %s", err.Error()),
+			domain.EventMetadata{"tweet_id": string(tweet.ID), "phase": "download", "error": err.Error()})
 		// Continue to phase 3 anyway - partial media is better than none
 	}
 
@@ -662,8 +707,22 @@ func (s *TweetService) processPhase3Analyze(ctx context.Context, tweet *domain.T
 	// Final save
 	if err := s.saveTweetMetadata(tweet); err != nil {
 		logger.Error("failed to save final metadata", "error", err)
+		s.emitEvent(domain.EventSeverityError, domain.EventCategoryTweet,
+			fmt.Sprintf("Failed to save archive metadata: %s", err.Error()),
+			domain.EventMetadata{"tweet_id": string(tweet.ID), "error": err.Error()})
 		return
 	}
+
+	// Emit success event for completed archive
+	s.emitEvent(domain.EventSeveritySuccess, domain.EventCategoryTweet,
+		fmt.Sprintf("Tweet archived: @%s - %s", tweet.Author.Username, tweet.AITitle),
+		domain.EventMetadata{
+			"tweet_id":    string(tweet.ID),
+			"author":      tweet.Author.Username,
+			"ai_title":    tweet.AITitle,
+			"media_count": len(tweet.Media),
+			"tags_count":  len(tweet.AITags),
+		})
 
 	logger.Info("phase 3 complete - archive finished",
 		"ai_title", tweet.AITitle,
@@ -1116,7 +1175,9 @@ func (s *TweetService) RegenerateAIMetadata(ctx context.Context, tweetID domain.
 }
 
 func (s *TweetService) regenerateAIMetadata(ctx context.Context, tweetID domain.TweetID) error {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
+	s.tweetsMu.RUnlock()
 	if !ok {
 		return domain.ErrVideoNotFound
 	}
@@ -1196,7 +1257,9 @@ func (s *TweetService) IsAIAnalysisInProgress(tweetID domain.TweetID) bool {
 // This is useful when the original fetch had truncated text or missing data.
 // It also re-runs AI analysis to ensure metadata reflects the new data.
 func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
+	s.tweetsMu.RUnlock()
 	if !ok {
 		return domain.ErrVideoNotFound
 	}
@@ -1258,7 +1321,10 @@ func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error
 // StartResync runs resync in the background so client disconnection doesn't cancel the work.
 func (s *TweetService) StartResync(tweetID domain.TweetID) error {
 	// Check if tweet exists
-	if _, ok := s.tweets[tweetID]; !ok {
+	s.tweetsMu.RLock()
+	_, ok := s.tweets[tweetID]
+	s.tweetsMu.RUnlock()
+	if !ok {
 		return domain.ErrVideoNotFound
 	}
 
@@ -1305,7 +1371,10 @@ func (s *TweetService) StartRegenerateAIMetadata(tweetID domain.TweetID) error {
 		return ErrAIAlreadyInProgress
 	}
 	// Ensure tweet exists before we start
-	if _, ok := s.tweets[tweetID]; !ok {
+	s.tweetsMu.RLock()
+	_, exists := s.tweets[tweetID]
+	s.tweetsMu.RUnlock()
+	if !exists {
 		s.aiAnalysisLock.Unlock()
 		return domain.ErrVideoNotFound
 	}
@@ -1678,12 +1747,14 @@ func buildMarkdownSummary(tweet *domain.Tweet) string {
 
 // GetStatus returns the current status of a tweet archive.
 func (s *TweetService) GetStatus(ctx context.Context, tweetID domain.TweetID) (*TweetStatusResponse, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return nil, domain.ErrVideoNotFound
 	}
-
-	return &TweetStatusResponse{
+	// Copy fields while holding lock
+	resp := &TweetStatusResponse{
 		TweetID:     tweet.ID,
 		Status:      tweet.Status,
 		Author:      tweet.Author.Username,
@@ -1693,15 +1764,23 @@ func (s *TweetService) GetStatus(ctx context.Context, tweetID domain.TweetID) (*
 		ArchivePath: tweet.ArchivePath,
 		Error:       tweet.Error,
 		CreatedAt:   tweet.CreatedAt,
-	}, nil
+	}
+	s.tweetsMu.RUnlock()
+	return resp, nil
 }
 
 // List returns archived tweets sorted by date (newest first).
+// Returns a snapshot copy of tweets, safe for concurrent use during exports.
 func (s *TweetService) List(ctx context.Context, limit, offset int) ([]*domain.Tweet, int, error) {
-	var result []*domain.Tweet
+	s.tweetsMu.RLock()
+	// Create a snapshot copy of all tweets to avoid holding lock during sort/pagination
+	result := make([]*domain.Tweet, 0, len(s.tweets))
 	for _, tweet := range s.tweets {
-		result = append(result, tweet)
+		// Create a shallow copy to avoid returning pointers to live data
+		tweetCopy := *tweet
+		result = append(result, &tweetCopy)
 	}
+	s.tweetsMu.RUnlock()
 
 	// Sort by CreatedAt descending (newest first)
 	sort.Slice(result, func(i, j int) bool {
@@ -1816,25 +1895,27 @@ func (s *TweetService) tweetMatchesQuery(t *domain.Tweet, query string) bool {
 
 // Delete removes a tweet archive including all files.
 func (s *TweetService) Delete(ctx context.Context, tweetID domain.TweetID) error {
+	s.tweetsMu.Lock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.Unlock()
 		return domain.ErrVideoNotFound
 	}
+	archivePath := tweet.ArchivePath
+	// Remove from in-memory storage first
+	delete(s.tweets, tweetID)
+	s.tweetsMu.Unlock()
 
-	// Delete the archive directory if it exists
-	if tweet.ArchivePath != "" {
-		if err := os.RemoveAll(tweet.ArchivePath); err != nil {
+	// Delete the archive directory if it exists (outside lock to avoid blocking)
+	if archivePath != "" {
+		if err := os.RemoveAll(archivePath); err != nil {
 			s.logger.Warn("failed to delete archive directory",
 				"tweet_id", tweetID,
-				"path", tweet.ArchivePath,
+				"path", archivePath,
 				"error", err,
 			)
-			// Continue anyway to remove from memory
 		}
 	}
-
-	// Remove from in-memory storage
-	delete(s.tweets, tweetID)
 
 	s.logger.Info("tweet deleted", "tweet_id", tweetID)
 	return nil
@@ -1861,19 +1942,23 @@ type MediaFile struct {
 
 // GetFullTweet returns complete tweet details from the stored JSON.
 func (s *TweetService) GetFullTweet(ctx context.Context, tweetID domain.TweetID) (*domain.StoredTweet, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return nil, domain.ErrVideoNotFound
 	}
+	archivePath := tweet.ArchivePath
+	tweetCopy := tweet.ToStoredTweet()
+	s.tweetsMu.RUnlock()
 
 	// Read the tweet.json file for complete data
-	jsonPath := filepath.Join(tweet.ArchivePath, "tweet.json")
+	jsonPath := filepath.Join(archivePath, "tweet.json")
 	data, err := os.ReadFile(jsonPath)
 	if err != nil {
 		// If file doesn't exist yet (still processing), return what we have
 		if os.IsNotExist(err) {
-			stored := tweet.ToStoredTweet()
-			return &stored, nil
+			return &tweetCopy, nil
 		}
 		return nil, fmt.Errorf("read tweet.json: %w", err)
 	}
@@ -1888,12 +1973,16 @@ func (s *TweetService) GetFullTweet(ctx context.Context, tweetID domain.TweetID)
 
 // ListMediaFiles returns list of media files for a tweet.
 func (s *TweetService) ListMediaFiles(ctx context.Context, tweetID domain.TweetID) ([]MediaFile, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return nil, domain.ErrVideoNotFound
 	}
+	archivePath := tweet.ArchivePath
+	s.tweetsMu.RUnlock()
 
-	mediaDir := filepath.Join(tweet.ArchivePath, "media")
+	mediaDir := filepath.Join(archivePath, "media")
 	entries, err := os.ReadDir(mediaDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1927,17 +2016,21 @@ func (s *TweetService) ListMediaFiles(ctx context.Context, tweetID domain.TweetI
 
 // GetMediaFilePath returns the full filesystem path to a media file.
 func (s *TweetService) GetMediaFilePath(ctx context.Context, tweetID domain.TweetID, filename string) (string, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return "", domain.ErrVideoNotFound
 	}
+	archivePath := tweet.ArchivePath
+	s.tweetsMu.RUnlock()
 
 	// Security: validate filename to prevent path traversal
 	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
 		return "", domain.ErrMediaNotFound
 	}
 
-	filePath := filepath.Join(tweet.ArchivePath, "media", filename)
+	filePath := filepath.Join(archivePath, "media", filename)
 
 	// Verify file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -1949,26 +2042,35 @@ func (s *TweetService) GetMediaFilePath(ctx context.Context, tweetID domain.Twee
 
 // GetArchivePath returns the archive path for a tweet.
 func (s *TweetService) GetArchivePath(ctx context.Context, tweetID domain.TweetID) (string, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return "", domain.ErrVideoNotFound
 	}
-	return tweet.ArchivePath, nil
+	archivePath := tweet.ArchivePath
+	s.tweetsMu.RUnlock()
+	return archivePath, nil
 }
 
 // GetAvatarPath returns the path to the locally stored avatar for a tweet's author.
 func (s *TweetService) GetAvatarPath(ctx context.Context, tweetID domain.TweetID) (string, error) {
+	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
+		s.tweetsMu.RUnlock()
 		return "", domain.ErrVideoNotFound
 	}
+	localAvatarURL := tweet.Author.LocalAvatarURL
+	archivePath := tweet.ArchivePath
+	s.tweetsMu.RUnlock()
 
-	if tweet.Author.LocalAvatarURL != "" {
-		return tweet.Author.LocalAvatarURL, nil
+	if localAvatarURL != "" {
+		return localAvatarURL, nil
 	}
 
 	// Fallback: try avatar.jpg in archive path
-	avatarPath := filepath.Join(tweet.ArchivePath, "avatar.jpg")
+	avatarPath := filepath.Join(archivePath, "avatar.jpg")
 	if _, err := os.Stat(avatarPath); err == nil {
 		return avatarPath, nil
 	}

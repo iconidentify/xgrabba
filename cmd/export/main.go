@@ -77,10 +77,11 @@ func main() {
 		cfg.AI,
 		false, // Whisper disabled
 		logger,
+		nil, // No event emitter for CLI
 	)
 
 	// Create export service
-	exportSvc := service.NewExportService(tweetSvc, logger)
+	exportSvc := service.NewExportService(tweetSvc, logger, nil)
 
 	// Setup context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())

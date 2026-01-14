@@ -89,6 +89,17 @@ func main() {
 		logger.Info("whisper transcription disabled (no API key or disabled)")
 	}
 
+	// Event service for activity log / admin console (created early so other services can emit events)
+	eventSvc, err := service.NewEventService(service.EventServiceConfig{
+		RingBufferSize:  1000,
+		PersistToSQLite: false, // In-memory only for now
+	}, logger)
+	if err != nil {
+		logger.Error("failed to create event service", "error", err)
+		os.Exit(1)
+	}
+	defer eventSvc.Close()
+
 	// Initialize services
 	videoSvc := service.NewVideoService(
 		videoRepo,
@@ -109,10 +120,11 @@ func main() {
 		cfg.AI,
 		cfg.Whisper.Enabled,
 		logger,
+		eventSvc,
 	)
 
 	// Initialize export service
-	exportSvc := service.NewExportService(tweetSvc, logger)
+	exportSvc := service.NewExportService(tweetSvc, logger, eventSvc)
 
 	// Start AI metadata backfill in background for legacy tweets
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
@@ -221,6 +233,7 @@ func main() {
 						startCfg := bmCfg
 						startCfg.UserID = st.UserID
 						mon := bookmarks.NewMonitor(startCfg, rtClient, tweetSvc, logger)
+						mon.SetEventEmitter(eventSvc)
 						// Register monitor with handler for control endpoints
 						// (handler is already created by the time this goroutine detects the OAuth store)
 						if bookmarksOAuthHandler != nil {
@@ -242,6 +255,7 @@ func main() {
 				UserAgent: ua,
 			})
 			mon := bookmarks.NewMonitor(bmCfg, bmClient, tweetSvc, logger)
+			mon.SetEventEmitter(eventSvc)
 			bookmarkMonitor = mon
 			go mon.Start(bookmarksCtx)
 		}
@@ -271,8 +285,10 @@ func main() {
 		logger.Info("USB export enabled", "manager_url", cfg.USB.ManagerURL)
 	}
 
+	eventHandler := handler.NewEventHandler(eventSvc, logger)
+
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, eventHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

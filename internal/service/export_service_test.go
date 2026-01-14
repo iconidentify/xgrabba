@@ -11,7 +11,7 @@ import (
 
 func TestExportService_GetAvailableVolumes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger)
+	svc := NewExportService(nil, logger, nil)
 
 	volumes := svc.GetAvailableVolumes()
 
@@ -28,7 +28,7 @@ func TestExportService_GetAvailableVolumes(t *testing.T) {
 
 func TestExportService_GetExportStatus_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger)
+	svc := NewExportService(nil, logger, nil)
 
 	status := svc.GetExportStatus()
 
@@ -43,7 +43,7 @@ func TestExportService_GetExportStatus_NoActiveExport(t *testing.T) {
 
 func TestExportService_CancelExport_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger)
+	svc := NewExportService(nil, logger, nil)
 
 	err := svc.CancelExport()
 
@@ -54,7 +54,7 @@ func TestExportService_CancelExport_NoActiveExport(t *testing.T) {
 
 func TestExportService_StartExportAsync_AlreadyInProgress(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger)
+	svc := NewExportService(nil, logger, nil)
 
 	// Simulate an active export
 	svc.mu.Lock()

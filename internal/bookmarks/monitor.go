@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/iconidentify/xgrabba/internal/config"
+	"github.com/iconidentify/xgrabba/internal/domain"
 	"github.com/iconidentify/xgrabba/internal/service"
 	"github.com/iconidentify/xgrabba/pkg/twitter"
 )
@@ -41,10 +42,11 @@ const (
 
 // Monitor polls X bookmarks and triggers archiving for new bookmark IDs.
 type Monitor struct {
-	cfg    config.BookmarksConfig
-	client bookmarkLister
-	arch   archiver
-	logger *slog.Logger
+	cfg          config.BookmarksConfig
+	client       bookmarkLister
+	arch         archiver
+	logger       *slog.Logger
+	eventEmitter domain.EventEmitter
 
 	seen          map[string]time.Time
 	rateLimitFile string
@@ -79,6 +81,26 @@ func NewMonitor(cfg config.BookmarksConfig, client bookmarkLister, tweetSvc arch
 		checkNow:      make(chan struct{}, 1),
 		activity:      NewActivityLog(activityPath, 100),
 	}
+}
+
+// SetEventEmitter sets the event emitter for the monitor.
+func (m *Monitor) SetEventEmitter(emitter domain.EventEmitter) {
+	m.eventEmitter = emitter
+}
+
+// emitEvent emits an event if the event emitter is configured.
+func (m *Monitor) emitEvent(severity domain.EventSeverity, message string, metadata domain.EventMetadata) {
+	if m.eventEmitter == nil {
+		return
+	}
+	m.eventEmitter.Emit(domain.Event{
+		Timestamp: time.Now(),
+		Severity:  severity,
+		Category:  domain.EventCategoryBookmarks,
+		Message:   message,
+		Source:    "BookmarksMonitor",
+		Metadata:  metadata.ToJSON(),
+	})
 }
 
 // State returns the current monitor state.
@@ -289,6 +311,11 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 				RateLimitReset: &resetTime,
 			})
 
+			// Emit rate limit event
+			m.emitEvent(domain.EventSeverityWarning,
+				fmt.Sprintf("X API rate limit hit, waiting %s", sleepFor.Round(time.Second)),
+				domain.EventMetadata{"reset_at": resetTime.Format(time.RFC3339), "wait_duration": sleepFor.String()})
+
 			timer := time.NewTimer(sleepFor)
 			defer timer.Stop()
 			select {
@@ -368,6 +395,13 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 		NewBookmarks:   len(newIDs),
 		ArchivedIDs:    archivedIDs,
 	})
+
+	// Emit event for new bookmarks found
+	if len(archivedIDs) > 0 {
+		m.emitEvent(domain.EventSeveritySuccess,
+			fmt.Sprintf("Found %d new bookmarks, queued for archiving", len(archivedIDs)),
+			domain.EventMetadata{"new_count": len(archivedIDs), "total_count": len(ids), "tweet_ids": archivedIDs})
+	}
 
 	return true, false
 }

@@ -4368,7 +4368,108 @@
         }
 
         /* =============================================
-           EXPORT MODAL
+           HEADER BUTTON SYSTEM
+           ============================================= */
+        .header-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .header-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .header-btn:active {
+            transform: scale(0.96);
+        }
+
+        .header-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Header navigation */
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Button group */
+        .header-btn-group {
+            display: flex;
+            align-items: center;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .header-btn-group .header-btn {
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+        }
+
+        .header-btn-group .header-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Offline Archive Info Banner */
+        .offline-info-banner {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .offline-info-banner svg {
+            color: var(--brand-start);
+            flex-shrink: 0;
+        }
+
+        .offline-meta-sep {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .offline-encrypted {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--success);
+        }
+
+        .offline-encrypted svg {
+            color: var(--success);
+        }
+
+        /* Divider */
+        .header-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border-subtle);
+        }
+
+        /* =============================================
+           EXPORT BUTTON WITH PROGRESS RING
            ============================================= */
         .export-btn {
             width: 36px;
@@ -4382,7 +4483,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.15s;
-            margin-right: 8px;
+            position: relative;
         }
 
         .export-btn:hover {
@@ -4391,9 +4492,42 @@
             color: var(--text-primary);
         }
 
-        .export-btn svg {
+        .export-btn svg.export-icon {
             width: 18px;
             height: 18px;
+        }
+
+        /* Circular progress ring */
+        .export-progress-ring {
+            position: absolute;
+            inset: -3px;
+            width: 42px;
+            height: 42px;
+            transform: rotate(-90deg);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .export-btn.exporting .export-progress-ring {
+            opacity: 1;
+        }
+
+        .export-progress-ring circle {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+        }
+
+        .export-progress-ring .progress-bg {
+            stroke: var(--border-subtle);
+        }
+
+        .export-progress-ring .progress-bar {
+            stroke: url(#export-progress-gradient);
+            stroke-dasharray: 125.6;
+            stroke-dashoffset: 125.6;
+            transition: stroke-dashoffset 0.3s ease;
         }
 
         .export-btn.exporting {
@@ -4401,13 +4535,54 @@
             color: var(--brand-start);
         }
 
-        .export-btn.exporting::after {
-            content: attr(data-progress);
+        .export-btn.exporting:hover {
+            background: rgba(20, 184, 166, 0.1);
+        }
+
+        /* Indeterminate spinning */
+        .export-btn.exporting.indeterminate .export-progress-ring {
+            animation: exportSpin 1.5s linear infinite;
+        }
+
+        @keyframes exportSpin {
+            from { transform: rotate(-90deg); }
+            to { transform: rotate(270deg); }
+        }
+
+        /* Progress tooltip */
+        .export-progress-tooltip {
             position: absolute;
-            font-size: 9px;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--brand-start);
-            margin-top: 30px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.15s;
+            pointer-events: none;
+            z-index: 200;
+        }
+
+        .export-progress-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-bottom-color: var(--border-color);
+        }
+
+        .export-btn.exporting:hover .export-progress-tooltip {
+            opacity: 1;
+            visibility: visible;
         }
 
         .export-modal-overlay {
@@ -6317,36 +6492,50 @@
             </svg>
             <span style="background: linear-gradient(135deg, #14b8a6, #0891b2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">xgrabba</span>
         </h1>
-        <!-- Gallery mode deprecated - media now viewed in archive detail panel -->
-        <button class="btn btn-browse-media" onclick="openGalleryMode()" style="display:none;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-            </svg>
-            <span class="btn-text-full">Browse Media</span>
-            <span class="btn-text-short">Media</span>
-        </button>
-        <!-- Export Button -->
-        <button class="export-btn" id="exportBtn" onclick="openExportModal()" title="Export Archive">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-            </svg>
-        </button>
-        <!-- X Bookmarks Button -->
-        <button class="bookmarks-btn" id="bookmarksBtn" onclick="openBookmarksModal()" title="X Bookmarks">
-            <svg class="x-logo" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-            </svg>
-            <span class="bookmarks-status" id="bookmarksStatus"></span>
-        </button>
-        <!-- Stats Gear Button -->
-        <button class="stats-gear-btn" onclick="toggleStatsModal()" title="System Stats">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-            </svg>
-        </button>
+
+        <!-- Navigation Actions -->
+        <nav class="header-nav">
+            <!-- Primary Actions Group -->
+            <div class="header-btn-group">
+                <!-- Export Button with Progress Ring -->
+                <button class="header-btn export-btn" id="exportBtn" onclick="openExportModal()" title="Export Archive">
+                    <!-- Progress Ring SVG -->
+                    <svg class="export-progress-ring" viewBox="0 0 42 42">
+                        <defs>
+                            <linearGradient id="export-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#14b8a6"/>
+                                <stop offset="100%" stop-color="#0891b2"/>
+                            </linearGradient>
+                        </defs>
+                        <circle class="progress-bg" cx="21" cy="21" r="20"/>
+                        <circle class="progress-bar" id="headerExportProgressRing" cx="21" cy="21" r="20"/>
+                    </svg>
+                    <!-- Export Icon -->
+                    <svg class="export-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                    <!-- Progress Tooltip -->
+                    <span class="export-progress-tooltip" id="exportProgressTooltip">0%</span>
+                </button>
+
+                <!-- X Bookmarks Button -->
+                <button class="header-btn" id="bookmarksBtn" onclick="openBookmarksModal()" title="X Bookmarks">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    <span class="bookmarks-status" id="bookmarksStatus"></span>
+                </button>
+            </div>
+
+            <div class="header-divider"></div>
+
+            <!-- Settings -->
+            <button class="header-btn" onclick="toggleStatsModal()" title="Settings & Stats">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                </svg>
+            </button>
+        </nav>
     </header>
 
     <!-- System Stats Bar (hidden - replaced by modal) -->
@@ -10176,11 +10365,13 @@
             }, 150);
         });
 
-        searchClear.addEventListener('click', () => {
+        searchClear.addEventListener('click', async () => {
             searchInput.value = '';
             searchClear.classList.remove('visible');
             searchResultsInfo.classList.remove('visible');
-            renderTweets(tweets);
+            // Reset pagination and reload full tweet list from server
+            paginationState.searchQuery = '';
+            await loadTweets({ preserveScroll: false, keepSearch: false, reset: true });
         });
 
         // Server-side search with infinite scroll support
@@ -10404,6 +10595,63 @@
 
             // Update title to indicate offline mode
             document.title = 'XGrabba Archive (Offline)';
+
+            // Display export metadata if available
+            const metadata = window.OFFLINE_DATA?.metadata;
+            if (metadata) {
+                // Update the stats bar with offline metadata
+                const statTweets = document.getElementById('statTweets');
+                if (statTweets) statTweets.textContent = metadata.tweet_count || OFFLINE_TWEETS.length;
+
+                const statVideos = document.getElementById('statVideos');
+                const statImages = document.getElementById('statImages');
+                if (statVideos && statImages && metadata.media_count !== undefined) {
+                    // Count videos vs images from OFFLINE_TWEETS
+                    let videoCount = 0, imageCount = 0;
+                    OFFLINE_TWEETS.forEach(t => {
+                        (t.media || []).forEach(m => {
+                            if (m.type === 'video' || m.type === 'gif') videoCount++;
+                            else if (m.type === 'image') imageCount++;
+                        });
+                    });
+                    statVideos.textContent = videoCount;
+                    statImages.textContent = imageCount;
+                }
+
+                // Show export info in header or create info banner
+                const exportDate = metadata.exported_at ? new Date(metadata.exported_at) : null;
+                const exportDateStr = exportDate ? exportDate.toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric'
+                }) : '';
+
+                // Add offline info banner below header
+                const header = document.querySelector('.header');
+                if (header && exportDateStr) {
+                    const infoBanner = document.createElement('div');
+                    infoBanner.className = 'offline-info-banner';
+                    infoBanner.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                            <path d="M12 3v10.586l3.293-3.293 1.414 1.414L12 16.414l-4.707-4.707 1.414-1.414L12 13.586V3h2z"/>
+                            <path d="M5 17v4h14v-4h2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4h2z"/>
+                        </svg>
+                        <span>Exported ${exportDateStr}</span>
+                        <span class="offline-meta-sep">•</span>
+                        <span>${metadata.tweet_count || OFFLINE_TWEETS.length} tweets</span>
+                        <span class="offline-meta-sep">•</span>
+                        <span>${metadata.media_count || 0} media files</span>
+                        ${metadata.encrypted ? `
+                            <span class="offline-meta-sep">•</span>
+                            <span class="offline-encrypted">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                                </svg>
+                                Encrypted
+                            </span>
+                        ` : ''}
+                    `;
+                    header.parentNode.insertBefore(infoBanner, header.nextSibling);
+                }
+            }
         }
 
         // Bookmarks state
@@ -11257,14 +11505,16 @@
         }
 
         function closeExportModal() {
-            if (exportInProgress) {
-                if (!confirm('Export is in progress. Are you sure you want to close? The export will continue in the background.')) {
-                    return;
-                }
-            }
             document.getElementById('exportModalOverlay').classList.remove('active');
             stopExportPolling();
             closeUSBEventStream();
+
+            // If export is in progress, switch to slower background polling
+            // so the header progress indicator stays updated
+            if (exportInProgress) {
+                startBackgroundExportPolling();
+            }
+
             // Reset encryption fields
             document.getElementById('encryptExport').checked = false;
             document.getElementById('encryptPassword').value = '';
@@ -11369,7 +11619,12 @@
             }
         }
 
+        // Background polling interval (slower, for when modal is closed)
+        let backgroundExportPollInterval = null;
+
         function startExportPolling() {
+            // Stop any background polling first
+            stopBackgroundExportPolling();
             if (exportPollInterval) return;
             exportPollInterval = setInterval(pollExportStatus, 500);
         }
@@ -11378,6 +11633,19 @@
             if (exportPollInterval) {
                 clearInterval(exportPollInterval);
                 exportPollInterval = null;
+            }
+        }
+
+        // Background polling keeps progress indicator updated when modal is closed
+        function startBackgroundExportPolling() {
+            if (backgroundExportPollInterval) return;
+            backgroundExportPollInterval = setInterval(pollExportStatus, 2000); // Slower when modal closed
+        }
+
+        function stopBackgroundExportPolling() {
+            if (backgroundExportPollInterval) {
+                clearInterval(backgroundExportPollInterval);
+                backgroundExportPollInterval = null;
             }
         }
 
@@ -11475,20 +11743,47 @@
                 currentFileEl.style.display = 'none';
             }
 
-            // Update header button
-            updateExportBtn(true, percent);
+            // Update header button with phase info
+            updateExportBtn(true, percent, status.phase);
         }
 
-        function updateExportBtn(exporting, percent = 0) {
+        function updateExportBtn(exporting, percent = 0, phase = '') {
             const btn = document.getElementById('exportBtn');
+            const progressRing = document.getElementById('headerExportProgressRing');
+            const tooltip = document.getElementById('exportProgressTooltip');
+
             if (exporting) {
                 btn.classList.add('exporting');
-                btn.setAttribute('data-progress', percent + '%');
-                btn.title = `Exporting: ${percent}%`;
+
+                // Update progress ring - circumference = 2 * PI * 20 = 125.6
+                const circumference = 125.6;
+                const offset = circumference - (percent / 100) * circumference;
+                progressRing.style.strokeDashoffset = offset;
+
+                // Update tooltip with phase info
+                const phaseLabels = {
+                    preparing: 'Preparing',
+                    exporting: 'Exporting',
+                    encrypting: 'Encrypting',
+                    finalizing: 'Finalizing'
+                };
+                const phaseLabel = phaseLabels[phase] || 'Exporting';
+                tooltip.textContent = `${phaseLabel}: ${percent}%`;
+                btn.title = `${phaseLabel}: ${percent}%`;
+
+                // Show indeterminate spinner for preparing/finalizing phases
+                if (phase === 'preparing' || phase === 'finalizing') {
+                    btn.classList.add('indeterminate');
+                    progressRing.style.strokeDashoffset = circumference * 0.75;
+                } else {
+                    btn.classList.remove('indeterminate');
+                }
             } else {
-                btn.classList.remove('exporting');
-                btn.removeAttribute('data-progress');
+                btn.classList.remove('exporting', 'indeterminate');
+                progressRing.style.strokeDashoffset = 125.6;
                 btn.title = 'Export Archive';
+                // Stop background polling when export completes
+                stopBackgroundExportPolling();
             }
         }
 
@@ -11517,6 +11812,31 @@
 
         // Initial bookmarks status
         refreshBookmarksStatus();
+
+        // Check for active export on page load
+        async function checkActiveExport() {
+            if (OFFLINE_MODE) return;
+            try {
+                const resp = await fetch('/api/v1/export/status', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (resp.ok) {
+                    const status = await resp.json();
+                    if (status.active) {
+                        exportInProgress = true;
+                        const percent = status.total_tweets > 0
+                            ? Math.round((status.exported_tweets / status.total_tweets) * 100)
+                            : 0;
+                        updateExportBtn(true, percent, status.phase);
+                        // Start background polling to keep indicator updated
+                        startBackgroundExportPolling();
+                    }
+                }
+            } catch (err) {
+                console.error('Check active export error:', err);
+            }
+        }
+        checkActiveExport();
     </script>
 </body>
 </html>

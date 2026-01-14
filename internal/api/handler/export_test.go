@@ -20,7 +20,7 @@ func TestExportHandler_Estimate(t *testing.T) {
 
 func TestExportHandler_Start_InvalidJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	exportSvc := service.NewExportService(nil, logger)
+	exportSvc := service.NewExportService(nil, logger, nil)
 	handler := NewExportHandler(exportSvc, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/export/start", bytes.NewBufferString("invalid json"))
@@ -35,7 +35,7 @@ func TestExportHandler_Start_InvalidJSON(t *testing.T) {
 
 func TestExportHandler_Start_EmptyPath(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	exportSvc := service.NewExportService(nil, logger)
+	exportSvc := service.NewExportService(nil, logger, nil)
 	handler := NewExportHandler(exportSvc, logger)
 
 	body, _ := json.Marshal(ExportStartRequest{DestPath: ""})
@@ -51,7 +51,7 @@ func TestExportHandler_Start_EmptyPath(t *testing.T) {
 
 func TestExportHandler_Status_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	exportSvc := service.NewExportService(nil, logger)
+	exportSvc := service.NewExportService(nil, logger, nil)
 	handler := NewExportHandler(exportSvc, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/export/status", nil)
@@ -79,7 +79,7 @@ func TestExportHandler_Status_NoActiveExport(t *testing.T) {
 
 func TestExportHandler_Cancel_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	exportSvc := service.NewExportService(nil, logger)
+	exportSvc := service.NewExportService(nil, logger, nil)
 	handler := NewExportHandler(exportSvc, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/export/cancel", nil)

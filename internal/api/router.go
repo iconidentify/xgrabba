@@ -19,6 +19,7 @@ func NewRouter(
 	exportHandler *handler.ExportHandler,
 	bookmarksOAuthHandler *handler.BookmarksOAuthHandler,
 	usbHandler *handler.USBHandler,
+	eventHandler *handler.EventHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -113,6 +114,16 @@ func NewRouter(
 			r.Post("/usb/drives/{device}/rename", usbHandler.RenameDrive)
 			r.Get("/usb/format/{operationID}", usbHandler.FormatProgress)
 			r.Get("/usb/health", usbHandler.Health)
+		}
+
+		// Event/Activity log operations
+		if eventHandler != nil {
+			r.Get("/events", eventHandler.List)
+			r.Get("/events/recent", eventHandler.Recent)
+			r.Get("/events/stats", eventHandler.Stats)
+			r.Get("/events/stream", eventHandler.Stream)
+			r.Get("/events/categories", eventHandler.Categories)
+			r.Get("/events/severities", eventHandler.Severities)
 		}
 	})
 
