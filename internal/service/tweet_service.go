@@ -1337,9 +1337,34 @@ func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error
 
 	// Update author but preserve LocalAvatarURL (local copy of downloaded avatar)
 	existingLocalAvatar := tweet.Author.LocalAvatarURL
+	existingAvatarURL := tweet.Author.AvatarURL
 	tweet.Author = fetchedTweet.Author
 	if existingLocalAvatar != "" {
 		tweet.Author.LocalAvatarURL = existingLocalAvatar
+	}
+
+	// Smart resync: do NOT re-download media. Only refresh avatar metadata/picture if needed.
+	// - If we already have a local avatar, keep it.
+	// - If the author avatar URL changed or we have none, attempt to download the avatar.jpg (small).
+	if tweet.ArchivePath != "" {
+		avatarPath := filepath.Join(tweet.ArchivePath, "avatar.jpg")
+		needsAvatar := tweet.Author.LocalAvatarURL == ""
+		if existingAvatarURL != "" && tweet.Author.AvatarURL != "" && existingAvatarURL != tweet.Author.AvatarURL {
+			needsAvatar = true
+		}
+		// If the file is missing on disk, refresh.
+		if !needsAvatar && tweet.Author.LocalAvatarURL != "" {
+			if _, err := os.Stat(tweet.Author.LocalAvatarURL); os.IsNotExist(err) {
+				needsAvatar = true
+			}
+		}
+		if needsAvatar && tweet.Author.AvatarURL != "" {
+			if err := s.downloadThumbnail(ctx, tweet.Author.AvatarURL, avatarPath); err != nil {
+				s.logger.Debug("avatar refresh failed", "tweet_id", tweetID, "error", err)
+			} else {
+				tweet.Author.LocalAvatarURL = avatarPath
+			}
+		}
 	}
 
 	// Don't overwrite media if already downloaded - just update metadata

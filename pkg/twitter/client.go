@@ -344,10 +344,103 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 	if graphqlErr == nil {
 		tweet.URL = tweetURL
 		applyAuthorFromURL(tweet, tweetURL)
+		// If we still don't have an avatar URL, try a profile-page fallback.
+		// This is useful when API endpoints are blocked but the public profile HTML loads.
+		c.enrichAvatarFromProfilePage(ctx, tweet)
 		return tweet, nil
 	}
 
 	return nil, fmt.Errorf("failed to fetch tweet (syndication: %v, graphql: %v)", err, graphqlErr)
+}
+
+// enrichAvatarFromProfilePage attempts to populate the author's avatar URL by fetching the public profile HTML.
+// This is best-effort and should never fail the tweet fetch.
+func (c *Client) enrichAvatarFromProfilePage(ctx context.Context, tweet *domain.Tweet) {
+	if tweet == nil {
+		return
+	}
+	if tweet.Author.AvatarURL != "" {
+		return
+	}
+	username := strings.TrimSpace(tweet.Author.Username)
+	if username == "" {
+		return
+	}
+	// Keep this bounded; it's a fallback only.
+	pctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
+	avatar, err := c.fetchProfileAvatarFromHTML(pctx, username)
+	if err != nil || avatar == "" {
+		return
+	}
+	tweet.Author.AvatarURL = avatar
+}
+
+func (c *Client) fetchProfileAvatarFromHTML(ctx context.Context, username string) (string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return "", fmt.Errorf("missing username")
+	}
+	profileURL := "https://x.com/" + url.PathEscape(username)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", profileURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+	// If we have browser creds, include them (can help with bot checks), but still target HTML.
+	if h := c.getBrowserHeaders(); h != nil {
+		for k, v := range h {
+			req.Header[k] = v
+		}
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.Header.Del("Content-Type")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("profile fetch status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	htmlBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB cap
+	if err != nil {
+		return "", err
+	}
+	html := string(htmlBytes)
+
+	// Prefer og:image / twitter:image. These frequently point to pbs.twimg.com/profile_images/*.
+	reMeta := regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']`)
+	if m := reMeta.FindStringSubmatch(html); len(m) > 1 {
+		return normalizeProfileImageURL(m[1]), nil
+	}
+
+	// Fallback: any pbs.twimg.com/profile_images URL in the HTML.
+	reImg := regexp.MustCompile(`(?i)https://pbs\.twimg\.com/profile_images/[^"'\\s]+`)
+	if m := reImg.FindString(html); m != "" {
+		return normalizeProfileImageURL(m), nil
+	}
+
+	return "", fmt.Errorf("no avatar found in profile html")
+}
+
+func normalizeProfileImageURL(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return u
+	}
+	// Upgrade common low-res suffixes when present.
+	u = strings.ReplaceAll(u, "_normal.", "_400x400.")
+	return u
 }
 
 // enrichFromGraphQL fills in missing tweet fields from GraphQL without changing the primary
