@@ -284,3 +284,468 @@ func TestActiveExport_Struct(t *testing.T) {
 		t.Error("context should be cancelled")
 	}
 }
+
+func TestCopyFile_SmallFile(t *testing.T) {
+	// Create temp directory for test
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file with small content
+	srcPath := tmpDir + "/source.txt"
+	content := []byte("Hello, World!")
+	if err := os.WriteFile(srcPath, content, 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Copy file
+	dstPath := tmpDir + "/dest.txt"
+	size, err := copyFile(srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	// Verify size
+	if size != int64(len(content)) {
+		t.Errorf("expected size %d, got %d", len(content), size)
+	}
+
+	// Verify content
+	dstContent, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("failed to read destination file: %v", err)
+	}
+	if string(dstContent) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", string(dstContent), string(content))
+	}
+}
+
+func TestCopyFile_LargeFile(t *testing.T) {
+	// Create temp directory for test
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file with 5MB content (simulating binary size)
+	srcPath := tmpDir + "/source.bin"
+	content := make([]byte, 5*1024*1024) // 5MB
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(srcPath, content, 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Copy file
+	dstPath := tmpDir + "/dest.bin"
+	size, err := copyFile(srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	// Verify size
+	expectedSize := int64(5 * 1024 * 1024)
+	if size != expectedSize {
+		t.Errorf("expected size %d, got %d", expectedSize, size)
+	}
+
+	// Verify destination file size
+	dstStat, err := os.Stat(dstPath)
+	if err != nil {
+		t.Fatalf("failed to stat destination file: %v", err)
+	}
+	if dstStat.Size() != expectedSize {
+		t.Errorf("destination file size mismatch: got %d, want %d", dstStat.Size(), expectedSize)
+	}
+
+	// Verify content integrity (check first and last 1KB)
+	dstContent, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("failed to read destination file: %v", err)
+	}
+	for i := 0; i < 1024; i++ {
+		if dstContent[i] != content[i] {
+			t.Errorf("content mismatch at byte %d: got %d, want %d", i, dstContent[i], content[i])
+			break
+		}
+	}
+	lastStart := len(content) - 1024
+	for i := lastStart; i < len(content); i++ {
+		if dstContent[i] != content[i] {
+			t.Errorf("content mismatch at byte %d: got %d, want %d", i, dstContent[i], content[i])
+			break
+		}
+	}
+}
+
+func TestCopyFile_SourceNotFound(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcPath := tmpDir + "/nonexistent.txt"
+	dstPath := tmpDir + "/dest.txt"
+
+	_, err = copyFile(srcPath, dstPath)
+	if err == nil {
+		t.Error("expected error for non-existent source file")
+	}
+}
+
+func TestCopyFile_DestinationDirNotFound(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file
+	srcPath := tmpDir + "/source.txt"
+	if err := os.WriteFile(srcPath, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Try to copy to non-existent directory
+	dstPath := tmpDir + "/nonexistent/dest.txt"
+
+	_, err = copyFile(srcPath, dstPath)
+	if err == nil {
+		t.Error("expected error for non-existent destination directory")
+	}
+}
+
+func TestCopyFile_PermissionDenied(t *testing.T) {
+	// Skip on CI or if running as root
+	if os.Getuid() == 0 {
+		t.Skip("skipping permission test when running as root")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file
+	srcPath := tmpDir + "/source.txt"
+	if err := os.WriteFile(srcPath, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Create read-only directory
+	readOnlyDir := tmpDir + "/readonly"
+	if err := os.Mkdir(readOnlyDir, 0555); err != nil {
+		t.Fatalf("failed to create read-only dir: %v", err)
+	}
+
+	// Try to copy to read-only directory
+	dstPath := readOnlyDir + "/dest.txt"
+	_, err = copyFile(srcPath, dstPath)
+	if err == nil {
+		t.Error("expected permission denied error")
+	}
+
+	// Cleanup: restore write permission to delete
+	os.Chmod(readOnlyDir, 0755)
+}
+
+func TestCopyFile_EmptyFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create empty source file
+	srcPath := tmpDir + "/empty.txt"
+	if err := os.WriteFile(srcPath, []byte{}, 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Copy file
+	dstPath := tmpDir + "/dest.txt"
+	size, err := copyFile(srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	// Verify size is 0
+	if size != 0 {
+		t.Errorf("expected size 0, got %d", size)
+	}
+
+	// Verify destination file exists and is empty
+	dstStat, err := os.Stat(dstPath)
+	if err != nil {
+		t.Fatalf("failed to stat destination file: %v", err)
+	}
+	if dstStat.Size() != 0 {
+		t.Errorf("destination file size should be 0, got %d", dstStat.Size())
+	}
+}
+
+func TestCopyFile_BinaryContent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file with binary content (all byte values 0-255)
+	srcPath := tmpDir + "/binary.bin"
+	content := make([]byte, 256)
+	for i := range content {
+		content[i] = byte(i)
+	}
+	if err := os.WriteFile(srcPath, content, 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Copy file
+	dstPath := tmpDir + "/dest.bin"
+	size, err := copyFile(srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	// Verify size
+	if size != 256 {
+		t.Errorf("expected size 256, got %d", size)
+	}
+
+	// Verify binary content is preserved
+	dstContent, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("failed to read destination file: %v", err)
+	}
+	for i, b := range dstContent {
+		if b != byte(i) {
+			t.Errorf("binary content mismatch at byte %d: got %d, want %d", i, b, i)
+		}
+	}
+}
+
+func TestCopyFile_OverwriteExisting(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "copyfile_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create source file
+	srcPath := tmpDir + "/source.txt"
+	srcContent := []byte("new content")
+	if err := os.WriteFile(srcPath, srcContent, 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+
+	// Create existing destination file with different content
+	dstPath := tmpDir + "/dest.txt"
+	if err := os.WriteFile(dstPath, []byte("old content that is longer"), 0644); err != nil {
+		t.Fatalf("failed to write existing destination file: %v", err)
+	}
+
+	// Copy file (should overwrite)
+	size, err := copyFile(srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	// Verify size matches source, not old content
+	if size != int64(len(srcContent)) {
+		t.Errorf("expected size %d, got %d", len(srcContent), size)
+	}
+
+	// Verify content is the new content
+	dstContent, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("failed to read destination file: %v", err)
+	}
+	if string(dstContent) != string(srcContent) {
+		t.Errorf("content mismatch: got %q, want %q", string(dstContent), string(srcContent))
+	}
+}
+
+// TestCopyViewerBinaries_Integration tests the full viewer binary copy workflow
+// This simulates copying binaries like the real export process does
+func TestCopyViewerBinaries_Integration(t *testing.T) {
+	// Create temp directories for source binaries and destination (simulating USB)
+	srcDir, err := os.MkdirTemp("", "viewer_binaries_src")
+	if err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+	defer os.RemoveAll(srcDir)
+
+	dstDir, err := os.MkdirTemp("", "viewer_binaries_dst")
+	if err != nil {
+		t.Fatalf("failed to create dest dir: %v", err)
+	}
+	defer os.RemoveAll(dstDir)
+
+	// Simulate viewer binaries with realistic sizes (matching actual binary sizes from issue)
+	binaries := []struct {
+		name string
+		size int
+	}{
+		{"xgrabba-viewer.exe", 5492224},        // Windows - 5.2MB
+		{"xgrabba-viewer-mac-arm64", 5081890},  // Mac ARM - 4.8MB
+		{"xgrabba-viewer-mac-amd64", 5370336},  // Mac Intel - 5.1MB
+		{"xgrabba-viewer-linux", 5247128},      // Linux - 5.0MB
+	}
+
+	// Create fake binaries with deterministic content
+	for _, bin := range binaries {
+		content := make([]byte, bin.size)
+		// Fill with pattern based on filename for verification
+		pattern := []byte(bin.name)
+		for i := range content {
+			content[i] = pattern[i%len(pattern)]
+		}
+		srcPath := srcDir + "/" + bin.name
+		if err := os.WriteFile(srcPath, content, 0755); err != nil {
+			t.Fatalf("failed to create fake binary %s: %v", bin.name, err)
+		}
+		t.Logf("Created source binary: %s (%d bytes)", bin.name, bin.size)
+	}
+
+	// Copy each binary using copyFile (same as copyViewerBinaries does)
+	for _, bin := range binaries {
+		srcPath := srcDir + "/" + bin.name
+		dstPath := dstDir + "/" + bin.name
+
+		size, err := copyFile(srcPath, dstPath)
+		if err != nil {
+			t.Errorf("copyFile failed for %s: %v", bin.name, err)
+			continue
+		}
+
+		// Verify returned size matches expected
+		if size != int64(bin.size) {
+			t.Errorf("%s: returned size %d, expected %d", bin.name, size, bin.size)
+		}
+
+		// Verify destination file exists and has correct size
+		dstStat, err := os.Stat(dstPath)
+		if err != nil {
+			t.Errorf("%s: failed to stat destination: %v", bin.name, err)
+			continue
+		}
+
+		if dstStat.Size() != int64(bin.size) {
+			t.Errorf("%s: destination size %d bytes, expected %d bytes (THIS IS THE BUG!)",
+				bin.name, dstStat.Size(), bin.size)
+		}
+
+		if dstStat.Size() == 0 {
+			t.Errorf("%s: CRITICAL - destination is ZERO BYTES!", bin.name)
+		}
+
+		// Verify content integrity by checking first and last 1KB
+		srcContent, _ := os.ReadFile(srcPath)
+		dstContent, _ := os.ReadFile(dstPath)
+
+		if len(dstContent) != len(srcContent) {
+			t.Errorf("%s: content length mismatch: got %d, want %d",
+				bin.name, len(dstContent), len(srcContent))
+			continue
+		}
+
+		// Check first 1KB
+		checkLen := 1024
+		if len(srcContent) < checkLen {
+			checkLen = len(srcContent)
+		}
+		for i := 0; i < checkLen; i++ {
+			if dstContent[i] != srcContent[i] {
+				t.Errorf("%s: content mismatch at byte %d", bin.name, i)
+				break
+			}
+		}
+
+		// Check last 1KB
+		if len(srcContent) > 1024 {
+			start := len(srcContent) - 1024
+			for i := start; i < len(srcContent); i++ {
+				if dstContent[i] != srcContent[i] {
+					t.Errorf("%s: content mismatch at byte %d (near end)", bin.name, i)
+					break
+				}
+			}
+		}
+
+		t.Logf("PASS: %s copied successfully (%d bytes)", bin.name, dstStat.Size())
+	}
+}
+
+// TestCopyViewerBinaries_Service tests the actual ExportService.copyViewerBinaries method
+func TestCopyViewerBinaries_Service(t *testing.T) {
+	// Create temp directories
+	srcDir, err := os.MkdirTemp("", "viewer_svc_src")
+	if err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+	defer os.RemoveAll(srcDir)
+
+	dstDir, err := os.MkdirTemp("", "viewer_svc_dst")
+	if err != nil {
+		t.Fatalf("failed to create dest dir: %v", err)
+	}
+	defer os.RemoveAll(dstDir)
+
+	// Create test binaries (smaller for faster test)
+	binaries := map[string]int{
+		"xgrabba-viewer.exe":       1024 * 100, // 100KB
+		"xgrabba-viewer-mac-arm64": 1024 * 100,
+		"xgrabba-viewer-linux":     1024 * 100,
+	}
+
+	for name, size := range binaries {
+		content := make([]byte, size)
+		for i := range content {
+			content[i] = byte(i % 256)
+		}
+		if err := os.WriteFile(srcDir+"/"+name, content, 0755); err != nil {
+			t.Fatalf("failed to create %s: %v", name, err)
+		}
+	}
+
+	// Create ExportService and call copyViewerBinaries
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	svc := NewExportService(nil, logger, nil)
+
+	err = svc.copyViewerBinaries(srcDir, dstDir)
+	if err != nil {
+		t.Fatalf("copyViewerBinaries failed: %v", err)
+	}
+
+	// Verify all binaries were copied with correct sizes
+	for name, expectedSize := range binaries {
+		dstPath := dstDir + "/" + name
+		stat, err := os.Stat(dstPath)
+		if err != nil {
+			t.Errorf("%s: not found in destination: %v", name, err)
+			continue
+		}
+
+		if stat.Size() != int64(expectedSize) {
+			t.Errorf("%s: size mismatch - got %d, want %d", name, stat.Size(), expectedSize)
+		}
+
+		if stat.Size() == 0 {
+			t.Errorf("%s: ZERO BYTES - this is the bug we're fixing!", name)
+		}
+
+		// Verify executable permissions
+		if stat.Mode().Perm()&0111 == 0 {
+			t.Errorf("%s: not executable (mode: %v)", name, stat.Mode())
+		}
+
+		t.Logf("PASS: %s - %d bytes, mode %v", name, stat.Size(), stat.Mode())
+	}
+}

@@ -1757,6 +1757,8 @@ func (s *ExportService) exportMedia(ctx context.Context, media *domain.Media, sr
 }
 
 // copyFile copies a file and returns its size.
+// It syncs the destination file to ensure data is flushed to disk (critical for USB drives)
+// and verifies the destination file size matches the source.
 func copyFile(src, dst string) (int64, error) {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -1768,19 +1770,44 @@ func copyFile(src, dst string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	srcSize := srcStat.Size()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return 0, err
 	}
-	defer dstFile.Close()
 
-	_, err = io.Copy(dstFile, srcFile)
+	written, err := io.Copy(dstFile, srcFile)
 	if err != nil {
+		dstFile.Close()
 		return 0, err
 	}
 
-	return srcStat.Size(), nil
+	// Sync to ensure data is written to disk - critical for USB drives with delayed writes
+	if err := dstFile.Sync(); err != nil {
+		dstFile.Close()
+		return 0, fmt.Errorf("sync destination file: %w", err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return 0, fmt.Errorf("close destination file: %w", err)
+	}
+
+	// Verify written bytes match source size
+	if written != srcSize {
+		return 0, fmt.Errorf("size mismatch: wrote %d bytes, expected %d", written, srcSize)
+	}
+
+	// Double-check by statting the destination file
+	dstStat, err := os.Stat(dst)
+	if err != nil {
+		return 0, fmt.Errorf("stat destination file: %w", err)
+	}
+	if dstStat.Size() != srcSize {
+		return 0, fmt.Errorf("destination file size mismatch: got %d bytes, expected %d", dstStat.Size(), srcSize)
+	}
+
+	return srcSize, nil
 }
 
 // copyOfflineUI generates the offline-capable index.html.
