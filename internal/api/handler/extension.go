@@ -25,6 +25,7 @@ func NewExtensionHandler(twitterClient *twitter.Client) *ExtensionHandler {
 type SyncCredentialsRequest struct {
 	AuthToken    string            `json:"auth_token"`
 	CT0          string            `json:"ct0"`
+	Cookies      string            `json:"cookies,omitempty"`      // Full cookie string for NSFW/age-restricted content
 	QueryIDs     map[string]string `json:"query_ids,omitempty"`
 	FeatureFlags json.RawMessage   `json:"feature_flags,omitempty"`
 }
@@ -59,7 +60,7 @@ func (h *ExtensionHandler) SyncCredentials(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Debug logging (no secrets):
-	// show whether the extension is sending query_ids / feature_flags.
+	// show whether the extension is sending query_ids / feature_flags / cookies.
 	queryIDCount := len(req.QueryIDs)
 	keys := make([]string, 0, 8)
 	for k := range req.QueryIDs {
@@ -69,6 +70,7 @@ func (h *ExtensionHandler) SyncCredentials(w http.ResponseWriter, r *http.Reques
 	}
 	sort.Strings(keys)
 	ffBytes := len(req.FeatureFlags)
+	cookieLen := len(req.Cookies)
 
 	slog.Default().Info("extension credentials received",
 		"remote_addr", r.RemoteAddr,
@@ -77,12 +79,15 @@ func (h *ExtensionHandler) SyncCredentials(w http.ResponseWriter, r *http.Reques
 		"query_id_keys_sample", keys,
 		"has_feature_flags", ffBytes > 0,
 		"feature_flags_bytes", ffBytes,
+		"has_full_cookies", cookieLen > 0,
+		"cookie_string_len", cookieLen,
 	)
 
 	// Store credentials
 	h.twitterClient.SetBrowserCredentials(twitter.BrowserCredentials{
 		AuthToken:    req.AuthToken,
 		CT0:          req.CT0,
+		Cookies:      req.Cookies,
 		QueryIDs:     req.QueryIDs,
 		FeatureFlags: req.FeatureFlags,
 	})
@@ -97,15 +102,17 @@ func (h *ExtensionHandler) SyncCredentials(w http.ResponseWriter, r *http.Reques
 
 // CredentialsStatusResponse is the response for credential status.
 type CredentialsStatusResponse struct {
-	HasCredentials bool    `json:"has_credentials"`
-	UpdatedAt      *string `json:"updated_at,omitempty"`
-	ExpiresAt      *string `json:"expires_at,omitempty"`
-	IsExpired      bool    `json:"is_expired"`
-	HasQueryIDs    bool     `json:"has_query_ids,omitempty"`
-	QueryIDCount   int      `json:"query_id_count,omitempty"`
-	QueryIDKeys    []string `json:"query_id_keys_sample,omitempty"`
-	HasFeatureFlags bool    `json:"has_feature_flags,omitempty"`
-	FeatureFlagsBytes int   `json:"feature_flags_bytes,omitempty"`
+	HasCredentials    bool     `json:"has_credentials"`
+	UpdatedAt         *string  `json:"updated_at,omitempty"`
+	ExpiresAt         *string  `json:"expires_at,omitempty"`
+	IsExpired         bool     `json:"is_expired"`
+	HasQueryIDs       bool     `json:"has_query_ids,omitempty"`
+	QueryIDCount      int      `json:"query_id_count,omitempty"`
+	QueryIDKeys       []string `json:"query_id_keys_sample,omitempty"`
+	HasFeatureFlags   bool     `json:"has_feature_flags,omitempty"`
+	FeatureFlagsBytes int      `json:"feature_flags_bytes,omitempty"`
+	HasFullCookies    bool     `json:"has_full_cookies,omitempty"`
+	CookieStringLen   int      `json:"cookie_string_len,omitempty"`
 }
 
 // CredentialsStatus handles GET /api/v1/extension/credentials/status
@@ -114,13 +121,15 @@ func (h *ExtensionHandler) CredentialsStatus(w http.ResponseWriter, r *http.Requ
 	debug := h.twitterClient.GetBrowserCredentialsDebugStatus()
 
 	resp := CredentialsStatusResponse{
-		HasCredentials: debug.HasCredentials,
-		IsExpired:      debug.IsExpired,
-		HasQueryIDs:    debug.HasQueryIDs,
-		QueryIDCount:   debug.QueryIDCount,
-		QueryIDKeys:    debug.QueryIDKeysSample,
-		HasFeatureFlags: debug.HasFeatureFlags,
+		HasCredentials:    debug.HasCredentials,
+		IsExpired:         debug.IsExpired,
+		HasQueryIDs:       debug.HasQueryIDs,
+		QueryIDCount:      debug.QueryIDCount,
+		QueryIDKeys:       debug.QueryIDKeysSample,
+		HasFeatureFlags:   debug.HasFeatureFlags,
 		FeatureFlagsBytes: debug.FeatureFlagsBytes,
+		HasFullCookies:    debug.HasFullCookies,
+		CookieStringLen:   debug.CookieStringLen,
 	}
 
 	if debug.UpdatedAt != nil {

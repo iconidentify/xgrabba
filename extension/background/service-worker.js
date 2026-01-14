@@ -104,9 +104,13 @@ async function maybeSyncGraphQLCapture() {
     return;
   }
 
+  // Get ALL cookies for full session access (needed for age-restricted content)
+  const allCookies = await getAllCookies();
+
   const result = await syncCredentials({
     authToken: auth.authToken,
     ct0: ct0.ct0,
+    cookies: allCookies.cookies,  // Full cookie string for NSFW/age-restricted content
     queryIds: GRAPHQL_CAPTURE.queryIds,
     featureFlags: GRAPHQL_CAPTURE.featureFlags
   });
@@ -115,7 +119,8 @@ async function maybeSyncGraphQLCapture() {
     GRAPHQL_CAPTURE.lastSync = now;
     console.debug('[XGrabba] Synced credentials+GraphQL capture', {
       queryIdCount: Object.keys(GRAPHQL_CAPTURE.queryIds || {}).length,
-      hasFeatureFlags: !!GRAPHQL_CAPTURE.featureFlags
+      hasFeatureFlags: !!GRAPHQL_CAPTURE.featureFlags,
+      cookieCount: allCookies.count
     });
   }
 }
@@ -585,6 +590,45 @@ async function getCT0Token() {
   }
 }
 
+// Get ALL cookies from X.com/Twitter.com for full session access
+// This is needed for age-restricted/NSFW content which requires additional session cookies
+async function getAllCookies() {
+  try {
+    // Get cookies from both domains
+    const xCookies = await chrome.cookies.getAll({ domain: '.x.com' });
+    const twitterCookies = await chrome.cookies.getAll({ domain: '.twitter.com' });
+
+    // Merge cookies, preferring x.com cookies over twitter.com for duplicates
+    const cookieMap = new Map();
+
+    // Add twitter.com cookies first (will be overwritten by x.com if same name)
+    for (const cookie of twitterCookies) {
+      cookieMap.set(cookie.name, cookie.value);
+    }
+
+    // Add x.com cookies (these take precedence)
+    for (const cookie of xCookies) {
+      cookieMap.set(cookie.name, cookie.value);
+    }
+
+    // Build cookie string
+    const cookieString = Array.from(cookieMap.entries())
+      .map(([name, value]) => `${name}=${value}`)
+      .join('; ');
+
+    console.debug('[XGrabba] Captured cookies', {
+      xCount: xCookies.length,
+      twitterCount: twitterCookies.length,
+      totalUnique: cookieMap.size
+    });
+
+    return { cookies: cookieString, count: cookieMap.size };
+  } catch (error) {
+    console.error('Failed to get all cookies:', error);
+    return { cookies: null, count: 0, error: error.message };
+  }
+}
+
 // Sync browser credentials to backend server
 async function syncCredentials(credentials) {
   try {
@@ -602,6 +646,10 @@ async function syncCredentials(credentials) {
       auth_token: credentials.authToken,
       ct0: credentials.ct0
     };
+    // Include full cookie string for age-restricted/NSFW content support
+    if (credentials.cookies) {
+      body.cookies = credentials.cookies;
+    }
     if (credentials.queryIds && Object.keys(credentials.queryIds).length > 0) {
       body.query_ids = credentials.queryIds;
     }
