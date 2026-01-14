@@ -1363,18 +1363,20 @@ func (s *ExportService) copyViewerBinaries(binDir, destPath string) error {
 
 	for _, bin := range binaries {
 		srcPath := filepath.Join(binDir, bin.src)
-		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-			continue // Skip missing binaries
+		srcStat, err := os.Stat(srcPath)
+		if err != nil || srcStat.Size() == 0 {
+			continue // Skip missing or empty binaries
 		}
 
-		destPath := filepath.Join(destPath, bin.dest)
-		if _, err := copyFile(srcPath, destPath); err != nil {
+		dstPath := filepath.Join(destPath, bin.dest)
+		if _, err := copyFile(srcPath, dstPath); err != nil {
 			s.logger.Warn("failed to copy viewer binary", "src", bin.src, "error", err)
 			continue
 		}
 
 		// Make executable on Unix
-		os.Chmod(destPath, 0755)
+		os.Chmod(dstPath, 0755)
+		s.logger.Info("copied viewer binary", "src", bin.src, "size", srcStat.Size())
 	}
 
 	return nil
