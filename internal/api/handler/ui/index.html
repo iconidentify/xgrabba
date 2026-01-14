@@ -6598,7 +6598,7 @@
                 </div>
             </div>
             <div class="export-modal-footer" id="exportModalFooter">
-                <button class="export-btn-secondary" onclick="closeExportModal()">Cancel</button>
+                <button class="export-btn-secondary" id="exportCancelBtn" onclick="closeExportModal()">Cancel</button>
                 <button class="export-btn-primary" id="exportStartBtn" onclick="startUSBExport()">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
@@ -11158,11 +11158,18 @@
             }
 
             const footer = document.getElementById('exportModalFooter');
+            const cancelBtn = document.getElementById('exportCancelBtn');
             const startBtn = document.getElementById('exportStartBtn');
 
+            // Reset buttons to default state
+            footer.style.display = 'flex';
+            cancelBtn.style.display = 'inline-flex';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = closeExportModal;
+            startBtn.style.display = 'inline-flex';
+            startBtn.disabled = false;
+
             if (view === 'usb') {
-                footer.style.display = 'flex';
-                startBtn.style.display = 'flex';
                 startBtn.disabled = !selectedUSBDrive || !selectedUSBDrive.is_mounted;
                 startBtn.innerHTML = `
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -11172,21 +11179,15 @@
                 `;
                 startBtn.onclick = startUSBExport;
             } else if (view === 'progress') {
-                footer.style.display = 'flex';
-                startBtn.style.display = 'flex';
-                startBtn.disabled = false;
-                startBtn.innerHTML = 'Cancel';
+                cancelBtn.style.display = 'none';
+                startBtn.innerHTML = 'Cancel Export';
                 startBtn.onclick = cancelExport;
             } else if (view === 'completed') {
-                footer.style.display = 'flex';
-                startBtn.style.display = 'flex';
-                startBtn.disabled = false;
-                startBtn.innerHTML = 'Done';
+                cancelBtn.style.display = 'none';
+                startBtn.innerHTML = 'Close';
                 startBtn.onclick = closeExportModal;
             } else if (view === 'error') {
-                footer.style.display = 'flex';
-                startBtn.style.display = 'flex';
-                startBtn.disabled = false;
+                cancelBtn.textContent = 'Close';
                 startBtn.innerHTML = 'Try Again';
                 startBtn.onclick = function() {
                     showExportView('usb');
