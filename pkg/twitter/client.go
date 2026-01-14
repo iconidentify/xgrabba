@@ -100,10 +100,53 @@ func (c *Client) getBookmarksQueryIDWithSource() (queryID string, source string)
 
 // getGraphQLFeaturesWithSource returns the features JSON blob plus where it came from (browser|default).
 func (c *Client) getGraphQLFeaturesWithSource() (features string, source string) {
+	// Prefer browser-observed feature flags, but merge them into our known-good defaults.
+	//
+	// X's API is strict: many feature keys "cannot be null". The browser-captured feature
+	// blob can be partial (and sometimes contains nulls), so we:
+	// - start with defaultGraphQLFeatures (full set)
+	// - overlay browser flags ONLY when the value is a strict boolean
+	// - drop null / non-boolean values to avoid validation failures
 	if ff := c.getBrowserFeatureFlags(); len(ff) > 0 {
-		return string(ff), "browser"
+		merged, ok := mergeGraphQLFeatureFlags(defaultGraphQLFeatures, ff)
+		if ok {
+			return merged, "merged(browser+default)"
+		}
+		// If merge fails, fall back to defaults (never pass through a potentially-invalid blob).
+		c.logger.Warn("failed to merge browser feature flags; falling back to default")
 	}
 	return defaultGraphQLFeatures, "default"
+}
+
+// mergeGraphQLFeatureFlags merges a browser-observed "features" object into a default features object.
+// Only boolean overrides are applied; null / non-boolean values are ignored.
+func mergeGraphQLFeatureFlags(defaultJSON string, browser json.RawMessage) (string, bool) {
+	if len(browser) == 0 {
+		return "", false
+	}
+
+	var base map[string]interface{}
+	if err := json.Unmarshal([]byte(defaultJSON), &base); err != nil {
+		return "", false
+	}
+
+	var observed map[string]interface{}
+	if err := json.Unmarshal(browser, &observed); err != nil {
+		return "", false
+	}
+
+	// Overlay only strict booleans from observed onto base.
+	for k, v := range observed {
+		if b, ok := v.(bool); ok {
+			base[k] = b
+		}
+	}
+
+	out, err := json.Marshal(base)
+	if err != nil {
+		return "", false
+	}
+	return string(out), true
 }
 
 // refreshGraphQLQueryID fetches the current query ID from X's main.js.
