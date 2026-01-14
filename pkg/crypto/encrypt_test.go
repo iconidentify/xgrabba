@@ -375,3 +375,107 @@ func TestBackwardCompatibility(t *testing.T) {
 		t.Error("v1 and v2 decrypted content should match")
 	}
 }
+
+func BenchmarkStreamEncrypt1MB(b *testing.B) {
+	password := "benchmark-password!"
+	plaintext := make([]byte, 1024*1024) // 1MB
+	for i := range plaintext {
+		plaintext[i] = byte(i % 256)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		b.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(plaintext)))
+
+	for i := 0; i < b.N; i++ {
+		var encrypted bytes.Buffer
+		_, err := enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+		if err != nil {
+			b.Fatalf("EncryptStream failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkStreamEncrypt10MB(b *testing.B) {
+	password := "benchmark-password!"
+	plaintext := make([]byte, 10*1024*1024) // 10MB
+	for i := range plaintext {
+		plaintext[i] = byte(i % 256)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		b.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(plaintext)))
+
+	for i := 0; i < b.N; i++ {
+		var encrypted bytes.Buffer
+		_, err := enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+		if err != nil {
+			b.Fatalf("EncryptStream failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkStreamEncrypt100MB(b *testing.B) {
+	password := "benchmark-password!"
+	plaintext := make([]byte, 100*1024*1024) // 100MB
+	for i := range plaintext {
+		plaintext[i] = byte(i % 256)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		b.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(plaintext)))
+
+	for i := 0; i < b.N; i++ {
+		var encrypted bytes.Buffer
+		encrypted.Grow(len(plaintext) + 1024*1024) // Pre-allocate to avoid realloc
+		_, err := enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+		if err != nil {
+			b.Fatalf("EncryptStream failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkFileStreamEncrypt(b *testing.B) {
+	password := "benchmark-password!"
+	plaintext := make([]byte, 50*1024*1024) // 50MB
+	for i := range plaintext {
+		plaintext[i] = byte(i % 256)
+	}
+
+	tmpDir := b.TempDir()
+	srcPath := filepath.Join(tmpDir, "source.bin")
+	if err := os.WriteFile(srcPath, plaintext, 0644); err != nil {
+		b.Fatalf("Write source failed: %v", err)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		b.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(plaintext)))
+
+	for i := 0; i < b.N; i++ {
+		encPath := filepath.Join(tmpDir, "encrypted.enc")
+		_, err := EncryptFileStream(context.Background(), srcPath, encPath, enc)
+		if err != nil {
+			b.Fatalf("EncryptFileStream failed: %v", err)
+		}
+		os.Remove(encPath)
+	}
+}

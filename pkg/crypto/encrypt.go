@@ -2,6 +2,7 @@
 package crypto
 
 import (
+	"bufio"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -43,6 +44,10 @@ const (
 
 	// V2 Header size: magic(4) + version(4) + salt(32) + nonce(12) + chunkSize(4) = 56 bytes
 	HeaderSizeV2 = 4 + 4 + SaltSize + NonceSize + 4
+
+	// Pipeline constants for high-performance streaming
+	pipelineDepth = 4                     // chunks in flight for async I/O
+	writerBufSize = 4 * 1024 * 1024       // 4MB bufio buffer for output
 )
 
 var (
@@ -51,6 +56,21 @@ var (
 	ErrDecryptFailed  = errors.New("decryption failed: wrong password or corrupted data")
 	ErrCancelled      = errors.New("encryption cancelled")
 )
+
+// chunkPool provides reusable chunk buffers to reduce allocation pressure
+// when encrypting multiple files sequentially.
+var chunkPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, DefaultChunkSize)
+		return &buf
+	},
+}
+
+// encryptedChunk represents an encrypted chunk ready for writing.
+type encryptedChunk struct {
+	lengthBuf  []byte // 4-byte length header
+	ciphertext []byte // encrypted data including GCM tag
+}
 
 // Encryptor provides fast bulk encryption with a pre-derived key.
 // Use this for encrypting multiple files with the same password.
@@ -192,8 +212,20 @@ func (e *Encryptor) EncryptStreamWithContext(ctx context.Context, reader io.Read
 	}
 
 	var totalWritten int64
-	chunkBuf := make([]byte, DefaultChunkSize)
+
+	// Get chunk buffer from pool to reduce allocations
+	chunkBufPtr := chunkPool.Get().(*[]byte)
+	chunkBuf := *chunkBufPtr
+	defer chunkPool.Put(chunkBufPtr)
+
+	// Pre-allocate reusable buffers outside the hot loop
 	chunkNonce := make([]byte, NonceSize)
+	counterBytes := make([]byte, 8)
+	lenBuf := make([]byte, 4)
+
+	// Pre-allocate ciphertext buffer (chunk + GCM tag) to avoid allocation per chunk
+	ciphertextBuf := make([]byte, 0, DefaultChunkSize+GCMTagSize)
+
 	chunkNum := uint64(0)
 
 	for {
@@ -216,22 +248,21 @@ func (e *Encryptor) EncryptStreamWithContext(ctx context.Context, reader io.Read
 
 		// Derive unique nonce for this chunk by XORing with chunk counter
 		copy(chunkNonce, baseNonce)
-		counterBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(counterBytes, chunkNum)
-		for i := 0; i < 8 && i < NonceSize; i++ {
+		for i := 0; i < 8; i++ {
 			chunkNonce[i] ^= counterBytes[i]
 		}
 
 		// Write chunk length (4 bytes, little-endian)
-		lenBuf := make([]byte, 4)
 		binary.LittleEndian.PutUint32(lenBuf, uint32(n))
 		if _, err := writer.Write(lenBuf); err != nil {
 			return totalWritten, fmt.Errorf("write chunk length: %w", err)
 		}
 
 		// Encrypt and write chunk (ciphertext includes GCM tag)
-		ciphertext := gcm.Seal(nil, chunkNonce, chunkBuf[:n], nil)
-		if _, err := writer.Write(ciphertext); err != nil {
+		// Reuse ciphertextBuf to avoid allocation
+		ciphertextBuf = gcm.Seal(ciphertextBuf[:0], chunkNonce, chunkBuf[:n], nil)
+		if _, err := writer.Write(ciphertextBuf); err != nil {
 			return totalWritten, fmt.Errorf("write ciphertext: %w", err)
 		}
 
@@ -545,6 +576,7 @@ func EncryptFile(srcPath, dstPath, password string) error {
 
 // EncryptFileStream encrypts a file using streaming (v2 format, constant memory).
 // This is the recommended method for large files as it doesn't load the entire file into memory.
+// Uses buffered I/O to coalesce small writes (4-byte length headers) for better throughput.
 func EncryptFileStream(ctx context.Context, srcPath, dstPath string, enc *Encryptor) (int64, error) {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
@@ -557,11 +589,23 @@ func EncryptFileStream(ctx context.Context, srcPath, dstPath string, enc *Encryp
 		return 0, fmt.Errorf("create destination: %w", err)
 	}
 
-	written, err := enc.EncryptStreamWithContext(ctx, srcFile, dstFile)
+	// Wrap destination in buffered writer to coalesce small writes
+	// This significantly improves throughput by batching the 4-byte length headers
+	// with the ciphertext writes instead of issuing separate syscalls
+	bufWriter := bufio.NewWriterSize(dstFile, writerBufSize)
+
+	written, err := enc.EncryptStreamWithContext(ctx, srcFile, bufWriter)
 	if err != nil {
 		dstFile.Close()
 		os.Remove(dstPath) // Clean up partial file
 		return written, err
+	}
+
+	// Flush buffered writer before sync
+	if err := bufWriter.Flush(); err != nil {
+		dstFile.Close()
+		os.Remove(dstPath)
+		return written, fmt.Errorf("flush buffer: %w", err)
 	}
 
 	// Sync to ensure data is written to disk (critical for USB drives)
