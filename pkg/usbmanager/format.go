@@ -138,9 +138,14 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 	}
 
 	// Track progress using time estimation
-	done := make(chan error, 1)
+	type formatResult struct {
+		err    error
+		output string
+	}
+	done := make(chan formatResult, 1)
 	go func() {
-		done <- cmd.Run()
+		output, err := cmd.CombinedOutput()
+		done <- formatResult{err: err, output: string(output)}
 	}()
 
 	startTime := time.Now()
@@ -149,11 +154,17 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 
 	for {
 		select {
-		case err := <-done:
-			if err != nil {
-				op.setError("format failed: " + err.Error())
+		case result := <-done:
+			if result.err != nil {
+				errMsg := fmt.Sprintf("format failed: %v", result.err)
+				if result.output != "" {
+					errMsg += " - " + result.output
+				}
+				fm.logger.Error("mkfs failed", "device", partition, "error", result.err, "output", result.output)
+				op.setError(errMsg)
 				return
 			}
+			fm.logger.Info("mkfs completed", "device", partition, "output", result.output)
 			goto verify
 		case <-ctx.Done():
 			if cmd.Process != nil {
@@ -181,12 +192,23 @@ verify:
 	// Phase 3: Verify
 	op.updatePhase("verifying", 90)
 
-	// Quick verification - check that blkid can read the new filesystem
-	verifyCmd := exec.CommandContext(ctx, "blkid", partition)
-	if err := verifyCmd.Run(); err != nil {
+	// Verify that blkid can read the filesystem and it matches expected type
+	verifyCmd := exec.CommandContext(ctx, "blkid", "-o", "value", "-s", "TYPE", partition)
+	verifyOutput, err := verifyCmd.Output()
+	if err != nil {
+		fm.logger.Error("blkid verification failed", "device", partition, "error", err)
 		op.setError("verification failed: drive may not be properly formatted")
 		return
 	}
+
+	actualFS := strings.TrimSpace(string(verifyOutput))
+	expectedFS := strings.ToLower(fsType)
+	if actualFS != expectedFS {
+		fm.logger.Error("filesystem mismatch", "device", partition, "expected", expectedFS, "actual", actualFS)
+		op.setError(fmt.Sprintf("verification failed: expected %s but got %s", expectedFS, actualFS))
+		return
+	}
+	fm.logger.Info("filesystem verified", "device", partition, "type", actualFS)
 
 	// Phase 4: Complete
 	op.updatePhase("completed", 100)
