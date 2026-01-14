@@ -76,15 +76,6 @@ func (c *Client) getGraphQLQueryIDWithSource() (queryID string, source string) {
 	return defaultTweetResultByRestIDQueryID, "default"
 }
 
-// getGraphQLFeatures returns the GraphQL "features" JSON blob to send on requests.
-// Prefer browser-observed flags; fall back to a baked-in set.
-func (c *Client) getGraphQLFeatures() string {
-	if ff := c.getBrowserFeatureFlags(); len(ff) > 0 {
-		return string(ff)
-	}
-	return defaultGraphQLFeatures
-}
-
 // getGraphQLFeaturesWithSource returns the features JSON blob plus where it came from (browser|default).
 func (c *Client) getGraphQLFeaturesWithSource() (features string, source string) {
 	if ff := c.getBrowserFeatureFlags(); len(ff) > 0 {

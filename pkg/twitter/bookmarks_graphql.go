@@ -35,6 +35,68 @@ func (b *GraphQLBookmarksClient) HasBrowserCredentials() bool {
 	return b.c.HasBrowserCredentials()
 }
 
+func (b *GraphQLBookmarksClient) getBookmarksFeatures() string {
+	// X's Bookmarks GraphQL endpoint is strict about certain feature flags not being null.
+	// We defensively ensure they're present and boolean.
+	requiredTrue := []string{
+		"responsive_web_media_download_video_enabled",
+		"graphql_timeline_v2_bookmark_timeline",
+		"responsive_web_graphql_exclude_directive_enabled",
+		"tweetypie_unmention_optimization_enabled",
+		"responsive_web_home_pinned_timelines_enabled",
+	}
+
+	loadMap := func(raw []byte) (map[string]any, bool) {
+		if len(raw) == 0 {
+			return nil, false
+		}
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+			return nil, false
+		}
+		return m, true
+	}
+
+	var m map[string]any
+	if ff := b.c.getBrowserFeatureFlags(); len(ff) > 0 {
+		if mm, ok := loadMap(ff); ok {
+			m = mm
+		}
+	}
+	if m == nil {
+		// Fall back to the default feature set used for tweet GraphQL.
+		if mm, ok := loadMap([]byte(defaultGraphQLFeatures)); ok {
+			m = mm
+		} else {
+			m = map[string]any{}
+		}
+	}
+
+	for _, k := range requiredTrue {
+		v, ok := m[k]
+		if !ok || v == nil {
+			m[k] = true
+			continue
+		}
+		// If the extension provided a non-bool (unlikely), force true to satisfy server validation.
+		if _, ok := v.(bool); !ok {
+			m[k] = true
+		}
+	}
+
+	out, err := json.Marshal(m)
+	if err != nil {
+		// Last resort: send required keys only.
+		fallback := map[string]any{}
+		for _, k := range requiredTrue {
+			fallback[k] = true
+		}
+		out2, _ := json.Marshal(fallback)
+		return string(out2)
+	}
+	return string(out)
+}
+
 // ListBookmarks returns bookmark tweet IDs for a user (most recent first).
 // userID is ignored for GraphQL mode (session determines the user).
 func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID string, maxResults int, paginationToken string) (ids []string, nextToken string, err error) {
@@ -68,7 +130,7 @@ func (b *GraphQLBookmarksClient) ListBookmarks(ctx context.Context, userID strin
 	}
 	varsJSON, _ := json.Marshal(vars)
 
-	features := b.c.getGraphQLFeatures()
+	features := b.getBookmarksFeatures()
 
 	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/Bookmarks?variables=%s&features=%s",
 		queryID,
