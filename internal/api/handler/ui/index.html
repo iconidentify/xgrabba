@@ -6497,25 +6497,11 @@
         <nav class="header-nav">
             <!-- Primary Actions Group -->
             <div class="header-btn-group">
-                <!-- Export Button with Progress Ring -->
+                <!-- Export Button -->
                 <button class="header-btn export-btn" id="exportBtn" onclick="openExportModal()" title="Export Archive">
-                    <!-- Progress Ring SVG -->
-                    <svg class="export-progress-ring" viewBox="0 0 42 42">
-                        <defs>
-                            <linearGradient id="export-progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#14b8a6"/>
-                                <stop offset="100%" stop-color="#0891b2"/>
-                            </linearGradient>
-                        </defs>
-                        <circle class="progress-bg" cx="21" cy="21" r="20"/>
-                        <circle class="progress-bar" id="headerExportProgressRing" cx="21" cy="21" r="20"/>
-                    </svg>
-                    <!-- Export Icon -->
-                    <svg class="export-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                     </svg>
-                    <!-- Progress Tooltip -->
-                    <span class="export-progress-tooltip" id="exportProgressTooltip">0%</span>
                 </button>
             </div>
 
@@ -7215,6 +7201,33 @@
                             Storage
                         </div>
                         <div class="stats-modal-item-value" id="statsModalStorage">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-modal-section">
+                <div class="stats-modal-section-title">Export</div>
+                <div class="stats-modal-grid">
+                    <div class="stats-modal-item" style="grid-column: 1 / -1;">
+                        <div class="stats-modal-item-label" style="display:flex; align-items:center; gap:8px;">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                            Status
+                        </div>
+                        <div class="stats-modal-item-value" id="statsExportStatus" style="display:flex; align-items:center; gap:10px; justify-content:flex-end;">
+                            <span style="color: var(--text-muted);">Idle</span>
+                            <button class="btn btn-secondary" onclick="openExportModal()">Export</button>
+                        </div>
+                    </div>
+                    <div class="stats-modal-item" id="statsExportProgressItem" style="grid-column: 1 / -1; display: none;">
+                        <div class="stats-modal-item-label">Progress</div>
+                        <div class="stats-modal-item-value" id="statsExportProgress">0%</div>
+                        <div class="stats-modal-bar"><div class="stats-modal-bar-fill" id="statsExportProgressBar" style="width: 0%; background: linear-gradient(90deg, #14b8a6, #0891b2);"></div></div>
+                    </div>
+                    <div class="stats-modal-item" id="statsExportCurrentItem" style="grid-column: 1 / -1; display: none;">
+                        <div class="stats-modal-item-label">Current</div>
+                        <div class="stats-modal-item-value" id="statsExportCurrent" style="font-size: 12px; color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
                     </div>
                 </div>
             </div>
