@@ -11587,6 +11587,9 @@
                 return;
             }
 
+            // Close settings modal first if open (fixes z-index stacking issue)
+            closeStatsModal();
+
             const overlay = document.getElementById('exportModalOverlay');
             overlay.classList.add('active');
 
