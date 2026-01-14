@@ -10913,19 +10913,19 @@
                     });
                     if (!resp.ok) throw new Error('Failed to get format progress');
 
-                    const progress = await resp.json();
+                    const data = await resp.json();
 
-                    if (progressBar) progressBar.style.width = `${progress.percent}%`;
-                    if (progressText) progressText.textContent = progress.phase || `${progress.percent}% complete`;
+                    if (progressBar) progressBar.style.width = `${data.progress}%`;
+                    if (progressText) progressText.textContent = data.phase || `${data.progress}% complete`;
 
-                    if (progress.status === 'completed') {
+                    if (data.phase === 'completed') {
                         closeFormatProgress();
                         showNotification('Drive formatted successfully', 'success');
                         await loadUSBDrives();
                         return;
-                    } else if (progress.status === 'error' || progress.status === 'failed') {
+                    } else if (data.phase === 'failed') {
                         closeFormatProgress();
-                        showNotification('Format failed: ' + (progress.error || 'Unknown error'), 'error');
+                        showNotification('Format failed: ' + (data.error || 'Unknown error'), 'error');
                         return;
                     }
 
