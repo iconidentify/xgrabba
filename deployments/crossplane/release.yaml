@@ -36,6 +36,11 @@ spec:
           count: 2
         grok:
           model: "grok-3"
+        bookmarks:
+          enabled: false
+          # Use extension-forwarded browser session credentials to poll bookmarks via GraphQL
+          # (avoids requiring X API v2 bearer/OAuth tokens).
+          useBrowserCredentials: false
 
       persistence:
         enabled: true

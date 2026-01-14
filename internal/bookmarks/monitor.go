@@ -277,7 +277,8 @@ func (m *Monitor) pollOnce(ctx context.Context) (bool, bool) {
 	m.lastPoll = time.Now()
 	m.mu.Unlock()
 
-	if m.cfg.UserID == "" {
+	// UserID is only required for API v2 bookmarks; GraphQL browser-session mode is user-bound.
+	if !m.cfg.UseBrowserCredentials && m.cfg.UserID == "" {
 		m.logger.Warn("bookmarks monitor missing user id; skipping")
 		m.setLastError("missing user id")
 		return false, false
