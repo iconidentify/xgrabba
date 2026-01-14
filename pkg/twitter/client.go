@@ -1158,14 +1158,15 @@ type userLegacyData struct {
 // userByRestIDResponse is the GraphQL response for UserByRestId
 type userByRestIDResponse struct {
 	Data struct {
-		User struct {
+		// For UsersByRestIds (plural) endpoint
+		Users []struct {
 			Result struct {
 				TypeName       string         `json:"__typename"`
 				ID             string         `json:"rest_id"`
 				Legacy         userLegacyData `json:"legacy"`
 				IsBlueVerified bool           `json:"is_blue_verified"`
 			} `json:"result"`
-		} `json:"user"`
+		} `json:"users"`
 	} `json:"data"`
 	Errors []struct {
 		Message string `json:"message"`
@@ -1184,18 +1185,23 @@ func (c *Client) fetchUserByRestID(ctx context.Context, userID string) (*userLeg
 		return nil, fmt.Errorf("browser credentials not available for user lookup")
 	}
 
-	// Build UserByRestId GraphQL request
+	// Build UsersByRestIds GraphQL request (plural endpoint)
 	// Try to get query ID from browser capture, fall back to known value
-	queryID := c.getBrowserQueryID("UserByRestId")
+	queryID := c.getBrowserQueryID("UsersByRestIds")
 	if queryID == "" {
-		queryID = "xf3jd90KKBCUxdlI_tNHZw" // Fallback query ID
+		// Try singular as fallback
+		queryID = c.getBrowserQueryID("UserByRestId")
+	}
+	if queryID == "" {
+		queryID = "OJnDIdHX7gWdPjVT7dlZUg" // Fallback query ID for UsersByRestIds
 	}
 
-	variables := fmt.Sprintf(`{"userId":"%s","withSafetyModeUserFields":true}`, userID)
-	// Use specific feature flags for UserByRestId - it requires different flags than TweetResultByRestId
+	// Use array format for UsersByRestIds endpoint
+	variables := fmt.Sprintf(`{"userIds":["%s"]}`, userID)
+	// Use specific feature flags for UsersByRestIds
 	features := json.RawMessage(userByRestIDFeatures)
 
-	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/UserByRestId?variables=%s&features=%s",
+	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/UsersByRestIds?variables=%s&features=%s",
 		queryID,
 		url.QueryEscape(variables),
 		url.QueryEscape(string(features)),
@@ -1233,7 +1239,12 @@ func (c *Client) fetchUserByRestID(ctx context.Context, userID string) (*userLeg
 		return nil, fmt.Errorf("graphql error: %s", userResp.Errors[0].Message)
 	}
 
-	result := userResp.Data.User.Result
+	// UsersByRestIds returns an array
+	if len(userResp.Data.Users) == 0 {
+		return nil, fmt.Errorf("no users in response")
+	}
+
+	result := userResp.Data.Users[0].Result
 	if result.TypeName == "UserUnavailable" {
 		return nil, fmt.Errorf("user unavailable")
 	}
