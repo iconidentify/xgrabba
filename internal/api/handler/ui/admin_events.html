@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Log - xgrabba Admin</title>
+    <style>
+:root {
+    --bg-primary: #0f1419;
+    --bg-secondary: #16181c;
+    --bg-hover: #1d1f23;
+    --bg-elevated: #202327;
+    --border-color: #2f3336;
+    --text-primary: #e7e9ea;
+    --text-secondary: #71767b;
+    --text-muted: #536471;
+    --brand-start: #14b8a6;
+    --brand-end: #0891b2;
+    --danger: #f4212e;
+    --danger-bg: rgba(244, 33, 46, 0.1);
+    --success: #00ba7c;
+    --success-bg: rgba(0, 186, 124, 0.1);
+    --warning: #ffad1f;
+    --warning-bg: rgba(255, 173, 31, 0.1);
+    --info: #1d9bf0;
+    --info-bg: rgba(29, 155, 240, 0.1);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: var(--text-primary); background: var(--bg-primary); min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+.header h1 { display: flex; align-items: center; gap: 12px; font-size: 24px; }
+.header h1 svg { width: 28px; height: 28px; color: var(--brand-start); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.status { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+.status.connected .status-dot { background: var(--success); animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 13px; font-weight: 500; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+.btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn svg { width: 16px; height: 16px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
+.stat-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+.stat-icon svg { width: 20px; height: 20px; }
+.stat-icon.total { background: var(--info-bg); color: var(--info); }
+.stat-icon.error { background: var(--danger-bg); color: var(--danger); }
+.stat-icon.warning { background: var(--warning-bg); color: var(--warning); }
+.stat-icon.success { background: var(--success-bg); color: var(--success); }
+.stat-value { font-size: 20px; font-weight: 600; }
+.stat-label { font-size: 12px; color: var(--text-secondary); }
+.filters { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.search { position: relative; width: 250px; }
+.search input { width: 100%; padding: 8px 12px 8px 36px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 13px; }
+.search input:focus { outline: none; border-color: var(--brand-start); }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted); }
+.chip { padding: 4px 12px; font-size: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; cursor: pointer; transition: all 0.15s; }
+.chip:hover { background: var(--bg-hover); }
+.chip.active { background: linear-gradient(135deg, var(--brand-start), var(--brand-end)); border-color: transparent; color: white; }
+.events-list { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+.event { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.15s; }
+.event:last-child { border-bottom: none; }
+.event:hover { background: var(--bg-hover); }
+.event.error { background: var(--danger-bg); border-left: 3px solid var(--danger); }
+.event.warning { border-left: 3px solid var(--warning); }
+.event.success { border-left: 3px solid var(--success); }
+.event-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+.event-icon svg { width: 18px; height: 18px; }
+.event-icon.info { background: var(--info-bg); color: var(--info); }
+.event-icon.success { background: var(--success-bg); color: var(--success); }
+.event-icon.warning { background: var(--warning-bg); color: var(--warning); }
+.event-icon.error { background: var(--danger-bg); color: var(--danger); }
+.event-content { flex: 1; min-width: 0; }
+.event-title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+.event-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); }
+.event-category { padding: 2px 6px; background: var(--bg-elevated); border-radius: 4px; text-transform: capitalize; }
+.empty { text-align: center; padding: 48px; color: var(--text-muted); }
+.empty svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.5; }
+.back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); text-decoration: none; font-size: 13px; margin-bottom: 16px; }
+.back-link:hover { color: var(--text-primary); }
+.back-link svg { width: 16px; height: 16px; }
+@media (max-width: 768px) { .stats { grid-template-columns: repeat(2, 1fr); } .filters { flex-direction: column; align-items: stretch; } .search { width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/ui" class="back-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+            Back to Archive
+        </a>
+        <div class="header">
+            <h1>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Activity Log
+            </h1>
+            <div class="header-right">
+                <div class="status" id="status">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
+                <button class="btn btn-secondary" onclick="location.reload()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div class="stats">
+            <div class="stat-card"><div class="stat-icon total"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></div><div><div class="stat-value" id="totalCount">--</div><div class="stat-label">Total Events</div></div></div>
+            <div class="stat-card"><div class="stat-icon error"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div><div><div class="stat-value" id="errorCount">--</div><div class="stat-label">Errors</div></div></div>
+            <div class="stat-card"><div class="stat-icon warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><div class="stat-value" id="warningCount">--</div><div class="stat-label">Warnings</div></div></div>
+            <div class="stat-card"><div class="stat-icon success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><div class="stat-value" id="successCount">--</div><div class="stat-label">Successful</div></div></div>
+        </div>
+        <div class="filters">
+            <div class="search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" id="searchInput" placeholder="Search events...">
+            </div>
+            <div id="categoryFilters">
+                <button class="chip active" data-cat="all">All</button>
+                <button class="chip" data-cat="archive">Archive</button>
+                <button class="chip" data-cat="export">Export</button>
+                <button class="chip" data-cat="encryption">Encryption</button>
+                <button class="chip" data-cat="bookmarks">Bookmarks</button>
+                <button class="chip" data-cat="system">System</button>
+            </div>
+        </div>
+        <div class="events-list" id="eventsList">
+            <div class="empty" id="loading">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <p>Loading events...</p>
+            </div>
+        </div>
+    </div>
+    <script>
+const API_KEY = localStorage.getItem('xgrabba_api_key') || '';
+const ICONS = {
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'
+};
+let events = [], filter = { cat: 'all', search: '' };
+
+async function fetchEvents() {
+    try {
+        const res = await fetch('/api/v1/events/recent?limit=100', { headers: { 'X-API-Key': API_KEY } });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        events = data.events || [];
+        renderEvents();
+    } catch (e) {
+        document.getElementById('eventsList').innerHTML = '<div class="empty"><p>Failed to load events. Check API key.</p></div>';
+    }
+}
+
+async function fetchStats() {
+    try {
+        const res = await fetch('/api/v1/events/stats', { headers: { 'X-API-Key': API_KEY } });
+        if (!res.ok) return;
+        const stats = await res.json();
+        document.getElementById('totalCount').textContent = stats.total || 0;
+        document.getElementById('errorCount').textContent = stats.by_severity?.error || 0;
+        document.getElementById('warningCount').textContent = stats.by_severity?.warning || 0;
+        document.getElementById('successCount').textContent = stats.by_severity?.success || 0;
+    } catch (e) {}
+}
+
+function formatTime(ts) {
+    const d = new Date(ts), now = new Date(), diff = (now - d) / 1000;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderEvents() {
+    let filtered = events;
+    if (filter.cat !== 'all') filtered = filtered.filter(e => e.category === filter.cat);
+    if (filter.search) filtered = filtered.filter(e => e.message.toLowerCase().includes(filter.search.toLowerCase()));
+    
+    if (!filtered.length) {
+        document.getElementById('eventsList').innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No events found</p></div>';
+        return;
+    }
+    
+    document.getElementById('eventsList').innerHTML = filtered.map(e => `
+        <div class="event ${e.severity}">
+            <div class="event-icon ${e.severity}">${ICONS[e.severity] || ICONS.info}</div>
+            <div class="event-content">
+                <div class="event-title">${escapeHtml(e.message)}</div>
+                <div class="event-meta">
+                    <span class="event-category">${e.category}</span>
+                    <span>${formatTime(e.timestamp)}</span>
+                    ${e.source ? `<span>${e.source}</span>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function connectSSE() {
+    const es = new EventSource('/api/v1/events/stream');
+    es.onopen = () => { document.getElementById('status').classList.add('connected'); document.getElementById('statusText').textContent = 'Live'; };
+    es.onerror = () => { document.getElementById('status').classList.remove('connected'); document.getElementById('statusText').textContent = 'Disconnected'; };
+    es.addEventListener('event', (e) => { try { const ev = JSON.parse(e.data); events.unshift(ev); renderEvents(); fetchStats(); } catch {} });
+}
+
+document.getElementById('categoryFilters').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('#categoryFilters .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    filter.cat = chip.dataset.cat;
+    renderEvents();
+});
+
+document.getElementById('searchInput').addEventListener('input', e => { filter.search = e.target.value; renderEvents(); });
+
+fetchEvents();
+fetchStats();
+connectSSE();
+    </script>
+</body>
+</html>

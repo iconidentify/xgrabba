@@ -12,6 +12,9 @@ var uiHTML []byte
 //go:embed ui/quick.html
 var quickHTML []byte
 
+//go:embed ui/admin_events.html
+var adminEventsHTML []byte
+
 // UIHandler serves the web UI.
 type UIHandler struct{}
 
@@ -46,4 +49,10 @@ func (h *UIHandler) Smart(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write(uiHTML)
 	}
+}
+
+// AdminEvents serves the admin activity log page.
+func (h *UIHandler) AdminEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(adminEventsHTML)
 }
