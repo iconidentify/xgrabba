@@ -1250,3 +1250,29 @@ func (c *Client) fetchUserByRestID(ctx context.Context, userID string) (*userLeg
 
 	return &result.Legacy, nil
 }
+
+// TestUserLookupResult contains the result of a user lookup test.
+type TestUserLookupResult struct {
+	Success    bool   `json:"success"`
+	UserID     string `json:"user_id"`
+	ScreenName string `json:"screen_name,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// TestUserLookup tests the UserByRestId endpoint with the current browser credentials.
+// This is a debug endpoint to verify the fix works before deploying.
+func (c *Client) TestUserLookup(ctx context.Context, userID string) TestUserLookupResult {
+	result := TestUserLookupResult{UserID: userID}
+
+	userData, err := c.fetchUserByRestID(ctx, userID)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
+	result.Success = true
+	result.ScreenName = userData.ScreenName
+	result.Name = userData.Name
+	return result
+}

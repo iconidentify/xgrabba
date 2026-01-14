@@ -133,6 +133,7 @@ func NewRouter(
 			r.Post("/extension/credentials", extensionHandler.SyncCredentials)
 			r.Get("/extension/credentials/status", extensionHandler.CredentialsStatus)
 			r.Post("/extension/credentials/clear", extensionHandler.ClearCredentials)
+			r.Get("/extension/test-user-lookup", extensionHandler.TestUserLookup) // Debug endpoint
 		}
 	})
 
