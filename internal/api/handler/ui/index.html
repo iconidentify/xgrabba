@@ -7255,6 +7255,14 @@
             window.history.replaceState({}, '', window.location.pathname);
         }
 
+        // Update events link to include API key for seamless navigation
+        if (API_KEY) {
+            const eventsLink = document.querySelector('a[href="/admin/events"]');
+            if (eventsLink) {
+                eventsLink.href = '/admin/events?key=' + encodeURIComponent(API_KEY);
+            }
+        }
+
         // State
         let tweets = [];
         let deleteTarget = null;

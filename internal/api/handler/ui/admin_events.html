@@ -133,14 +133,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
         </div>
     </div>
     <script>
-let API_KEY = localStorage.getItem('xgrabba_api_key') || '';
+// Get API key from URL params first, then localStorage (same pattern as main page)
+const params = new URLSearchParams(window.location.search);
+let API_KEY = params.get('key') || localStorage.getItem('xgrabba_api_key') || '';
 
-// Prompt for API key if not set
+// Store API key if provided in URL and clean up URL
+if (params.get('key')) {
+    localStorage.setItem('xgrabba_api_key', params.get('key'));
+    window.history.replaceState({}, '', window.location.pathname);
+}
+
+// Prompt for API key only if still not set
 if (!API_KEY) {
     const key = prompt('Enter your xgrabba API key:');
     if (key) {
         localStorage.setItem('xgrabba_api_key', key);
         API_KEY = key;
+    }
+}
+
+// Update back link to include API key for seamless navigation
+if (API_KEY) {
+    const backLink = document.querySelector('a[href="/ui"]');
+    if (backLink) {
+        backLink.href = '/ui?key=' + encodeURIComponent(API_KEY);
     }
 }
 
