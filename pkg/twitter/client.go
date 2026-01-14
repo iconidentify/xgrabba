@@ -758,7 +758,11 @@ type graphQLTweetResult struct {
 	Core  struct {
 		UserResults struct {
 			Result struct {
-				Legacy struct {
+				TypeName string `json:"__typename"` // "User", "UserUnavailable", etc.
+				ID       string `json:"rest_id"`    // User ID if available
+				Reason   string `json:"reason"`     // Reason for UserUnavailable (e.g., "NsfwLoggedOut")
+				Message  string `json:"message"`    // Additional message
+				Legacy   struct {
 					Name            string `json:"name"`
 					ScreenName      string `json:"screen_name"`
 					ProfileImageURL string `json:"profile_image_url_https"`
@@ -1050,6 +1054,16 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 
 	// Log the result type for debugging visibility issues
 	if result.Core.UserResults.Result.Legacy.ScreenName == "" {
+		// Debug: dump more info about the response structure for age-restricted content debugging
+		c.logger.Error("tweet author data missing",
+			"tweet_id", tweetID,
+			"type_name", result.TypeName,
+			"has_legacy", result.Legacy.FullText != "",
+			"has_core", result.Core.UserResults.Result.Legacy.Name != "",
+			"core_type", result.Core.UserResults.Result.TypeName,
+			"user_id", result.Core.UserResults.Result.ID,
+			"reason", result.Core.UserResults.Result.Reason,
+		)
 		return nil, fmt.Errorf("tweet author data unavailable (type=%s, has_core=%v)", result.TypeName, result.Core.UserResults.Result.Legacy.Name != "")
 	}
 
