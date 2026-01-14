@@ -1052,19 +1052,33 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 		}
 	}
 
-	// Log the result type for debugging visibility issues
+	// Handle missing user data - try to fetch separately if we have user ID
 	if result.Core.UserResults.Result.Legacy.ScreenName == "" {
-		// Debug: dump more info about the response structure for age-restricted content debugging
-		c.logger.Error("tweet author data missing",
+		userID := result.Core.UserResults.Result.ID
+		c.logger.Warn("tweet author data missing, attempting user lookup",
 			"tweet_id", tweetID,
 			"type_name", result.TypeName,
 			"has_legacy", result.Legacy.FullText != "",
-			"has_core", result.Core.UserResults.Result.Legacy.Name != "",
 			"core_type", result.Core.UserResults.Result.TypeName,
-			"user_id", result.Core.UserResults.Result.ID,
-			"reason", result.Core.UserResults.Result.Reason,
+			"user_id", userID,
 		)
-		return nil, fmt.Errorf("tweet author data unavailable (type=%s, has_core=%v)", result.TypeName, result.Core.UserResults.Result.Legacy.Name != "")
+
+		// If we have a user ID, try to fetch user data separately
+		if userID != "" {
+			userData, err := c.fetchUserByRestID(context.Background(), userID)
+			if err != nil {
+				c.logger.Warn("failed to fetch user by rest_id", "user_id", userID, "error", err)
+			} else if userData != nil {
+				// Successfully fetched user data - update the result
+				result.Core.UserResults.Result.Legacy = *userData
+				c.logger.Info("successfully fetched missing user data", "user_id", userID, "screen_name", userData.ScreenName)
+			}
+		}
+
+		// If still no screen_name, fail
+		if result.Core.UserResults.Result.Legacy.ScreenName == "" {
+			return nil, fmt.Errorf("tweet author data unavailable (type=%s, user_id=%s)", result.TypeName, userID)
+		}
 	}
 
 	// Parse created_at
@@ -1127,4 +1141,111 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	// For now, we rely on syndication API for media when possible
 
 	return tweet, nil
+}
+
+// userLegacyData holds the user profile fields we need
+type userLegacyData struct {
+	Name            string `json:"name"`
+	ScreenName      string `json:"screen_name"`
+	ProfileImageURL string `json:"profile_image_url_https"`
+	Verified        bool   `json:"verified"`
+	FollowersCount  int    `json:"followers_count"`
+	FriendsCount    int    `json:"friends_count"`
+	StatusesCount   int    `json:"statuses_count"`
+	Description     string `json:"description"`
+}
+
+// userByRestIDResponse is the GraphQL response for UserByRestId
+type userByRestIDResponse struct {
+	Data struct {
+		User struct {
+			Result struct {
+				TypeName       string         `json:"__typename"`
+				ID             string         `json:"rest_id"`
+				Legacy         userLegacyData `json:"legacy"`
+				IsBlueVerified bool           `json:"is_blue_verified"`
+			} `json:"result"`
+		} `json:"user"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+// fetchUserByRestID fetches user data by their REST ID using GraphQL.
+// This is used as a fallback when tweet data is returned without user profile info.
+func (c *Client) fetchUserByRestID(ctx context.Context, userID string) (*userLegacyData, error) {
+	// Use browser credentials for authenticated access
+	headers := c.getBrowserHeaders()
+	if headers == nil {
+		return nil, fmt.Errorf("browser credentials not available for user lookup")
+	}
+
+	// Build UserByRestId GraphQL request
+	// Try to get query ID from browser capture, fall back to known value
+	queryID := c.getBrowserQueryID("UserByRestId")
+	if queryID == "" {
+		queryID = "xf3jd90KKBCUxdlI_tNHZw" // Fallback query ID
+	}
+
+	variables := fmt.Sprintf(`{"userId":"%s","withSafetyModeUserFields":true}`, userID)
+	features := c.getBrowserFeatureFlags()
+	if features == nil {
+		features = json.RawMessage(defaultGraphQLFeatures)
+	}
+
+	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/UserByRestId?variables=%s&features=%s",
+		queryID,
+		url.QueryEscape(variables),
+		url.QueryEscape(string(features)),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers from browser credentials
+	for key, values := range headers {
+		for _, value := range values {
+			req.Header.Set(key, value)
+		}
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("user lookup failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var userResp userByRestIDResponse
+	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(userResp.Errors) > 0 {
+		return nil, fmt.Errorf("graphql error: %s", userResp.Errors[0].Message)
+	}
+
+	result := userResp.Data.User.Result
+	if result.TypeName == "UserUnavailable" {
+		return nil, fmt.Errorf("user unavailable")
+	}
+
+	if result.Legacy.ScreenName == "" {
+		return nil, fmt.Errorf("user data empty in response")
+	}
+
+	c.logger.Info("fetched user by rest_id",
+		"user_id", userID,
+		"screen_name", result.Legacy.ScreenName,
+		"name", result.Legacy.Name,
+	)
+
+	return &result.Legacy, nil
 }
