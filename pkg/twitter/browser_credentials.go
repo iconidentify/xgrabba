@@ -161,7 +161,7 @@ func (c *Client) getBrowserHeaders() http.Header {
 		// Browser fingerprinting headers to avoid Cloudflare blocks
 		"Accept":                     []string{"*/*"},
 		"Accept-Language":            []string{"en-US,en;q=0.9"},
-		"Accept-Encoding":            []string{"gzip, deflate, br"},
+		// Note: Don't send Accept-Encoding since we don't decompress responses
 		"Origin":                     []string{"https://x.com"},
 		"Referer":                    []string{"https://x.com/"},
 		"Sec-Fetch-Dest":             []string{"empty"},
