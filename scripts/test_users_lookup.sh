@@ -48,6 +48,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" \
     -H "Accept: */*" \
     -H "Accept-Language: en-US,en;q=0.9" \
     -H "Origin: https://x.com" \
+    --no-compressed \
     -H "Referer: https://x.com/" \
     -H "Sec-Fetch-Dest: empty" \
     -H "Sec-Fetch-Mode: cors" \
