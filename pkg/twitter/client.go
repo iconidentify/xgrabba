@@ -24,7 +24,7 @@ const bearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs
 // GraphQL query IDs - these may change periodically as X updates their API
 // To find current IDs: curl -s "https://x.com" | extract main.js URL, then search for operationName
 const (
-	defaultTweetResultByRestIDQueryID = "geNbknbFuVk6S2dpb8lr2Q"
+	defaultTweetResultByRestIDQueryID = "Xl5pC_lBk_gcO2ItU39DQw"
 )
 
 // defaultGraphQLFeatures is used when we don't have browser-observed feature flags.
