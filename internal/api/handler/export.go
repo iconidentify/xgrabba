@@ -54,6 +54,7 @@ type ExportStatusResponse struct {
 	DestPath       string `json:"dest_path,omitempty"`
 	Error          string `json:"error,omitempty"`
 	DownloadReady  bool   `json:"download_ready,omitempty"` // True when zip is ready for download
+	StartedAt      int64  `json:"started_at,omitempty"`     // Unix timestamp when export started
 }
 
 // Estimate returns an estimate of the export size.
@@ -141,6 +142,7 @@ func (h *ExportHandler) Status(w http.ResponseWriter, r *http.Request) {
 		DestPath:       status.DestPath,
 		Error:          status.Error,
 		DownloadReady:  downloadReady,
+		StartedAt:      status.StartedAt.Unix(),
 	})
 }
 
