@@ -1276,7 +1276,9 @@ func (s *ExportService) copyViewerBinaries(binDir, destPath string) error {
 		dest string
 	}{
 		{"xgrabba-viewer.exe", "xgrabba-viewer.exe"},
-		{"xgrabba-viewer-mac", "xgrabba-viewer-mac"},
+		{"xgrabba-viewer-mac", "xgrabba-viewer-mac"},               // Universal binary if available
+		{"xgrabba-viewer-mac-arm64", "xgrabba-viewer-mac-arm64"},   // Apple Silicon
+		{"xgrabba-viewer-mac-amd64", "xgrabba-viewer-mac-amd64"},   // Intel Mac
 		{"xgrabba-viewer-linux", "xgrabba-viewer-linux"},
 	}
 
@@ -1328,8 +1330,13 @@ OPTION 2: Use the Viewer Application (Recommended)
     1. Double-click xgrabba-viewer.exe
     2. Your browser will open automatically to view the archive
 
-  macOS:
-    1. Right-click xgrabba-viewer-mac and select "Open"
+  macOS (Apple Silicon M1/M2/M3):
+    1. Right-click xgrabba-viewer-mac-arm64 and select "Open"
+    2. Click "Open" in the security dialog (first time only)
+    3. Your browser will open automatically
+
+  macOS (Intel):
+    1. Right-click xgrabba-viewer-mac-amd64 and select "Open"
     2. Click "Open" in the security dialog (first time only)
     3. Your browser will open automatically
 
@@ -1348,9 +1355,13 @@ OPTION 3: Use Python's Built-in Web Server
 DIRECTORY STRUCTURE
 -------------------
 
-README.txt          - This file
-index.html          - The archive viewer (web application)
-tweets-data.json    - All tweet metadata in JSON format
+README.txt              - This file
+index.html              - The archive viewer (web application)
+tweets-data.json        - All tweet metadata in JSON format
+xgrabba-viewer.exe      - Windows viewer application
+xgrabba-viewer-mac-arm64 - macOS viewer (Apple Silicon)
+xgrabba-viewer-mac-amd64 - macOS viewer (Intel)
+xgrabba-viewer-linux    - Linux viewer application
 
 data/               - Tweet archives organized by date
   YYYY/             - Year folder (e.g., 2024)

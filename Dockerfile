@@ -16,11 +16,26 @@ COPY . .
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 
-# Build the binary
+# Build the server binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -o xgrabba \
     ./cmd/server
+
+# Build viewer binaries for all platforms (for USB export)
+RUN mkdir -p bin && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o bin/xgrabba-viewer-linux ./cmd/viewer && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o bin/xgrabba-viewer-mac-amd64 ./cmd/viewer && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o bin/xgrabba-viewer-mac-arm64 ./cmd/viewer && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o bin/xgrabba-viewer.exe ./cmd/viewer
 
 # Runtime stage
 FROM alpine:3.19
@@ -36,6 +51,9 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/xgrabba .
+
+# Copy viewer binaries for USB export
+COPY --from=builder /app/bin ./bin
 
 # Create data directories
 RUN mkdir -p /data/videos /data/temp && \
