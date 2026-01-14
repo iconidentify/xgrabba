@@ -463,6 +463,11 @@ type syndicationResponse struct {
 }
 
 func (c *Client) parseSyndicationResponse(tweetID string, resp *syndicationResponse) (*domain.Tweet, error) {
+	// Validate author data is present - if missing, tweet is likely deleted/suspended
+	if resp.User.ScreenName == "" {
+		return nil, fmt.Errorf("tweet author data unavailable (account may be suspended or deleted)")
+	}
+
 	// Parse created_at time
 	postedAt, _ := time.Parse(time.RubyDate, resp.CreatedAt)
 	if postedAt.IsZero() {
@@ -1044,6 +1049,11 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	}
 
 	user := result.Core.UserResults.Result
+
+	// Validate author data is present - if missing, tweet is likely deleted/suspended
+	if user.Legacy.ScreenName == "" {
+		return nil, fmt.Errorf("tweet author data unavailable (account may be suspended or deleted)")
+	}
 
 	tweet := &domain.Tweet{
 		ID:       domain.TweetID(tweetID),
