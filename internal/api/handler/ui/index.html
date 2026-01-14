@@ -6504,47 +6504,8 @@
                 </button>
             </div>
             <div class="export-modal-body">
-                <!-- Export Mode Selector -->
-                <div id="exportModeSelector" class="export-mode-selector">
-                    <button class="export-mode-tab active" id="exportModeDownload" onclick="selectExportMode('download')">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                        </svg>
-                        Download ZIP
-                    </button>
-                    <button class="export-mode-tab" id="exportModeUSB" onclick="selectExportMode('usb')">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
-                        </svg>
-                        USB Drive
-                        <span class="usb-badge" id="usbBadge" style="display: none;">0</span>
-                    </button>
-                </div>
-
-                <!-- Estimate View (Download Mode) -->
-                <div id="exportEstimateView">
-                    <div class="export-stat-grid">
-                        <div class="export-stat-item">
-                            <div class="export-stat-value" id="exportTweetCount">--</div>
-                            <div class="export-stat-label">Tweets</div>
-                        </div>
-                        <div class="export-stat-item">
-                            <div class="export-stat-value" id="exportMediaCount">--</div>
-                            <div class="export-stat-label">Media Files</div>
-                        </div>
-                        <div class="export-stat-item">
-                            <div class="export-stat-value" id="exportSize">--</div>
-                            <div class="export-stat-label">Est. Size</div>
-                        </div>
-                    </div>
-
-                    <p style="color: var(--text-secondary); margin: 16px 0; text-align: center; font-size: 14px;">
-                        Download your entire archive as a portable ZIP file. The archive includes an offline viewer that works in any browser.
-                    </p>
-                </div>
-
                 <!-- USB Drive View -->
-                <div id="exportUSBView" style="display: none;">
+                <div id="exportUSBView">
                     <div class="export-stat-grid">
                         <div class="export-stat-item">
                             <div class="export-stat-value" id="exportUSBTweetCount">--</div>
@@ -6612,14 +6573,14 @@
                                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                             </svg>
                         </div>
-                        <h4>Export Ready</h4>
-                        <p id="exportCompletedSummary">Your archive is ready to download.</p>
-                        <button class="export-btn-primary" id="exportDownloadBtn" onclick="downloadExport()" style="margin-top: 16px;">
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        <h4>Export Complete</h4>
+                        <p id="exportCompletedSummary">Your archive has been copied to the USB drive.</p>
+                        <p style="color: var(--text-secondary); margin-top: 12px; font-size: 14px;">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="vertical-align: middle; margin-right: 4px;">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                             </svg>
-                            Download ZIP
-                        </button>
+                            Drive safely ejected. You can remove it now.
+                        </p>
                     </div>
                 </div>
 
@@ -6638,11 +6599,11 @@
             </div>
             <div class="export-modal-footer" id="exportModalFooter">
                 <button class="export-btn-secondary" onclick="closeExportModal()">Cancel</button>
-                <button class="export-btn-primary" id="exportStartBtn" onclick="startExport()">
+                <button class="export-btn-primary" id="exportStartBtn" onclick="startUSBExport()">
                     <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/>
+                        <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
                     </svg>
-                    Create Archive
+                    Export to USB
                 </button>
             </div>
         </div>
@@ -10633,7 +10594,6 @@
         // =============================================
         let exportPollInterval = null;
         let exportInProgress = false;
-        let currentExportMode = 'download'; // 'download' or 'usb'
         let usbDrives = [];
         let selectedUSBDrive = null;
         let usbAvailable = false;
@@ -10659,7 +10619,6 @@
                         usbDrives = data.drives || [];
                         usbAvailable = true;
                         renderUSBDrives();
-                        updateUSBBadge();
                     } else if (data.type === 'added') {
                         // Drive added - refresh list
                         loadUSBDrives();
@@ -10671,7 +10630,6 @@
                             selectedUSBDrive = null;
                         }
                         renderUSBDrives();
-                        updateUSBBadge();
                         showNotification('USB drive disconnected', 'info');
                     }
                 } catch (e) {
@@ -10687,33 +10645,10 @@
             };
         }
 
-        function updateUSBBadge() {
-            const badge = document.getElementById('usbBadge');
-            if (usbDrives.length > 0) {
-                badge.textContent = usbDrives.length;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-
         function closeUSBEventStream() {
             if (usbEventSource) {
                 usbEventSource.close();
                 usbEventSource = null;
-            }
-        }
-
-        function selectExportMode(mode) {
-            currentExportMode = mode;
-            document.getElementById('exportModeDownload').classList.toggle('active', mode === 'download');
-            document.getElementById('exportModeUSB').classList.toggle('active', mode === 'usb');
-
-            if (mode === 'usb') {
-                showExportView('usb');
-                loadUSBDrives();
-            } else {
-                showExportView('estimate');
             }
         }
 
@@ -10738,15 +10673,6 @@
 
                 usbAvailable = data.available;
                 usbDrives = data.drives || [];
-
-                // Update badge
-                const badge = document.getElementById('usbBadge');
-                if (usbDrives.length > 0) {
-                    badge.textContent = usbDrives.length;
-                    badge.style.display = 'flex';
-                } else {
-                    badge.style.display = 'none';
-                }
 
                 if (!usbAvailable) {
                     driveList.innerHTML = '';
@@ -11084,10 +11010,8 @@
             overlay.classList.add('active');
 
             // Reset state
-            currentExportMode = 'download';
             selectedUSBDrive = null;
-            selectExportMode('download');
-            showExportView('estimate');
+            showExportView('usb');
 
             // Fetch estimate
             try {
@@ -11097,11 +11021,6 @@
                 if (!resp.ok) throw new Error('Failed to fetch estimate');
                 const data = await resp.json();
 
-                document.getElementById('exportTweetCount').textContent = data.tweet_count.toLocaleString();
-                document.getElementById('exportMediaCount').textContent = data.media_count.toLocaleString();
-                document.getElementById('exportSize').textContent = formatExportBytes(data.estimated_size_bytes);
-
-                // Also update USB view stats
                 document.getElementById('exportUSBTweetCount').textContent = data.tweet_count.toLocaleString();
                 document.getElementById('exportUSBMediaCount').textContent = data.media_count.toLocaleString();
                 document.getElementById('exportUSBSize').textContent = formatExportBytes(data.estimated_size_bytes);
@@ -11112,24 +11031,10 @@
             // Initialize SSE for real-time USB detection
             initUSBEventStream();
 
-            // Pre-fetch USB status to show badge (fallback if SSE not ready yet)
-            try {
-                const usbResp = await fetch('/api/v1/usb/drives', {
-                    headers: { 'X-API-Key': API_KEY }
-                });
-                if (usbResp.ok) {
-                    const usbData = await usbResp.json();
-                    const badge = document.getElementById('usbBadge');
-                    if (usbData.available && usbData.drives && usbData.drives.length > 0) {
-                        badge.textContent = usbData.drives.length;
-                        badge.style.display = 'flex';
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                }
-            } catch {}
+            // Load USB drives
+            await loadUSBDrives();
 
-            // Check if there's already an export in progress or completed
+            // Check if there's already an export in progress
             try {
                 const statusResp = await fetch('/api/v1/export/status', {
                     headers: { 'X-API-Key': API_KEY }
@@ -11141,11 +11046,6 @@
                         showExportView('progress');
                         updateExportProgress(status);
                         startExportPolling();
-                    } else if (status.download_ready) {
-                        // Export is done and ready to download
-                        document.getElementById('exportCompletedSummary').textContent =
-                            `${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) ready to download`;
-                        showExportView('completed');
                     }
                 }
             } catch {}
@@ -11163,27 +11063,19 @@
         }
 
         function showExportView(view) {
-            const modeSelector = document.getElementById('exportModeSelector');
-            const estimateView = document.getElementById('exportEstimateView');
             const usbView = document.getElementById('exportUSBView');
             const progressView = document.getElementById('exportProgressView');
             const completedView = document.getElementById('exportCompletedView');
             const errorView = document.getElementById('exportErrorView');
 
             // Hide all views first
-            estimateView.style.display = 'none';
             usbView.style.display = 'none';
             progressView.style.display = 'none';
             completedView.style.display = 'none';
             errorView.style.display = 'none';
 
-            // Show mode selector only for estimate/usb views
-            modeSelector.style.display = (view === 'estimate' || view === 'usb') ? 'flex' : 'none';
-
             // Show the appropriate view
-            if (view === 'estimate') {
-                estimateView.style.display = 'block';
-            } else if (view === 'usb') {
+            if (view === 'usb') {
                 usbView.style.display = 'block';
             } else if (view === 'progress') {
                 progressView.style.display = 'block';
@@ -11196,18 +11088,7 @@
             const footer = document.getElementById('exportModalFooter');
             const startBtn = document.getElementById('exportStartBtn');
 
-            if (view === 'estimate') {
-                footer.style.display = 'flex';
-                startBtn.style.display = 'flex';
-                startBtn.disabled = false;
-                startBtn.innerHTML = `
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/>
-                    </svg>
-                    Create Archive
-                `;
-                startBtn.onclick = startExport;
-            } else if (view === 'usb') {
+            if (view === 'usb') {
                 footer.style.display = 'flex';
                 startBtn.style.display = 'flex';
                 startBtn.disabled = !selectedUSBDrive || !selectedUSBDrive.is_mounted;
@@ -11236,43 +11117,8 @@
                 startBtn.disabled = false;
                 startBtn.innerHTML = 'Try Again';
                 startBtn.onclick = function() {
-                    selectExportMode(currentExportMode);
-                    showExportView(currentExportMode === 'usb' ? 'usb' : 'estimate');
+                    showExportView('usb');
                 };
-            }
-        }
-
-        async function startExport() {
-            try {
-                const resp = await fetch('/api/v1/export/start', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': API_KEY
-                    },
-                    body: JSON.stringify({
-                        download: true  // Use download mode - creates a zip for browser download
-                    })
-                });
-
-                if (resp.status === 409) {
-                    alert('An export is already in progress.');
-                    return;
-                }
-
-                if (!resp.ok) {
-                    const data = await resp.json();
-                    throw new Error(data.error || 'Failed to start export');
-                }
-
-                exportInProgress = true;
-                showExportView('progress');
-                updateExportBtn(true);
-                startExportPolling();
-            } catch (err) {
-                console.error('Start export error:', err);
-                document.getElementById('exportErrorMessage').textContent = err.message;
-                showExportView('error');
             }
         }
 
@@ -11303,13 +11149,23 @@
                     exportInProgress = false;
                     updateExportBtn(false);
 
-                    if (status.phase === 'completed' && status.download_ready) {
-                        document.getElementById('exportCompletedSummary').textContent =
-                            `${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)}) ready to download`;
-                        showExportView('completed');
-                    } else if (status.phase === 'completed') {
+                    if (status.phase === 'completed') {
                         document.getElementById('exportCompletedSummary').textContent =
                             `Exported ${status.exported_tweets} tweets (${formatExportBytes(status.bytes_written)})`;
+
+                        // Auto-eject the USB drive
+                        if (selectedUSBDrive) {
+                            try {
+                                const deviceName = selectedUSBDrive.device.replace('/dev/', '');
+                                await fetch(`/api/v1/usb/drives/${deviceName}/unmount`, {
+                                    method: 'POST',
+                                    headers: { 'X-API-Key': API_KEY }
+                                });
+                                selectedUSBDrive = null;
+                            } catch (ejectErr) {
+                                console.error('Auto-eject failed:', ejectErr);
+                            }
+                        }
                         showExportView('completed');
                     } else if (status.phase === 'failed') {
                         document.getElementById('exportErrorMessage').textContent = status.error || 'Export failed';
@@ -11393,44 +11249,6 @@
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        }
-
-        function downloadExport() {
-            // Create a temporary link to download the file
-            const downloadUrl = `/api/v1/export/download?api_key=${encodeURIComponent(API_KEY)}`;
-
-            // Use fetch with blob to handle the download with proper auth
-            fetch('/api/v1/export/download', {
-                headers: { 'X-API-Key': API_KEY }
-            })
-            .then(resp => {
-                if (!resp.ok) throw new Error('Download failed');
-                return resp.blob();
-            })
-            .then(blob => {
-                // Create a temporary link and trigger download
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `xgrabba-archive-${new Date().toISOString().split('T')[0]}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-
-                // Clean up on server after download
-                fetch('/api/v1/export/cleanup', {
-                    method: 'POST',
-                    headers: { 'X-API-Key': API_KEY }
-                }).catch(() => {});
-
-                // Close modal after successful download
-                closeExportModal();
-            })
-            .catch(err => {
-                console.error('Download error:', err);
-                alert('Failed to download archive: ' + err.message);
-            });
         }
 
         // Initial bookmarks status

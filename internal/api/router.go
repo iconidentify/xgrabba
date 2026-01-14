@@ -94,14 +94,12 @@ func NewRouter(
 		r.Get("/videos/{videoID}", videoHandler.Get)
 		r.Get("/videos/{videoID}/status", videoHandler.GetStatus)
 
-		// Export operations
+		// Export operations (USB export only - download removed)
 		if exportHandler != nil {
 			r.Get("/export/estimate", exportHandler.Estimate)
 			r.Post("/export/start", exportHandler.Start)
 			r.Get("/export/status", exportHandler.Status)
 			r.Post("/export/cancel", exportHandler.Cancel)
-			r.Get("/export/download", exportHandler.Download)
-			r.Post("/export/cleanup", exportHandler.Cleanup)
 		}
 
 		// USB drive operations (when USB Manager is available)
