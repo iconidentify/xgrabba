@@ -317,18 +317,27 @@ func (m *Manager) Unmount(ctx context.Context, device string) error {
 	mountPoint := drive.MountPoint
 	m.mu.RUnlock()
 
-	// Create a timeout context for sync/umount commands (30 second max)
-	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	// Create a timeout context for sync/umount commands (10 second max for sync)
+	syncCtx, syncCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer syncCancel()
 
-	// Sync first to flush buffers
-	cmd := exec.CommandContext(cmdCtx, "sync")
+	// Sync first to flush buffers (best effort, don't fail if it times out)
+	cmd := exec.CommandContext(syncCtx, "sync")
 	_ = cmd.Run()
 
-	// Unmount
-	cmd = exec.CommandContext(cmdCtx, "umount", mountPoint)
+	// Unmount with 30 second timeout
+	umountCtx, umountCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer umountCancel()
+
+	// Try normal unmount first
+	cmd = exec.CommandContext(umountCtx, "umount", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("unmount failed: %s: %w", string(output), err)
+		// If normal unmount fails, try lazy unmount which detaches immediately
+		m.logger.Warn("normal unmount failed, trying lazy unmount", "error", err)
+		cmd = exec.CommandContext(umountCtx, "umount", "-l", mountPoint)
+		if output2, err2 := cmd.CombinedOutput(); err2 != nil {
+			return fmt.Errorf("unmount failed: %s: %w (lazy: %s)", string(output), err, string(output2))
+		}
 	}
 
 	// Remove mount point directory
