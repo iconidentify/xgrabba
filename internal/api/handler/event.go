@@ -48,10 +48,12 @@ type EventListResponse struct {
 
 // EventStatsResponse contains event service statistics.
 type EventStatsResponse struct {
-	BufferSize     int `json:"buffer_size"`
-	BufferUsed     int `json:"buffer_used"`
-	SSESubscribers int `json:"sse_subscribers"`
-	SQLiteEnabled  bool `json:"sqlite_enabled"`
+	Total          int                `json:"total"`
+	BySeverity     map[string]int     `json:"by_severity"`
+	BufferSize     int                `json:"buffer_size"`
+	BufferUsed     int                `json:"buffer_used"`
+	SSESubscribers int                `json:"sse_subscribers"`
+	SQLiteEnabled  bool               `json:"sqlite_enabled"`
 }
 
 // List handles GET /api/v1/events
@@ -148,6 +150,11 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, response)
 }
 
+// RecentEventsResponse wraps the events array for the UI.
+type RecentEventsResponse struct {
+	Events []EventResponse `json:"events"`
+}
+
 // Recent handles GET /api/v1/events/recent
 // Returns the most recent N events (default 50).
 func (h *EventHandler) Recent(w http.ResponseWriter, r *http.Request) {
@@ -160,9 +167,11 @@ func (h *EventHandler) Recent(w http.ResponseWriter, r *http.Request) {
 
 	events := h.eventSvc.GetRecent(n)
 
-	response := make([]EventResponse, 0, len(events))
+	response := RecentEventsResponse{
+		Events: make([]EventResponse, 0, len(events)),
+	}
 	for _, e := range events {
-		response = append(response, EventResponse{
+		response.Events = append(response.Events, EventResponse{
 			ID:        string(e.ID),
 			Timestamp: e.Timestamp,
 			Severity:  string(e.Severity),
@@ -179,7 +188,22 @@ func (h *EventHandler) Recent(w http.ResponseWriter, r *http.Request) {
 // Stats handles GET /api/v1/events/stats
 func (h *EventHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	stats := h.eventSvc.Stats()
+
+	// Calculate severity counts from recent events
+	events := h.eventSvc.GetRecent(1000) // Get up to 1000 recent events
+	bySeverity := map[string]int{
+		"info":    0,
+		"warning": 0,
+		"error":   0,
+		"success": 0,
+	}
+	for _, e := range events {
+		bySeverity[string(e.Severity)]++
+	}
+
 	h.writeJSON(w, http.StatusOK, EventStatsResponse{
+		Total:          len(events),
+		BySeverity:     bySeverity,
 		BufferSize:     stats.BufferSize,
 		BufferUsed:     stats.BufferUsed,
 		SSESubscribers: stats.SSESubscribers,
