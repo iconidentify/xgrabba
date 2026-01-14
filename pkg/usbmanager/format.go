@@ -115,13 +115,58 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 		}
 	}
 
-	// Phase 2: Format
-	op.updatePhase("formatting", 10)
+	// Phase 2: Repartition the drive for proper cross-platform compatibility
+	op.updatePhase("partitioning", 10)
 
-	partition := device
-	if drive != nil && drive.Partition != "" {
-		partition = drive.Partition
+	// Get the base device (e.g., /dev/sdb from /dev/sdb1)
+	baseDevice := device
+	if drive != nil && drive.Partition != "" && drive.Partition != device {
+		// Strip partition number to get base device
+		baseDevice = strings.TrimRight(device, "0123456789")
 	}
+
+	// Step 1: Wipe existing filesystem signatures
+	fm.logger.Info("wiping existing signatures", "device", baseDevice)
+	wipeCmd := exec.CommandContext(ctx, "wipefs", "-a", baseDevice)
+	if output, err := wipeCmd.CombinedOutput(); err != nil {
+		fm.logger.Warn("wipefs warning", "output", string(output), "error", err)
+		// Continue anyway - wipefs failing isn't fatal
+	}
+
+	// Step 2: Create new MBR partition table with single partition
+	fm.logger.Info("creating partition table", "device", baseDevice)
+	partedCmd := exec.CommandContext(ctx, "parted", "-s", baseDevice,
+		"mklabel", "msdos",
+		"mkpart", "primary", "0%", "100%")
+	if output, err := partedCmd.CombinedOutput(); err != nil {
+		op.setError(fmt.Sprintf("failed to create partition table: %v - %s", err, string(output)))
+		return
+	}
+
+	// Wait for partition to appear
+	time.Sleep(500 * time.Millisecond)
+
+	// The new partition will be device + "1" (e.g., /dev/sdb1)
+	partition := baseDevice + "1"
+
+	// Step 3: Set partition type based on filesystem
+	// 0x07 = NTFS/exFAT, 0x83 = Linux (ext4)
+	partType := "07" // Default for exFAT/NTFS
+	if strings.ToLower(fsType) == "ext4" {
+		partType = "83"
+	}
+	fm.logger.Info("setting partition type", "device", baseDevice, "type", partType)
+	sfdiskCmd := exec.CommandContext(ctx, "sfdisk", "--part-type", baseDevice, "1", partType)
+	if output, err := sfdiskCmd.CombinedOutput(); err != nil {
+		fm.logger.Warn("sfdisk warning", "output", string(output), "error", err)
+		// Continue anyway - type setting isn't always critical
+	}
+
+	// Wait for kernel to recognize partition changes
+	time.Sleep(500 * time.Millisecond)
+
+	// Phase 3: Format the partition
+	op.updatePhase("formatting", 30)
 
 	// Determine the mkfs command
 	var cmd *exec.Cmd
@@ -176,12 +221,12 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 			elapsed := time.Since(startTime).Seconds()
 			estimated := float64(op.Progress.EstimatedSecs)
 
-			// Progress based on time estimation (capped at 85%)
-			progress := int((elapsed / estimated) * 75)
-			if progress > 85 {
-				progress = 85
+			// Progress based on time estimation (30-85% range for formatting phase)
+			progress := int((elapsed / estimated) * 55)
+			if progress > 55 {
+				progress = 55
 			}
-			op.updateProgress(10 + progress)
+			op.updateProgress(30 + progress)
 			op.mu.Lock()
 			op.Progress.ElapsedSecs = int(elapsed)
 			op.mu.Unlock()
@@ -189,7 +234,7 @@ func (fm *FormatManager) runFormat(ctx context.Context, op *FormatOperation, dev
 	}
 
 verify:
-	// Phase 3: Verify
+	// Phase 4: Verify filesystem
 	op.updatePhase("verifying", 90)
 
 	// Verify that blkid can read the filesystem and it matches expected type
@@ -210,7 +255,7 @@ verify:
 	}
 	fm.logger.Info("filesystem verified", "device", partition, "type", actualFS)
 
-	// Phase 4: Complete
+	// Phase 5: Complete
 	op.updatePhase("completed", 100)
 
 	// Refresh drive info

@@ -26,11 +26,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM alpine:3.19
 
 # Install required tools for USB management
-# - util-linux: provides blkid, mount, umount
+# - util-linux: provides blkid, mount, umount, sfdisk
 # - exfatprogs: provides mkfs.exfat (exFAT filesystem tools)
 # - e2fsprogs: provides mkfs.ext4
 # - ntfs-3g: provides mkfs.ntfs and NTFS support
 # - eudev: provides udev for device events
+# - parted: disk partitioning tool
+# - dosfstools: FAT filesystem tools (fatlabel)
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
@@ -38,7 +40,9 @@ RUN apk add --no-cache \
     exfatprogs \
     e2fsprogs \
     ntfs-3g \
-    eudev
+    eudev \
+    parted \
+    dosfstools
 
 WORKDIR /app
 
