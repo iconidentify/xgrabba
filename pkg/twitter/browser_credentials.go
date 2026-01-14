@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 	"sync"
 	"time"
 )
@@ -48,6 +49,28 @@ func (c *Client) SetBrowserCredentials(creds BrowserCredentials) {
 		creds.UpdatedAt = time.Now()
 	}
 	credsStore.creds = &creds
+
+	// Sandbox-level observability (no secrets):
+	// - whether query IDs / feature flags were included
+	// - how many operations were provided
+	queryIDCount := 0
+	queryIDKeys := make([]string, 0, 8)
+	for k := range creds.QueryIDs {
+		queryIDCount++
+		if len(queryIDKeys) < 8 {
+			queryIDKeys = append(queryIDKeys, k)
+		}
+	}
+	sort.Strings(queryIDKeys)
+	ffBytes := len(creds.FeatureFlags)
+	hasFF := ffBytes > 0
+	c.logger.Info("browser credentials updated",
+		"has_query_ids", queryIDCount > 0,
+		"query_id_count", queryIDCount,
+		"query_id_keys_sample", queryIDKeys,
+		"has_feature_flags", hasFF,
+		"feature_flags_bytes", ffBytes,
+	)
 }
 
 // GetBrowserCredentials returns the current browser credentials.
@@ -131,6 +154,60 @@ type BrowserCredentialsStatus struct {
 	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 	IsExpired      bool       `json:"is_expired"`
+}
+
+// BrowserCredentialsDebugStatus adds non-secret debug info to help validate that
+// query_ids and feature_flags are arriving from the browser.
+type BrowserCredentialsDebugStatus struct {
+	BrowserCredentialsStatus
+	HasQueryIDs       bool     `json:"has_query_ids"`
+	QueryIDCount      int      `json:"query_id_count"`
+	QueryIDKeysSample []string `json:"query_id_keys_sample,omitempty"`
+	HasFeatureFlags   bool     `json:"has_feature_flags"`
+	FeatureFlagsBytes int      `json:"feature_flags_bytes"`
+}
+
+func (c *Client) GetBrowserCredentialsDebugStatus() BrowserCredentialsDebugStatus {
+	credsStore.mu.RLock()
+	defer credsStore.mu.RUnlock()
+
+	// Base status
+	base := BrowserCredentialsStatus{
+		HasCredentials: credsStore.creds != nil,
+		IsExpired:      true,
+	}
+	if credsStore.creds != nil {
+		base.UpdatedAt = &credsStore.creds.UpdatedAt
+		base.ExpiresAt = &credsStore.creds.ExpiresAt
+		base.IsExpired = time.Now().After(credsStore.creds.ExpiresAt)
+	}
+
+	// Debug fields
+	queryIDCount := 0
+	keys := make([]string, 0, 16)
+	if credsStore.creds != nil && credsStore.creds.QueryIDs != nil {
+		for k := range credsStore.creds.QueryIDs {
+			queryIDCount++
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	if len(keys) > 12 {
+		keys = keys[:12]
+	}
+	ffBytes := 0
+	if credsStore.creds != nil {
+		ffBytes = len(credsStore.creds.FeatureFlags)
+	}
+
+	return BrowserCredentialsDebugStatus{
+		BrowserCredentialsStatus: base,
+		HasQueryIDs:             queryIDCount > 0,
+		QueryIDCount:            queryIDCount,
+		QueryIDKeysSample:       keys,
+		HasFeatureFlags:         ffBytes > 0,
+		FeatureFlagsBytes:       ffBytes,
+	}
 }
 
 // GetBrowserCredentialsStatus returns the current status of browser credentials.

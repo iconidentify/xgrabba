@@ -71,6 +71,7 @@ function recordGraphQLRequest(requestUrl) {
   const prev = GRAPHQL_CAPTURE.queryIds[operationName];
   if (prev !== queryId) {
     GRAPHQL_CAPTURE.queryIds[operationName] = queryId;
+    console.debug('[XGrabba] Captured GraphQL queryId', { operationName, queryId });
   }
 
   const featuresParam = u.searchParams.get('features');
@@ -78,8 +79,10 @@ function recordGraphQLRequest(requestUrl) {
     // searchParams already decodes; parse to ensure it's valid JSON.
     try {
       GRAPHQL_CAPTURE.featureFlags = JSON.parse(featuresParam);
+      console.debug('[XGrabba] Captured GraphQL feature flags', { bytes: featuresParam.length });
     } catch (e) {
       // ignore malformed features
+      console.debug('[XGrabba] Failed to parse GraphQL feature flags', e?.message);
     }
   }
 
@@ -96,7 +99,10 @@ async function maybeSyncGraphQLCapture() {
 
   const auth = await getAuthToken();
   const ct0 = await getCT0Token();
-  if (!auth?.authToken || !ct0?.ct0) return;
+  if (!auth?.authToken || !ct0?.ct0) {
+    console.debug('[XGrabba] Skipping GraphQL capture sync (missing cookies)', { hasAuth: !!auth?.authToken, hasCT0: !!ct0?.ct0 });
+    return;
+  }
 
   const result = await syncCredentials({
     authToken: auth.authToken,
@@ -107,6 +113,10 @@ async function maybeSyncGraphQLCapture() {
 
   if (result?.success) {
     GRAPHQL_CAPTURE.lastSync = now;
+    console.debug('[XGrabba] Synced credentials+GraphQL capture', {
+      queryIdCount: Object.keys(GRAPHQL_CAPTURE.queryIds || {}).length,
+      hasFeatureFlags: !!GRAPHQL_CAPTURE.featureFlags
+    });
   }
 }
 
@@ -150,10 +160,23 @@ async function handleMessage(message, sender) {
 
     case 'GET_CREDENTIALS_STATUS':
       return await getCredentialsStatus();
+    
+    case 'GET_GRAPHQL_CAPTURE':
+      return getGraphQLCapture();
 
     default:
       return { error: 'Unknown message type' };
   }
+}
+
+function getGraphQLCapture() {
+  return {
+    queryIds: GRAPHQL_CAPTURE.queryIds || {},
+    queryIdCount: Object.keys(GRAPHQL_CAPTURE.queryIds || {}).length,
+    hasFeatureFlags: !!GRAPHQL_CAPTURE.featureFlags,
+    featureFlagsBytes: GRAPHQL_CAPTURE.featureFlags ? JSON.stringify(GRAPHQL_CAPTURE.featureFlags).length : 0,
+    lastSync: GRAPHQL_CAPTURE.lastSync ? new Date(GRAPHQL_CAPTURE.lastSync).toISOString() : null
+  };
 }
 
 async function openUI(payload = {}) {

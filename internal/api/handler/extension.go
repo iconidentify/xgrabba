@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"sort"
 
 	"github.com/iconidentify/xgrabba/pkg/twitter"
 )
@@ -56,6 +58,27 @@ func (h *ExtensionHandler) SyncCredentials(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Debug logging (no secrets):
+	// show whether the extension is sending query_ids / feature_flags.
+	queryIDCount := len(req.QueryIDs)
+	keys := make([]string, 0, 8)
+	for k := range req.QueryIDs {
+		if len(keys) < 8 {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	ffBytes := len(req.FeatureFlags)
+
+	slog.Default().Info("extension credentials received",
+		"remote_addr", r.RemoteAddr,
+		"has_query_ids", queryIDCount > 0,
+		"query_id_count", queryIDCount,
+		"query_id_keys_sample", keys,
+		"has_feature_flags", ffBytes > 0,
+		"feature_flags_bytes", ffBytes,
+	)
+
 	// Store credentials
 	h.twitterClient.SetBrowserCredentials(twitter.BrowserCredentials{
 		AuthToken:    req.AuthToken,
@@ -78,24 +101,34 @@ type CredentialsStatusResponse struct {
 	UpdatedAt      *string `json:"updated_at,omitempty"`
 	ExpiresAt      *string `json:"expires_at,omitempty"`
 	IsExpired      bool    `json:"is_expired"`
+	HasQueryIDs    bool     `json:"has_query_ids,omitempty"`
+	QueryIDCount   int      `json:"query_id_count,omitempty"`
+	QueryIDKeys    []string `json:"query_id_keys_sample,omitempty"`
+	HasFeatureFlags bool    `json:"has_feature_flags,omitempty"`
+	FeatureFlagsBytes int   `json:"feature_flags_bytes,omitempty"`
 }
 
 // CredentialsStatus handles GET /api/v1/extension/credentials/status
 // Returns the current status of browser credentials.
 func (h *ExtensionHandler) CredentialsStatus(w http.ResponseWriter, r *http.Request) {
-	status := h.twitterClient.GetBrowserCredentialsStatus()
+	debug := h.twitterClient.GetBrowserCredentialsDebugStatus()
 
 	resp := CredentialsStatusResponse{
-		HasCredentials: status.HasCredentials,
-		IsExpired:      status.IsExpired,
+		HasCredentials: debug.HasCredentials,
+		IsExpired:      debug.IsExpired,
+		HasQueryIDs:    debug.HasQueryIDs,
+		QueryIDCount:   debug.QueryIDCount,
+		QueryIDKeys:    debug.QueryIDKeysSample,
+		HasFeatureFlags: debug.HasFeatureFlags,
+		FeatureFlagsBytes: debug.FeatureFlagsBytes,
 	}
 
-	if status.UpdatedAt != nil {
-		ts := status.UpdatedAt.Format("2006-01-02T15:04:05Z")
+	if debug.UpdatedAt != nil {
+		ts := debug.UpdatedAt.Format("2006-01-02T15:04:05Z")
 		resp.UpdatedAt = &ts
 	}
-	if status.ExpiresAt != nil {
-		ts := status.ExpiresAt.Format("2006-01-02T15:04:05Z")
+	if debug.ExpiresAt != nil {
+		ts := debug.ExpiresAt.Format("2006-01-02T15:04:05Z")
 		resp.ExpiresAt = &ts
 	}
 

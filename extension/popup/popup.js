@@ -31,6 +31,8 @@ class PopupApp {
       markArchived: document.getElementById('mark-archived'),
       forwardCredentials: document.getElementById('forward-credentials'),
       saveSettings: document.getElementById('save-settings'),
+      refreshDebug: document.getElementById('refresh-debug'),
+      debugGraphql: document.getElementById('debug-graphql'),
       clearHistory: document.getElementById('clear-history'),
       viewAllLink: document.getElementById('view-all-link'),
       quickArchiveLink: document.getElementById('quick-archive-link')
@@ -42,6 +44,7 @@ class PopupApp {
     await this.loadSettings();
     await this.checkBackend();
     await this.loadHistory();
+    await this.loadDebug();
   }
 
   bindEvents() {
@@ -63,6 +66,13 @@ class PopupApp {
     this.elements.saveSettings.addEventListener('click', () => {
       this.saveSettings();
     });
+
+    // Refresh debug
+    if (this.elements.refreshDebug) {
+      this.elements.refreshDebug.addEventListener('click', () => {
+        this.loadDebug();
+      });
+    }
 
     // Clear history
     this.elements.clearHistory.addEventListener('click', () => {
@@ -206,6 +216,21 @@ class PopupApp {
         }
       });
     });
+  }
+
+  async loadDebug() {
+    if (!this.elements.debugGraphql) return;
+    try {
+      const capture = await chrome.runtime.sendMessage({ type: 'GET_GRAPHQL_CAPTURE' });
+      const keys = Object.keys(capture?.queryIds || {}).sort().slice(0, 10);
+      this.elements.debugGraphql.textContent =
+        `queryIds=${capture?.queryIdCount || 0} ` +
+        `featureFlags=${capture?.hasFeatureFlags ? 'yes' : 'no'} ` +
+        `lastSync=${capture?.lastSync || 'n/a'} ` +
+        (keys.length ? `ops=[${keys.join(', ')}${(capture?.queryIdCount || 0) > keys.length ? ', …' : ''}]` : '');
+    } catch (e) {
+      this.elements.debugGraphql.textContent = `Debug load failed: ${e.message}`;
+    }
   }
 
   renderHistoryItem(item) {
