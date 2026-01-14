@@ -158,6 +158,18 @@ func (c *Client) getBrowserHeaders() http.Header {
 		"x-twitter-active-user":      []string{"yes"},
 		"x-twitter-client-language":  []string{"en"},
 		"x-twitter-auth-type":        []string{"OAuth2Session"},
+		// Browser fingerprinting headers to avoid Cloudflare blocks
+		"Accept":                     []string{"*/*"},
+		"Accept-Language":            []string{"en-US,en;q=0.9"},
+		"Accept-Encoding":            []string{"gzip, deflate, br"},
+		"Origin":                     []string{"https://x.com"},
+		"Referer":                    []string{"https://x.com/"},
+		"Sec-Fetch-Dest":             []string{"empty"},
+		"Sec-Fetch-Mode":             []string{"cors"},
+		"Sec-Fetch-Site":             []string{"same-origin"},
+		"Sec-Ch-Ua":                  []string{`"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"`},
+		"Sec-Ch-Ua-Mobile":           []string{"?0"},
+		"Sec-Ch-Ua-Platform":         []string{`"macOS"`},
 	}
 }
 
