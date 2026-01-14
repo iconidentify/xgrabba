@@ -1040,8 +1040,17 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 
 	// Handle "TweetWithVisibilityResults" - age-restricted/sensitive content wrapper
 	// The actual tweet data is nested inside the "tweet" field
-	if result.TypeName == "TweetWithVisibilityResults" && result.Tweet != nil {
-		result = result.Tweet
+	if result.TypeName == "TweetWithVisibilityResults" {
+		if result.Tweet != nil {
+			result = result.Tweet
+		} else {
+			return nil, fmt.Errorf("age-restricted tweet has no nested tweet data (authentication may be required)")
+		}
+	}
+
+	// Log the result type for debugging visibility issues
+	if result.Core.UserResults.Result.Legacy.ScreenName == "" {
+		return nil, fmt.Errorf("tweet author data unavailable (type=%s, has_core=%v)", result.TypeName, result.Core.UserResults.Result.Legacy.Name != "")
 	}
 
 	// Parse created_at
@@ -1057,11 +1066,6 @@ func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*d
 	}
 
 	user := result.Core.UserResults.Result
-
-	// Validate author data is present - if missing, tweet is likely deleted/suspended
-	if user.Legacy.ScreenName == "" {
-		return nil, fmt.Errorf("tweet author data unavailable (account may be suspended or deleted)")
-	}
 
 	tweet := &domain.Tweet{
 		ID:       domain.TweetID(tweetID),
