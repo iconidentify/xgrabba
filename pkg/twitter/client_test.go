@@ -214,8 +214,13 @@ func TestGraphQL_Integration(t *testing.T) {
 			// Log the error details - this helps debug flag issues
 			t.Logf("GraphQL fetch error (check feature flags): %v", err)
 
-			// Check if it's a 400 error which indicates bad feature flags
-			if strings.Contains(err.Error(), "400") {
+			// Some tweets return data but without user info (age-restricted, NSFW, etc.)
+			// Production code handles this via UserByRestId fallback with browser auth
+			if strings.Contains(err.Error(), "author data unavailable") {
+				t.Skip("Tweet requires browser auth for user data (age-restricted) - skipping")
+			}
+			// Check if it's a 400 HTTP error which indicates bad feature flags
+			if strings.Contains(err.Error(), "status 400") {
 				t.Fatalf("Got 400 error - likely missing/incorrect feature flags: %v", err)
 			}
 			// 403 or other errors might be rate limiting
