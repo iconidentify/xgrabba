@@ -4429,15 +4429,12 @@
         .export-modal {
             width: 100%;
             max-width: 440px;
-            min-height: 420px;
             background: var(--bg-secondary);
             border-radius: 16px;
             border: 1px solid var(--border-color);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             overflow: hidden;
             animation: exportSlideIn 0.2s ease-out;
-            display: flex;
-            flex-direction: column;
         }
 
         @keyframes exportSlideIn {
@@ -4493,8 +4490,8 @@
 
         .export-modal-body {
             padding: 20px;
-            flex: 1;
             overflow-y: auto;
+            max-height: 60vh;
         }
 
         .export-stat-grid {
@@ -10603,6 +10600,7 @@
         // =============================================
         let exportPollInterval = null;
         let exportInProgress = false;
+        let exportEstimatedBytes = 0;
         let usbDrives = [];
         let selectedUSBDrive = null;
         let usbAvailable = false;
@@ -11124,6 +11122,7 @@
                 document.getElementById('exportUSBTweetCount').textContent = data.tweet_count.toLocaleString();
                 document.getElementById('exportUSBMediaCount').textContent = data.media_count.toLocaleString();
                 document.getElementById('exportUSBSize').textContent = formatExportBytes(data.estimated_size_bytes);
+                exportEstimatedBytes = data.estimated_size_bytes || 0;
             } catch (err) {
                 console.error('Export estimate error:', err);
             }
@@ -11295,7 +11294,11 @@
             document.getElementById('exportPercent').textContent = percent + '%';
             document.getElementById('exportProgressBar').style.width = percent + '%';
             document.getElementById('exportedTweets').textContent = `${status.exported_tweets} / ${status.total_tweets}`;
-            document.getElementById('exportBytesWritten').textContent = formatExportBytes(status.bytes_written);
+
+            // Show bytes written as "X / Y GB" format
+            const writtenStr = formatExportBytes(status.bytes_written);
+            const totalStr = exportEstimatedBytes > 0 ? formatExportBytes(exportEstimatedBytes) : '--';
+            document.getElementById('exportBytesWritten').textContent = `${writtenStr} / ${totalStr}`;
 
             // Calculate transfer rate
             if (status.started_at && status.bytes_written > 0) {
