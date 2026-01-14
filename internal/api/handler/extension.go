@@ -157,3 +157,25 @@ func (h *ExtensionHandler) ClearCredentials(w http.ResponseWriter, r *http.Reque
 		"status": "ok",
 	})
 }
+
+// TestUserLookup handles GET /api/v1/extension/test-user-lookup?user_id=...
+// Tests the UserByRestId endpoint with current browser credentials.
+// This is a debug endpoint to verify the NSFW user lookup fix works.
+func (h *ExtensionHandler) TestUserLookup(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = "1685114627024121856" // Default: @psyop4921's user ID from the test case
+	}
+
+	slog.Default().Info("testing user lookup", "user_id", userID)
+
+	result := h.twitterClient.TestUserLookup(r.Context(), userID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if result.Success {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	json.NewEncoder(w).Encode(result)
+}
