@@ -666,9 +666,13 @@ async function getCT0Token() {
 // This is needed for age-restricted/NSFW content which requires additional session cookies
 async function getAllCookies() {
   try {
-    // Get cookies from both domains
-    const xCookies = await chrome.cookies.getAll({ domain: '.x.com' });
-    const twitterCookies = await chrome.cookies.getAll({ domain: '.twitter.com' });
+    // Get cookies from both domains.
+    //
+    // Important: use `url` filtering (not `domain`) so we capture cookies that are scoped
+    // to `x.com` (no leading dot) as well as `.x.com`, including HttpOnly cookies that
+    // can be required for NSFW / age-restricted GraphQL endpoints (Cloudflare, etc).
+    const xCookies = await chrome.cookies.getAll({ url: 'https://x.com/' });
+    const twitterCookies = await chrome.cookies.getAll({ url: 'https://twitter.com/' });
 
     // Merge cookies, preferring x.com cookies over twitter.com for duplicates
     const cookieMap = new Map();
@@ -714,19 +718,37 @@ async function syncCredentials(credentials) {
       return { success: false, error: 'Incomplete credentials' };
     }
 
+    // Best-effort enrichment:
+    // - content scripts only have `ct0` and `authToken`
+    // - background worker may have captured full cookies, queryIds, and featureFlags
+    // Always try to send the richest payload to support NSFW/age-restricted content.
+    let cookieString = credentials.cookies;
+    let cookieCount = 0;
+    if (!cookieString) {
+      const allCookies = await getAllCookies();
+      cookieString = allCookies.cookies;
+      cookieCount = allCookies.count || 0;
+    }
+
+    const queryIds = (credentials.queryIds && Object.keys(credentials.queryIds).length > 0)
+      ? credentials.queryIds
+      : (GRAPHQL_CAPTURE.queryIds || {});
+
+    const featureFlags = credentials.featureFlags || GRAPHQL_CAPTURE.featureFlags;
+
     const body = {
       auth_token: credentials.authToken,
       ct0: credentials.ct0
     };
     // Include full cookie string for age-restricted/NSFW content support
-    if (credentials.cookies) {
-      body.cookies = credentials.cookies;
+    if (cookieString) {
+      body.cookies = cookieString;
     }
-    if (credentials.queryIds && Object.keys(credentials.queryIds).length > 0) {
-      body.query_ids = credentials.queryIds;
+    if (queryIds && Object.keys(queryIds).length > 0) {
+      body.query_ids = queryIds;
     }
-    if (credentials.featureFlags) {
-      body.feature_flags = credentials.featureFlags;
+    if (featureFlags) {
+      body.feature_flags = featureFlags;
     }
 
     const response = await fetch(`${backendUrl}/api/v1/extension/credentials`, {
@@ -753,6 +775,14 @@ async function syncCredentials(credentials) {
         error: null
       }
     });
+
+    if (cookieCount > 0) {
+      console.debug('[XGrabba] Synced credentials (enriched)', {
+        cookieCount,
+        queryIdCount: Object.keys(queryIds || {}).length,
+        hasFeatureFlags: !!featureFlags
+      });
+    }
 
     return { success: true, status: data.status };
   } catch (error) {
