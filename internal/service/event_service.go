@@ -87,7 +87,7 @@ func NewEventService(cfg EventServiceConfig, logger *slog.Logger) (*EventService
 
 // initSQLite initializes the SQLite database.
 func (s *EventService) initSQLite() error {
-	db, err := sql.Open("sqlite3", s.cfg.SQLitePath)
+	db, err := sql.Open("sqlite", s.cfg.SQLitePath)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

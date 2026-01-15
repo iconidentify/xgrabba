@@ -24,7 +24,7 @@ import (
 	"github.com/iconidentify/xgrabba/pkg/twitter"
 	"github.com/iconidentify/xgrabba/pkg/usbclient"
 	"github.com/iconidentify/xgrabba/pkg/whisper"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 var (
