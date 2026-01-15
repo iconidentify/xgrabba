@@ -303,7 +303,7 @@ handlers:
 	var usbHandler *handler.USBHandler
 	if cfg.USB.Enabled {
 		usbClient := usbclient.NewClient(cfg.USB.ManagerURL, cfg.Server.APIKey)
-		usbHandler = handler.NewUSBHandler(usbClient, logger)
+		usbHandler = handler.NewUSBHandler(usbClient, logger, eventSvc)
 		logger.Info("USB export enabled", "manager_url", cfg.USB.ManagerURL)
 	}
 

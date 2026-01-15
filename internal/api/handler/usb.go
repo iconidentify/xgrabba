@@ -6,22 +6,26 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iconidentify/xgrabba/internal/domain"
 	"github.com/iconidentify/xgrabba/pkg/usbclient"
 )
 
 // USBHandler handles USB-related HTTP requests.
 type USBHandler struct {
-	client *usbclient.Client
-	logger *slog.Logger
+	client       *usbclient.Client
+	logger       *slog.Logger
+	eventEmitter domain.EventEmitter
 }
 
 // NewUSBHandler creates a new USB handler.
-func NewUSBHandler(client *usbclient.Client, logger *slog.Logger) *USBHandler {
+func NewUSBHandler(client *usbclient.Client, logger *slog.Logger, eventEmitter domain.EventEmitter) *USBHandler {
 	return &USBHandler{
-		client: client,
-		logger: logger,
+		client:       client,
+		logger:       logger,
+		eventEmitter: eventEmitter,
 	}
 }
 
@@ -162,6 +166,10 @@ func (h *USBHandler) MountDrive(w http.ResponseWriter, r *http.Request) {
 	mountPoint, err := h.client.MountDrive(r.Context(), device, req.MountAs)
 	if err != nil {
 		h.logger.Error("failed to mount USB drive", "device", device, "error", err)
+		h.emitUSBEvent(domain.EventSeverityError, "USB mount failed", domain.EventMetadata{
+			"device": device,
+			"error":  err.Error(),
+		})
 		h.writeJSON(w, http.StatusInternalServerError, USBMountResponse{
 			Success: false,
 			Message: err.Error(),
@@ -173,6 +181,10 @@ func (h *USBHandler) MountDrive(w http.ResponseWriter, r *http.Request) {
 		Success:    true,
 		MountPoint: mountPoint,
 		Message:    "Drive mounted successfully",
+	})
+	h.emitUSBEvent(domain.EventSeveritySuccess, "USB drive mounted", domain.EventMetadata{
+		"device":      device,
+		"mount_point": mountPoint,
 	})
 }
 
@@ -197,6 +209,11 @@ func (h *USBHandler) UnmountDrive(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.logger.Error("failed to unmount USB drive", "device", device, "force", force, "error", err)
+		h.emitUSBEvent(domain.EventSeverityError, "USB unmount failed", domain.EventMetadata{
+			"device": device,
+			"force":  force,
+			"error":  err.Error(),
+		})
 		h.writeJSON(w, http.StatusInternalServerError, USBUnmountResponse{
 			Success: false,
 			Message: err.Error(),
@@ -212,6 +229,10 @@ func (h *USBHandler) UnmountDrive(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, USBUnmountResponse{
 		Success: true,
 		Message: message,
+	})
+	h.emitUSBEvent(domain.EventSeveritySuccess, "USB drive unmounted", domain.EventMetadata{
+		"device": device,
+		"force":  force,
 	})
 }
 
@@ -247,9 +268,21 @@ func (h *USBHandler) FormatDrive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.emitUSBEvent(domain.EventSeverityInfo, "USB format started", domain.EventMetadata{
+		"device":     device,
+		"filesystem": req.Filesystem,
+		"label":      req.Label,
+	})
+
 	err := h.client.FormatDrive(r.Context(), device, req.Filesystem, req.Label, req.ConfirmToken)
 	if err != nil {
 		h.logger.Error("failed to format USB drive", "device", device, "error", err)
+		h.emitUSBEvent(domain.EventSeverityError, "USB format failed", domain.EventMetadata{
+			"device":     device,
+			"filesystem": req.Filesystem,
+			"label":      req.Label,
+			"error":      err.Error(),
+		})
 		h.writeJSON(w, http.StatusInternalServerError, USBFormatResponse{
 			Success: false,
 			Message: err.Error(),
@@ -260,6 +293,11 @@ func (h *USBHandler) FormatDrive(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, USBFormatResponse{
 		Success: true,
 		Message: "Drive formatted to " + req.Filesystem + " with label " + req.Label,
+	})
+	h.emitUSBEvent(domain.EventSeveritySuccess, "USB format completed", domain.EventMetadata{
+		"device":     device,
+		"filesystem": req.Filesystem,
+		"label":      req.Label,
 	})
 }
 
@@ -371,6 +409,12 @@ func (h *USBHandler) FormatDriveAsync(w http.ResponseWriter, r *http.Request) {
 	opID, err := h.client.FormatDriveAsync(r.Context(), device, req.Filesystem, req.Label, req.ConfirmToken)
 	if err != nil {
 		h.logger.Error("failed to start async format", "device", device, "error", err)
+		h.emitUSBEvent(domain.EventSeverityError, "USB format start failed", domain.EventMetadata{
+			"device":     device,
+			"filesystem": req.Filesystem,
+			"label":      req.Label,
+			"error":      err.Error(),
+		})
 		h.writeJSON(w, http.StatusInternalServerError, USBFormatAsyncResponse{
 			Status:  "error",
 			Message: err.Error(),
@@ -382,6 +426,12 @@ func (h *USBHandler) FormatDriveAsync(w http.ResponseWriter, r *http.Request) {
 		OperationID: opID,
 		Status:      "started",
 		Message:     "Format operation started",
+	})
+	h.emitUSBEvent(domain.EventSeverityInfo, "USB format started", domain.EventMetadata{
+		"device":       device,
+		"filesystem":   req.Filesystem,
+		"label":        req.Label,
+		"operation_id": opID,
 	})
 }
 
@@ -430,4 +480,19 @@ func (h *USBHandler) writeJSON(w http.ResponseWriter, status int, data interface
 // writeError writes an error response.
 func (h *USBHandler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (h *USBHandler) emitUSBEvent(severity domain.EventSeverity, message string, metadata domain.EventMetadata) {
+	if h.eventEmitter == nil {
+		return
+	}
+	h.eventEmitter.Emit(domain.Event{
+		Timestamp: time.Now(),
+		Severity:  severity,
+		Category:  domain.EventCategoryUSB,
+		Message:   message,
+		Source:    "USBHandler",
+		Metadata:  metadata.ToJSON(),
+	})
+	h.logger.Info("usb event emitted", "message", message, "severity", severity)
 }
