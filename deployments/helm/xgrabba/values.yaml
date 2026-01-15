@@ -146,15 +146,19 @@ livenessProbe:
   httpGet:
     path: /health
     port: http
-  initialDelaySeconds: 5
+  initialDelaySeconds: 10
   periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
 
 readinessProbe:
   httpGet:
     path: /ready
     port: http
-  initialDelaySeconds: 5
+  initialDelaySeconds: 10
   periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
 
 # Samba file sharing for browsing archives from Mac/Windows
 samba:
