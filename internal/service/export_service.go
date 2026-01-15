@@ -395,7 +395,8 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 			domain.EventMetadata{"export_id": exportID, "algorithm": "AES-256-GCM", "kdf": "Argon2id"})
 
 		var err error
-		encCtx, err = newEncryptionContext(opts.Password, opts.DestPath)
+		// Skip per-file syncs for USB drives - batch syncs at the end for better performance
+		encCtx, err = newEncryptionContext(opts.Password, opts.DestPath, true)
 		if err != nil {
 			s.setExportError(fmt.Sprintf("setup encryption: %v", err))
 			return
@@ -495,8 +496,23 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	if encCtx != nil {
 		// Streaming encryption: write encrypted manifest and data
 		s.mu.Lock()
-		s.activeExport.CurrentFile = "Writing encrypted metadata..."
+		s.activeExport.CurrentFile = "Syncing encrypted files to disk..."
 		exportID := s.activeExport.ID
+		s.mu.Unlock()
+
+		// Batch sync all encrypted files (much faster than syncing after each file)
+		s.logger.Info("batch syncing encrypted files", "file_count", len(encCtx.syncFiles))
+		syncStart := time.Now()
+		if err := encCtx.batchSyncFiles(); err != nil {
+			s.logger.Warn("batch sync had errors", "error", err)
+			// Continue anyway - files are written, just not synced
+		} else {
+			syncDuration := time.Since(syncStart)
+			s.logger.Info("batch sync completed", "file_count", len(encCtx.syncFiles), "duration", syncDuration)
+		}
+
+		s.mu.Lock()
+		s.activeExport.CurrentFile = "Writing encrypted metadata..."
 		s.mu.Unlock()
 
 		if err := encCtx.writeManifestAndData(opts.DestPath, tweetsJSON); err != nil {
@@ -1762,17 +1778,64 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 	var totalSize int64
 	var mediaCount int
 
-	// Copy media files
+	// Copy media files in parallel for better performance
 	exportedMedia := make([]ExportedMedia, 0, len(tweet.Media))
-	for _, media := range tweet.Media {
-		exported, size, err := s.exportMedia(ctx, &media, tweet.ArchivePath, destArchivePath, relArchivePath, encCtx)
-		if err != nil {
-			s.logger.Warn("failed to export media", "media_id", media.ID, "error", err)
-			continue
+	if len(tweet.Media) > 0 {
+		// Use worker pool for parallel processing
+		numWorkers := runtime.NumCPU()
+		if numWorkers > 4 {
+			numWorkers = 4 // Cap to avoid overwhelming USB
 		}
-		exportedMedia = append(exportedMedia, *exported)
-		totalSize += size
-		mediaCount++
+		if numWorkers < 1 {
+			numWorkers = 1
+		}
+
+		type mediaResult struct {
+			exported *ExportedMedia
+			size     int64
+			err      error
+		}
+
+		mediaChan := make(chan *domain.Media, len(tweet.Media))
+		resultChan := make(chan mediaResult, len(tweet.Media))
+
+		// Send all media to channel
+		for i := range tweet.Media {
+			mediaChan <- &tweet.Media[i]
+		}
+		close(mediaChan)
+
+		// Start workers
+		var wg sync.WaitGroup
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for media := range mediaChan {
+					exported, size, err := s.exportMedia(ctx, media, tweet.ArchivePath, destArchivePath, relArchivePath, encCtx)
+					resultChan <- mediaResult{exported: exported, size: size, err: err}
+				}
+			}()
+		}
+
+		// Close result channel when all workers done
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		// Collect results
+		for result := range resultChan {
+			if result.err != nil {
+				s.logger.Warn("failed to export media", "error", result.err)
+				continue
+			}
+			if result.exported != nil {
+				exportedMedia = append(exportedMedia, *result.exported)
+				totalSize += result.size
+				mediaCount++
+			}
+		}
 	}
 
 	// Copy avatar if exists
@@ -1961,6 +2024,9 @@ type encryptionContext struct {
 	encDir    string                   // Directory for encrypted files
 	manifest  map[string]manifestEntry // Maps original relative path to manifest entry
 	mu        sync.Mutex               // Protects manifest
+	skipSync  bool                     // Skip per-file syncs for better USB performance
+	syncFiles []string                 // Files to sync at the end (if skipSync is true)
+	syncMu    sync.Mutex               // Protects syncFiles
 }
 
 type manifestEntry struct {
@@ -1977,7 +2043,8 @@ type manifestFile struct {
 }
 
 // newEncryptionContext creates a new encryption context for streaming encryption.
-func newEncryptionContext(password, destPath string) (*encryptionContext, error) {
+// skipSync should be true for USB drives to improve performance (syncs batched at end).
+func newEncryptionContext(password, destPath string, skipSync bool) (*encryptionContext, error) {
 	enc, err := crypto.NewEncryptor(password)
 	if err != nil {
 		return nil, fmt.Errorf("create encryptor: %w", err)
@@ -1992,6 +2059,8 @@ func newEncryptionContext(password, destPath string) (*encryptionContext, error)
 		encryptor: enc,
 		encDir:    encDir,
 		manifest:  make(map[string]manifestEntry),
+		skipSync:  skipSync,
+		syncFiles: make([]string, 0),
 	}, nil
 }
 
@@ -2011,10 +2080,17 @@ func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPat
 	encName := hex.EncodeToString(hash[:8]) + ".enc"
 	dst := filepath.Join(ec.encDir, encName)
 
-	// Stream-encrypt the file
-	written, err := crypto.EncryptFileStream(ctx, src, dst, ec.encryptor)
+	// Stream-encrypt the file (skip sync for better USB performance)
+	written, err := crypto.EncryptFileStreamWithOptions(ctx, src, dst, ec.encryptor, ec.skipSync)
 	if err != nil {
 		return 0, err
+	}
+
+	// Track file for batched sync if skipping per-file syncs
+	if ec.skipSync {
+		ec.syncMu.Lock()
+		ec.syncFiles = append(ec.syncFiles, dst)
+		ec.syncMu.Unlock()
 	}
 
 	// Add to manifest
@@ -2031,6 +2107,57 @@ func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPat
 	ec.mu.Unlock()
 
 	return written, nil
+}
+
+// batchSyncFiles syncs all tracked files in parallel (for USB performance).
+// This is called at the end of export instead of syncing after each file.
+func (ec *encryptionContext) batchSyncFiles() error {
+	ec.syncMu.Lock()
+	files := make([]string, len(ec.syncFiles))
+	copy(files, ec.syncFiles)
+	ec.syncMu.Unlock()
+
+	if len(files) == 0 {
+		return nil
+	}
+
+	// Sync files in parallel (up to 8 at a time to avoid overwhelming USB)
+	const maxConcurrentSyncs = 8
+	sem := make(chan struct{}, maxConcurrentSyncs)
+	var wg sync.WaitGroup
+	var syncErr error
+	var syncErrMu sync.Mutex
+
+	for _, filePath := range files {
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
+		go func(path string) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release semaphore
+
+			f, err := os.OpenFile(path, os.O_RDWR, 0)
+			if err != nil {
+				syncErrMu.Lock()
+				if syncErr == nil {
+					syncErr = err
+				}
+				syncErrMu.Unlock()
+				return
+			}
+			err = f.Sync()
+			f.Close()
+			if err != nil {
+				syncErrMu.Lock()
+				if syncErr == nil {
+					syncErr = err
+				}
+				syncErrMu.Unlock()
+			}
+		}(filePath)
+	}
+
+	wg.Wait()
+	return syncErr
 }
 
 // writeManifestAndData writes the encrypted manifest and data files.

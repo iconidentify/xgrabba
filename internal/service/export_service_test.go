@@ -44,7 +44,7 @@ func TestEncryptingCopyFileManifestEntry(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := context.Background()
 
-	encCtx, err := newEncryptionContext("test-password", tmpDir)
+	encCtx, err := newEncryptionContext("test-password", tmpDir, false)
 	if err != nil {
 		t.Fatalf("newEncryptionContext failed: %v", err)
 	}

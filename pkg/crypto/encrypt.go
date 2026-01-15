@@ -39,15 +39,15 @@ const (
 	HeaderSize = 4 + 4 + SaltSize + NonceSize
 
 	// V2 streaming constants
-	DefaultChunkSize = 1024 * 1024 // 1MB chunks for streaming
+	DefaultChunkSize = 2 * 1024 * 1024 // 2MB chunks for streaming (increased for better USB throughput)
 	GCMTagSize       = 16          // GCM authentication tag size
 
 	// V2 Header size: magic(4) + version(4) + salt(32) + nonce(12) + chunkSize(4) = 56 bytes
 	HeaderSizeV2 = 4 + 4 + SaltSize + NonceSize + 4
 
 	// Pipeline constants for high-performance streaming
-	pipelineDepth = 4               // chunks in flight for async I/O
-	writerBufSize = 4 * 1024 * 1024 // 4MB bufio buffer for output
+	pipelineDepth = 4                // chunks in flight for async I/O
+	writerBufSize = 16 * 1024 * 1024 // 16MB bufio buffer for output (increased for USB performance)
 )
 
 var (
@@ -664,7 +664,14 @@ func EncryptFile(srcPath, dstPath, password string) error {
 // EncryptFileStream encrypts a file using streaming (v2 format, constant memory).
 // This is the recommended method for large files as it doesn't load the entire file into memory.
 // Uses buffered I/O to coalesce small writes (4-byte length headers) for better throughput.
+// If skipSync is true, the file sync is skipped (faster for USB drives, OS handles flushing).
 func EncryptFileStream(ctx context.Context, srcPath, dstPath string, enc *Encryptor) (int64, error) {
+	return EncryptFileStreamWithOptions(ctx, srcPath, dstPath, enc, false)
+}
+
+// EncryptFileStreamWithOptions encrypts a file with additional options.
+// skipSync: if true, skips the file sync (faster on USB, but less safe on power loss).
+func EncryptFileStreamWithOptions(ctx context.Context, srcPath, dstPath string, enc *Encryptor, skipSync bool) (int64, error) {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
 		return 0, fmt.Errorf("open source: %w", err)
@@ -696,9 +703,13 @@ func EncryptFileStream(ctx context.Context, srcPath, dstPath string, enc *Encryp
 	}
 
 	// Sync to ensure data is written to disk (critical for USB drives)
-	if err := dstFile.Sync(); err != nil {
-		dstFile.Close()
-		return written, fmt.Errorf("sync destination: %w", err)
+	// However, on USB drives, syncing after every file is extremely slow.
+	// For better performance, skip sync here and batch syncs at the end.
+	if !skipSync {
+		if err := dstFile.Sync(); err != nil {
+			dstFile.Close()
+			return written, fmt.Errorf("sync destination: %w", err)
+		}
 	}
 
 	if err := dstFile.Close(); err != nil {
