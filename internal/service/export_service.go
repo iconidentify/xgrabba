@@ -19,6 +19,7 @@ import (
 
 	"github.com/iconidentify/xgrabba/internal/domain"
 	"github.com/iconidentify/xgrabba/pkg/crypto"
+	"github.com/iconidentify/xgrabba/pkg/ui"
 )
 
 // ExportService handles exporting the archive to portable formats.
@@ -2069,19 +2070,18 @@ func (ec *encryptionContext) writeManifestAndData(destPath string, tweetsData []
 // It creates a loader page that fetches tweets-data.json, sets OFFLINE_DATA,
 // and then includes the main UI which will detect offline mode automatically.
 func (s *ExportService) copyOfflineUI(destPath string) error {
-	// Try to read the source index.html for the full UI experience
+	// Use the embedded shared UI (same UI as main server)
 	// The HTML has offline mode support built-in via OFFLINE_DATA detection
-	srcHTMLPath := filepath.Join("internal", "api", "handler", "ui", "index.html")
-	srcHTML, err := os.ReadFile(srcHTMLPath)
-	if err == nil {
-		// Successfully read source - inject offline data loader script
-		offlineHTML := injectOfflineDataLoader(string(srcHTML))
-		s.logger.Info("writing index.html from source", "path", destPath)
+	if len(ui.IndexHTML) > 0 {
+		// Inject offline data loader script into the shared UI
+		offlineHTML := injectOfflineDataLoader(string(ui.IndexHTML))
+		s.logger.Info("writing index.html from shared UI", "path", destPath)
 		return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
 	}
 
-	// Fallback: generate a standalone offline viewer if source not available
-	s.logger.Info("source index.html not found, using standalone offline viewer")
+	// Fallback: generate a standalone offline viewer if shared UI not available
+	// This should never happen in normal builds but provides safety
+	s.logger.Warn("shared UI not available, using standalone offline viewer")
 	offlineHTML := generateOfflineHTML()
 	return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
 }

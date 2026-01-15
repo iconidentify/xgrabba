@@ -7355,6 +7355,52 @@
             };
         }
 
+        // Convert offline tweet format to detail modal format (used when clicking View in offline mode)
+        function convertOfflineTweetToDetailFormat(t) {
+            return {
+                tweet_id: t.tweet_id,
+                url: t.url,
+                // The detail modal expects author as an object
+                author: {
+                    username: t.author?.username || '',
+                    display_name: t.author?.display_name || '',
+                    avatar_url: t.author?.avatar_path || null,
+                    verified: t.author?.verified || false,
+                    follower_count: t.author?.follower_count || 0,
+                    following_count: t.author?.following_count || 0,
+                    tweet_count: t.author?.tweet_count || 0,
+                    description: t.author?.description || ''
+                },
+                text: t.text,
+                posted_at: t.posted_at,
+                archived_at: t.archived_at,
+                media: (t.media || []).map(m => ({
+                    id: m.id,
+                    type: m.type,
+                    // In offline mode, local_path is the relative path that works with the viewer
+                    url: m.local_path || '',
+                    local_path: m.local_path || '',
+                    thumbnail_url: m.thumbnail_path || (m.type === 'image' ? m.local_path : null),
+                    content_type: m.content_type || (m.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+                    duration: m.duration_seconds || 0,
+                    transcript: m.transcript || '',
+                    transcript_language: m.transcript_language || '',
+                    ai_caption: m.ai_caption || '',
+                    ai_tags: m.ai_tags || [],
+                    ai_topics: m.ai_topics || []
+                })),
+                metrics: t.metrics || { likes: 0, retweets: 0, replies: 0, views: 0 },
+                ai_title: t.ai_title || '',
+                ai_summary: t.ai_summary || '',
+                ai_tags: t.ai_tags || [],
+                ai_content_type: t.ai_content_type || '',
+                ai_topics: t.ai_topics || [],
+                status: 'completed',
+                archive_path: t.archive_path || '',
+                notes: t.notes || ''
+            };
+        }
+
         // Legacy function for backwards compatibility
         async function fetchTweetsRaw() {
             const result = await fetchTweetsPage(0, 100, '');
@@ -8278,10 +8324,21 @@
             document.body.style.overflow = 'hidden';
 
             try {
-                const response = await fetch(`/api/v1/tweets/${tweetId}/full`, {
-                    headers: { 'X-API-Key': API_KEY }
-                });
-                const tweet = await response.json();
+                let tweet;
+                if (OFFLINE_MODE) {
+                    // In offline mode, find the tweet from OFFLINE_TWEETS
+                    tweet = OFFLINE_TWEETS.find(t => t.tweet_id === tweetId);
+                    if (!tweet) {
+                        throw new Error('Tweet not found in offline data');
+                    }
+                    // Convert offline format to detail format
+                    tweet = convertOfflineTweetToDetailFormat(tweet);
+                } else {
+                    const response = await fetch(`/api/v1/tweets/${tweetId}/full`, {
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+                    tweet = await response.json();
+                }
                 currentTweetDetail = tweet;
 
                 // Update navigation state
@@ -8435,6 +8492,20 @@
                         ` : ''}
 
                         <!-- Notes Section -->
+                        ${OFFLINE_MODE ? (
+                            // In offline mode: show notes read-only if they exist
+                            (tweet.notes || loadNote(tweet.tweet_id)) ? `
+                            <div class="detail-section detail-notes-section">
+                                <div class="detail-notes-header">
+                                    <div class="detail-notes-label">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                                        Notes
+                                    </div>
+                                </div>
+                                <div class="detail-notes-readonly" style="padding: 12px; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(tweet.notes || loadNote(tweet.tweet_id))}</div>
+                            </div>
+                            ` : ''
+                        ) : `
                         <div class="detail-section detail-notes-section">
                             <div class="detail-notes-header">
                                 <div class="detail-notes-label">
@@ -8445,6 +8516,7 @@
                             </div>
                             <textarea class="detail-notes-textarea" placeholder="Add your notes here..." oninput="handleNoteChange('${tweet.tweet_id}', this)">${escapeHtml(loadNote(tweet.tweet_id))}</textarea>
                         </div>
+                        `}
                     </div>
 
                     <!-- Right Column: Metadata -->
@@ -10613,11 +10685,18 @@
                 'backfillModal',      // Backfill truncated tweets modal
                 'bookmarksBtn',       // Bookmarks button in header
                 'bookmarksModal',     // Bookmarks modal
+                'exportBtn',          // Export button in header
             ];
             serverOnlyElements.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
             });
+
+            // Hide settings/stats button and admin events link (no IDs, need to select differently)
+            document.querySelectorAll('.header-btn[onclick*="toggleStatsModal"]').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.header-btn[href*="/admin/events"]').forEach(el => el.style.display = 'none');
+            // Also hide the divider before settings since export group is hidden
+            document.querySelectorAll('.header-divider').forEach(el => el.style.display = 'none');
 
             // Hide stats pills that show server metrics
             document.querySelectorAll('.stat-pill.archive-stat').forEach(el => {
@@ -10629,6 +10708,21 @@
 
             // Update title to indicate offline mode
             document.title = 'XGrabba Archive (Offline)';
+
+            // Add encryption badge to header
+            const headerH1 = document.querySelector('header.header h1');
+            if (headerH1) {
+                const badge = document.createElement('span');
+                badge.className = 'encryption-badge';
+                badge.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 4px;">
+                        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                    </svg>
+                    Encrypted (AES-256)
+                `;
+                badge.style.cssText = 'display: inline-flex; align-items: center; margin-left: 12px; padding: 4px 10px; background: rgba(0, 186, 124, 0.15); color: #00ba7c; font-size: 11px; font-weight: 600; border-radius: 9999px; letter-spacing: 0.3px;';
+                headerH1.appendChild(badge);
+            }
 
             // Display export metadata if available
             const metadata = window.OFFLINE_DATA?.metadata;

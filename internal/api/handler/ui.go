@@ -1,19 +1,11 @@
 package handler
 
 import (
-	_ "embed"
 	"net/http"
 	"strings"
+
+	"github.com/iconidentify/xgrabba/pkg/ui"
 )
-
-//go:embed ui/index.html
-var uiHTML []byte
-
-//go:embed ui/quick.html
-var quickHTML []byte
-
-//go:embed ui/admin_events.html
-var adminEventsHTML []byte
 
 // UIHandler serves the web UI.
 type UIHandler struct{}
@@ -26,13 +18,13 @@ func NewUIHandler() *UIHandler {
 // Index serves the main UI page (full archive browser).
 func (h *UIHandler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(uiHTML)
+	w.Write(ui.IndexHTML)
 }
 
 // Quick serves the mobile-optimized quick archive page.
 func (h *UIHandler) Quick(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(quickHTML)
+	w.Write(ui.QuickHTML)
 }
 
 // Smart serves the appropriate UI based on user agent (mobile vs desktop).
@@ -45,14 +37,14 @@ func (h *UIHandler) Smart(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if isMobile {
-		w.Write(quickHTML)
+		w.Write(ui.QuickHTML)
 	} else {
-		w.Write(uiHTML)
+		w.Write(ui.IndexHTML)
 	}
 }
 
 // AdminEvents serves the admin activity log page.
 func (h *UIHandler) AdminEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(adminEventsHTML)
+	w.Write(ui.AdminEventsHTML)
 }
