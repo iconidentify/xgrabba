@@ -24,10 +24,12 @@ import (
 
 // ExportService handles exporting the archive to portable formats.
 type ExportService struct {
-	tweetSvc     *TweetService
-	logger       *slog.Logger
-	eventEmitter domain.EventEmitter
-	storagePath  string // Base storage path for persistence
+	tweetSvc      *TweetService
+	logger        *slog.Logger
+	eventEmitter  domain.EventEmitter
+	storagePath   string // Base storage path for persistence
+	volumeLister  func() []Volume
+	estimateSizer func(ctx context.Context) (int64, error)
 
 	// Async export state
 	mu           sync.Mutex
@@ -73,6 +75,14 @@ func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter 
 		eventEmitter: eventEmitter,
 		storagePath:  storagePath,
 	}
+	svc.volumeLister = svc.GetAvailableVolumes
+	svc.estimateSizer = func(ctx context.Context) (int64, error) {
+		estimate, err := svc.EstimateExport(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return estimate.EstimatedSizeBytes, nil
+	}
 
 	// Load persisted export state on startup
 	if err := svc.loadExportState(); err != nil {
@@ -81,6 +91,11 @@ func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter 
 
 	return svc
 }
+
+const (
+	exportSizeSafetyMargin = 0.10
+	exportSizeMinHeadroom  = 256 * 1024 * 1024 // 256MB
+)
 
 // emitEvent emits an event if the event emitter is configured.
 func (s *ExportService) emitEvent(severity domain.EventSeverity, category domain.EventCategory, message string, metadata domain.EventMetadata) {
@@ -230,13 +245,20 @@ func (s *ExportService) StartExportAsync(opts ExportOptions) (string, error) {
 		s.mu.Unlock()
 		return "", ErrExportInProgress
 	}
+	s.mu.Unlock()
 
 	// Generate export ID
 	exportID := fmt.Sprintf("exp_%d", time.Now().UnixNano())
 
+	// Validate available space before starting
+	if err := s.ensureExportSpace(context.Background(), opts); err != nil {
+		return "", err
+	}
+
 	// Create cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 
+	s.mu.Lock()
 	s.activeExport = &ActiveExport{
 		ID:         exportID,
 		DestPath:   opts.DestPath,
@@ -256,6 +278,91 @@ func (s *ExportService) StartExportAsync(opts ExportOptions) (string, error) {
 	go s.runExportAsync(ctx, opts)
 
 	return exportID, nil
+}
+
+func (s *ExportService) ensureExportSpace(ctx context.Context, opts ExportOptions) error {
+	if opts.DestPath == "" {
+		return nil
+	}
+
+	estimatedBytes, err := s.estimateSizer(ctx)
+	if err != nil {
+		return fmt.Errorf("estimate export size: %w", err)
+	}
+
+	requiredBytes := int64(float64(estimatedBytes)*(1.0+exportSizeSafetyMargin)) + exportSizeMinHeadroom
+	volumePath, freeBytes := s.resolveFreeBytes(opts)
+	if freeBytes == 0 {
+		return fmt.Errorf("unable to determine free space for %s", volumePath)
+	}
+
+	if freeBytes < requiredBytes {
+		return fmt.Errorf("insufficient space on %s: need %s, have %s",
+			volumePath,
+			formatExportBytes(requiredBytes),
+			formatExportBytes(freeBytes),
+		)
+	}
+
+	return nil
+}
+
+func (s *ExportService) resolveFreeBytes(opts ExportOptions) (string, int64) {
+	volumes := s.volumeLister()
+
+	cleanMount := filepath.Clean(opts.MountPoint)
+	if cleanMount != "." && cleanMount != "" {
+		for _, vol := range volumes {
+			if filepath.Clean(vol.Path) == cleanMount {
+				return vol.Path, vol.FreeBytes
+			}
+		}
+		if free := getFreeDiskSpace(cleanMount); free > 0 {
+			return cleanMount, free
+		}
+	}
+
+	cleanDest := filepath.Clean(opts.DestPath)
+	bestMatch := ""
+	bestFree := int64(0)
+	for _, vol := range volumes {
+		volPath := filepath.Clean(vol.Path)
+		if strings.HasPrefix(cleanDest, volPath) && len(volPath) > len(bestMatch) {
+			bestMatch = vol.Path
+			bestFree = vol.FreeBytes
+		}
+	}
+	if bestMatch != "" {
+		return bestMatch, bestFree
+	}
+
+	if free := getFreeDiskSpace(cleanDest); free > 0 {
+		return cleanDest, free
+	}
+
+	parent := filepath.Dir(cleanDest)
+	if free := getFreeDiskSpace(parent); free > 0 {
+		return parent, free
+	}
+
+	return cleanDest, 0
+}
+
+func formatExportBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	suffixes := []string{"KB", "MB", "GB", "TB", "PB"}
+	if exp >= len(suffixes) {
+		exp = len(suffixes) - 1
+	}
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), suffixes[exp])
 }
 
 // runExportAsync runs the export operation and updates progress.
@@ -429,12 +536,12 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	for i, tweet := range tweets {
 		select {
 		case <-ctx.Done():
-		s.mu.Lock()
-		s.activeExport.Phase = "cancelled"
-		s.mu.Unlock()
-		s.saveExportState() // Persist cancelled state
-		// Clean up partial export
-		s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
+			s.mu.Lock()
+			s.activeExport.Phase = "cancelled"
+			s.mu.Unlock()
+			s.saveExportState() // Persist cancelled state
+			// Clean up partial export
+			s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
 			s.cleanupExport(opts.DestPath)
 			return
 		default:
@@ -1141,23 +1248,23 @@ func (s *ExportService) CancelExport() error {
 		return fmt.Errorf("export not in progress (phase: %s)", s.activeExport.Phase)
 	}
 
-		// Immediately set phase to cancelled so UI updates right away
-		s.activeExport.Phase = "cancelled"
-		s.activeExport.CurrentFile = "Cancelling export..."
-		s.activeExport.Error = "Export cancelled by user"
-		s.mu.Unlock()
+	// Immediately set phase to cancelled so UI updates right away
+	s.activeExport.Phase = "cancelled"
+	s.activeExport.CurrentFile = "Cancelling export..."
+	s.activeExport.Error = "Export cancelled by user"
+	s.mu.Unlock()
 
-		// Persist cancelled state
-		s.saveExportState()
+	// Persist cancelled state
+	s.saveExportState()
 
-		// Cancel the context to stop the export goroutine
-		s.mu.Lock()
-		if s.activeExport.cancelFunc != nil {
-			s.activeExport.cancelFunc()
-		}
-		s.mu.Unlock()
+	// Cancel the context to stop the export goroutine
+	s.mu.Lock()
+	if s.activeExport.cancelFunc != nil {
+		s.activeExport.cancelFunc()
+	}
+	s.mu.Unlock()
 
-		return nil
+	return nil
 }
 
 // IsExportUsingPath checks if an active export is writing to a path under the given mount point.
@@ -1495,29 +1602,6 @@ func (s *ExportService) CleanupDownloadExport() {
 		os.Remove(s.activeExport.ZipPath)
 		s.activeExport.ZipPath = ""
 	}
-}
-
-// getFreeDiskSpace returns the free disk space at the given path.
-func getFreeDiskSpace(path string) int64 {
-	// This is a simplified implementation that works on Unix systems
-	// For a production implementation, use syscall.Statfs on Unix or GetDiskFreeSpaceEx on Windows
-	stat, err := os.Stat(path)
-	if err != nil || !stat.IsDir() {
-		return 0
-	}
-
-	// Try to write a temp file to check if writable
-	testFile := filepath.Join(path, ".xgrabba_test")
-	f, err := os.Create(testFile)
-	if err != nil {
-		return 0
-	}
-	f.Close()
-	os.Remove(testFile)
-
-	// Return a placeholder - in production, use proper disk space API
-	// For now, return 100GB as a reasonable default for detection
-	return 100 * 1024 * 1024 * 1024
 }
 
 // ExportOptions configures the export process.

@@ -166,6 +166,62 @@ func TestActiveExport_PhaseTransitions(t *testing.T) {
 	}
 }
 
+func TestExportService_EnsureExportSpace_Insufficient(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	svc := NewExportService(nil, logger, nil, "")
+	svc.volumeLister = func() []Volume {
+		return []Volume{{Path: "/mnt/usb", FreeBytes: 100}}
+	}
+	svc.estimateSizer = func(ctx context.Context) (int64, error) {
+		return 1024 * 1024 * 1024, nil
+	}
+
+	err := svc.ensureExportSpace(context.Background(), ExportOptions{
+		DestPath:   "/mnt/usb/export",
+		MountPoint: "/mnt/usb",
+	})
+	if err == nil {
+		t.Fatal("expected insufficient space error")
+	}
+}
+
+func TestExportService_EnsureExportSpace_Sufficient(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	svc := NewExportService(nil, logger, nil, "")
+	svc.volumeLister = func() []Volume {
+		return []Volume{{Path: "/mnt/usb", FreeBytes: 10 * 1024 * 1024 * 1024}}
+	}
+	svc.estimateSizer = func(ctx context.Context) (int64, error) {
+		return 1024 * 1024 * 1024, nil
+	}
+
+	err := svc.ensureExportSpace(context.Background(), ExportOptions{
+		DestPath:   "/mnt/usb/export",
+		MountPoint: "/mnt/usb",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExportService_EnsureExportSpace_UsesDestPath(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	svc := NewExportService(nil, logger, nil, "")
+	svc.volumeLister = func() []Volume {
+		return []Volume{{Path: "/mnt/usb", FreeBytes: 5 * 1024 * 1024 * 1024}}
+	}
+	svc.estimateSizer = func(ctx context.Context) (int64, error) {
+		return 1024 * 1024 * 1024, nil
+	}
+
+	err := svc.ensureExportSpace(context.Background(), ExportOptions{
+		DestPath: "/mnt/usb/export",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestFormatExportBytes(t *testing.T) {
 	tests := []struct {
 		bytes    int64
