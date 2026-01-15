@@ -27,6 +27,7 @@ type ExportService struct {
 	tweetSvc     *TweetService
 	logger       *slog.Logger
 	eventEmitter domain.EventEmitter
+	storagePath  string // Base storage path for persistence
 
 	// Async export state
 	mu           sync.Mutex
@@ -65,12 +66,20 @@ type Volume struct {
 }
 
 // NewExportService creates a new export service.
-func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter domain.EventEmitter) *ExportService {
-	return &ExportService{
+func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter domain.EventEmitter, storagePath string) *ExportService {
+	svc := &ExportService{
 		tweetSvc:     tweetSvc,
 		logger:       logger,
 		eventEmitter: eventEmitter,
+		storagePath:  storagePath,
 	}
+
+	// Load persisted export state on startup
+	if err := svc.loadExportState(); err != nil {
+		logger.Warn("failed to load export state", "error", err)
+	}
+
+	return svc
 }
 
 // emitEvent emits an event if the event emitter is configured.
@@ -420,11 +429,12 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	for i, tweet := range tweets {
 		select {
 		case <-ctx.Done():
-			s.mu.Lock()
-			s.activeExport.Phase = "cancelled"
-			s.mu.Unlock()
-			// Clean up partial export
-			s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
+		s.mu.Lock()
+		s.activeExport.Phase = "cancelled"
+		s.mu.Unlock()
+		s.saveExportState() // Persist cancelled state
+		// Clean up partial export
+		s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
 			s.cleanupExport(opts.DestPath)
 			return
 		default:
@@ -501,9 +511,26 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 		s.mu.Unlock()
 
 		// Batch sync all encrypted files (much faster than syncing after each file)
+		// Check for cancellation before batch sync
+		select {
+		case <-ctx.Done():
+			s.mu.Lock()
+			s.activeExport.Phase = "cancelled"
+			s.mu.Unlock()
+			s.logger.Info("export cancelled before batch sync", "path", opts.DestPath)
+			s.cleanupExport(opts.DestPath)
+			return
+		default:
+		}
+
 		s.logger.Info("batch syncing encrypted files", "file_count", len(encCtx.syncFiles))
 		syncStart := time.Now()
-		if err := encCtx.batchSyncFiles(); err != nil {
+		if err := encCtx.batchSyncFiles(ctx); err != nil {
+			if err == context.Canceled {
+				s.logger.Info("batch sync cancelled", "path", opts.DestPath)
+				s.cleanupExport(opts.DestPath)
+				return
+			}
 			s.logger.Warn("batch sync had errors", "error", err)
 			// Continue anyway - files are written, just not synced
 		} else {
@@ -600,6 +627,12 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.activeExport.Phase = "completed"
 	s.activeExport.CurrentFile = ""
 	exportID := s.activeExport.ID
+	s.mu.Unlock()
+
+	// Persist completed state
+	s.saveExportState()
+
+	s.mu.Lock()
 	bytesWritten := s.activeExport.BytesWritten
 	s.mu.Unlock()
 
@@ -1108,11 +1141,23 @@ func (s *ExportService) CancelExport() error {
 		return fmt.Errorf("export not in progress (phase: %s)", s.activeExport.Phase)
 	}
 
-	if s.activeExport.cancelFunc != nil {
-		s.activeExport.cancelFunc()
-	}
+		// Immediately set phase to cancelled so UI updates right away
+		s.activeExport.Phase = "cancelled"
+		s.activeExport.CurrentFile = "Cancelling export..."
+		s.activeExport.Error = "Export cancelled by user"
+		s.mu.Unlock()
 
-	return nil
+		// Persist cancelled state
+		s.saveExportState()
+
+		// Cancel the context to stop the export goroutine
+		s.mu.Lock()
+		if s.activeExport.cancelFunc != nil {
+			s.activeExport.cancelFunc()
+		}
+		s.mu.Unlock()
+
+		return nil
 }
 
 // IsExportUsingPath checks if an active export is writing to a path under the given mount point.
@@ -2111,7 +2156,7 @@ func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPat
 
 // batchSyncFiles syncs all tracked files in parallel (for USB performance).
 // This is called at the end of export instead of syncing after each file.
-func (ec *encryptionContext) batchSyncFiles() error {
+func (ec *encryptionContext) batchSyncFiles(ctx context.Context) error {
 	ec.syncMu.Lock()
 	files := make([]string, len(ec.syncFiles))
 	copy(files, ec.syncFiles)
@@ -2119,6 +2164,13 @@ func (ec *encryptionContext) batchSyncFiles() error {
 
 	if len(files) == 0 {
 		return nil
+	}
+
+	// Check for cancellation before starting
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	// Sync files in parallel (up to 8 at a time to avoid overwhelming USB)
@@ -2129,6 +2181,13 @@ func (ec *encryptionContext) batchSyncFiles() error {
 	var syncErrMu sync.Mutex
 
 	for _, filePath := range files {
+		// Check for cancellation before each file
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		wg.Add(1)
 		sem <- struct{}{} // Acquire semaphore
 		go func(path string) {
@@ -2900,4 +2959,176 @@ func generateOfflineHTML() string {
     </script>
 </body>
 </html>`
+}
+
+// exportStatePath returns the path to the persisted export state file.
+func (s *ExportService) exportStatePath() string {
+	if s.storagePath == "" {
+		return ""
+	}
+	return filepath.Join(s.storagePath, ".export_state.json")
+}
+
+// saveExportState persists the current export state to disk.
+func (s *ExportService) saveExportState() error {
+	if s.storagePath == "" {
+		return nil // No persistence if no storage path
+	}
+
+	s.mu.Lock()
+	export := s.activeExport
+	s.mu.Unlock()
+
+	if export == nil {
+		// No active export, remove state file if it exists
+		statePath := s.exportStatePath()
+		if _, err := os.Stat(statePath); err == nil {
+			os.Remove(statePath)
+		}
+		return nil
+	}
+
+	// Create a serializable copy (without cancelFunc)
+	state := struct {
+		ID             string    `json:"export_id"`
+		DestPath       string    `json:"dest_path"`
+		MountPoint     string    `json:"mount_point,omitempty"`
+		Phase          string    `json:"phase"`
+		TotalTweets    int       `json:"total_tweets"`
+		ExportedTweets int       `json:"exported_tweets"`
+		BytesWritten   int64     `json:"bytes_written"`
+		CurrentFile    string    `json:"current_file"`
+		StartedAt      time.Time `json:"started_at"`
+		Error          string    `json:"error,omitempty"`
+		ZipPath        string    `json:"zip_path,omitempty"`
+	}{
+		ID:             export.ID,
+		DestPath:       export.DestPath,
+		MountPoint:     export.MountPoint,
+		Phase:          export.Phase,
+		TotalTweets:    export.TotalTweets,
+		ExportedTweets: export.ExportedTweets,
+		BytesWritten:   export.BytesWritten,
+		CurrentFile:    export.CurrentFile,
+		StartedAt:      export.StartedAt,
+		Error:          export.Error,
+		ZipPath:        export.ZipPath,
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal export state: %w", err)
+	}
+
+	statePath := s.exportStatePath()
+	if err := os.MkdirAll(filepath.Dir(statePath), 0755); err != nil {
+		return fmt.Errorf("create state directory: %w", err)
+	}
+
+	if err := os.WriteFile(statePath, data, 0644); err != nil {
+		return fmt.Errorf("write state file: %w", err)
+	}
+
+	return nil
+}
+
+// loadExportState loads persisted export state from disk.
+func (s *ExportService) loadExportState() error {
+	if s.storagePath == "" {
+		return nil
+	}
+
+	statePath := s.exportStatePath()
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // No state file, nothing to load
+		}
+		return fmt.Errorf("read state file: %w", err)
+	}
+
+	var state struct {
+		ID             string    `json:"export_id"`
+		DestPath       string    `json:"dest_path"`
+		MountPoint     string    `json:"mount_point,omitempty"`
+		Phase          string    `json:"phase"`
+		TotalTweets    int       `json:"total_tweets"`
+		ExportedTweets int       `json:"exported_tweets"`
+		BytesWritten   int64     `json:"bytes_written"`
+		CurrentFile    string    `json:"current_file"`
+		StartedAt      time.Time `json:"started_at"`
+		Error          string    `json:"error,omitempty"`
+		ZipPath        string    `json:"zip_path,omitempty"`
+	}
+
+	if err := json.Unmarshal(data, &state); err != nil {
+		s.logger.Warn("failed to parse export state, removing corrupted file", "error", err, "path", statePath)
+		os.Remove(statePath)
+		return nil
+	}
+
+	// Only restore if export was in progress (not completed/failed/cancelled)
+	if state.Phase == "preparing" || state.Phase == "exporting" || state.Phase == "finalizing" {
+		s.mu.Lock()
+		s.activeExport = &ActiveExport{
+			ID:             state.ID,
+			DestPath:       state.DestPath,
+			MountPoint:     state.MountPoint,
+			Phase:          "failed", // Mark as failed since we can't resume
+			TotalTweets:    state.TotalTweets,
+			ExportedTweets: state.ExportedTweets,
+			BytesWritten:   state.BytesWritten,
+			CurrentFile:    state.CurrentFile,
+			StartedAt:      state.StartedAt,
+			Error:          "Export interrupted by pod restart - cannot resume",
+			ZipPath:        state.ZipPath,
+		}
+		s.mu.Unlock()
+
+		s.logger.Info("restored export state from previous session",
+			"export_id", state.ID,
+			"phase", state.Phase,
+			"dest_path", state.DestPath,
+			"exported_tweets", state.ExportedTweets,
+			"total_tweets", state.TotalTweets)
+
+		// Emit event about the interrupted export
+		s.emitEvent(domain.EventSeverityWarning, domain.EventCategoryExport,
+			fmt.Sprintf("Previous export interrupted by restart: %s", state.CurrentFile),
+			domain.EventMetadata{
+				"export_id":       state.ID,
+				"dest_path":       state.DestPath,
+				"exported_tweets": state.ExportedTweets,
+				"total_tweets":    state.TotalTweets,
+			})
+	}
+
+	return nil
+}
+
+// SaveExportStateOnShutdown saves export state during graceful shutdown.
+// This is called before the server shuts down to ensure state is persisted.
+func (s *ExportService) SaveExportStateOnShutdown() {
+	s.mu.Lock()
+	hasActiveExport := s.activeExport != nil
+	var exportID, phase, destPath string
+	if s.activeExport != nil {
+		exportID = s.activeExport.ID
+		phase = s.activeExport.Phase
+		destPath = s.activeExport.DestPath
+	}
+	s.mu.Unlock()
+
+	if hasActiveExport {
+		s.logger.Info("saving export state on shutdown",
+			"export_id", exportID,
+			"phase", phase,
+			"dest_path", destPath)
+
+		if err := s.saveExportState(); err != nil {
+			s.logger.Error("failed to save export state on shutdown", "error", err)
+		} else {
+			s.logger.Info("export state saved successfully")
+		}
+	}
 }

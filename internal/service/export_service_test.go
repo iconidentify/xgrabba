@@ -86,7 +86,7 @@ func TestEncryptingCopyFileManifestEntry(t *testing.T) {
 
 func TestExportService_GetAvailableVolumes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	volumes := svc.GetAvailableVolumes()
 
@@ -103,7 +103,7 @@ func TestExportService_GetAvailableVolumes(t *testing.T) {
 
 func TestExportService_GetExportStatus_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	status := svc.GetExportStatus()
 
@@ -118,7 +118,7 @@ func TestExportService_GetExportStatus_NoActiveExport(t *testing.T) {
 
 func TestExportService_CancelExport_NoActiveExport(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	err := svc.CancelExport()
 
@@ -129,7 +129,7 @@ func TestExportService_CancelExport_NoActiveExport(t *testing.T) {
 
 func TestExportService_StartExportAsync_AlreadyInProgress(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	// Simulate an active export
 	svc.mu.Lock()
@@ -792,7 +792,7 @@ func TestCopyViewerBinaries_Service(t *testing.T) {
 
 	// Create ExportService and call copyViewerBinaries
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	err = svc.copyViewerBinaries(srcDir, dstDir)
 	if err != nil {
@@ -827,7 +827,7 @@ func TestCopyViewerBinaries_Service(t *testing.T) {
 
 func TestExportService_IsExportUsingPath(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	// No active export
 	if svc.IsExportUsingPath("/Volumes/USB") {
@@ -880,7 +880,7 @@ func TestExportService_IsExportUsingPath(t *testing.T) {
 
 func TestExportService_CancelExportForPath(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := NewExportService(nil, logger, nil)
+	svc := NewExportService(nil, logger, nil, "")
 
 	// No active export - should return false
 	if svc.CancelExportForPath("/Volumes/USB") {

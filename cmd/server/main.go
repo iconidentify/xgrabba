@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -90,15 +91,20 @@ func main() {
 	}
 
 	// Event service for activity log / admin console (created early so other services can emit events)
+	// Enable SQLite persistence so events survive pod restarts
+	eventsDBPath := filepath.Join(cfg.Storage.BasePath, ".events.db")
 	eventSvc, err := service.NewEventService(service.EventServiceConfig{
 		RingBufferSize:  1000,
-		PersistToSQLite: false, // In-memory only for now
+		PersistToSQLite: true,
+		SQLitePath:      eventsDBPath,
+		RetentionDays:   90, // Keep events for 90 days
 	}, logger)
 	if err != nil {
 		logger.Error("failed to create event service", "error", err)
 		os.Exit(1)
 	}
 	defer eventSvc.Close()
+	logger.Info("event service initialized with SQLite persistence", "db_path", eventsDBPath)
 
 	// Initialize services
 	videoSvc := service.NewVideoService(
@@ -123,8 +129,8 @@ func main() {
 		eventSvc,
 	)
 
-	// Initialize export service
-	exportSvc := service.NewExportService(tweetSvc, logger, eventSvc)
+	// Initialize export service with storage path for state persistence
+	exportSvc := service.NewExportService(tweetSvc, logger, eventSvc, cfg.Storage.BasePath)
 
 	// Start AI metadata backfill in background for legacy tweets
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
@@ -345,6 +351,10 @@ handlers:
 	<-quit
 
 	logger.Info("shutting down")
+
+	// Save export state before shutdown
+	exportSvc.SaveExportStateOnShutdown()
+	logger.Info("export state saved")
 
 	// Cancel background tasks
 	cancelBackfill()

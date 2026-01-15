@@ -11914,6 +11914,10 @@
                     } else if (status.phase === 'cancelled') {
                         document.getElementById('exportErrorMessage').textContent = 'Export was cancelled.';
                         showExportView('error');
+                        // Close modal after a short delay to show the error message
+                        setTimeout(() => {
+                            closeExportModal();
+                        }, 2000);
                     }
                 }
             } catch (err) {
@@ -12002,12 +12006,25 @@
             }
 
             try {
-                await fetch('/api/v1/export/cancel', {
+                const response = await fetch('/api/v1/export/cancel', {
                     method: 'POST',
                     headers: { 'X-API-Key': API_KEY }
                 });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Successfully cancelled - close modal and refresh status
+                    closeExportModal();
+                    // Poll status once to update UI immediately
+                    await pollExportStatus();
+                } else {
+                    // Show error if cancellation failed
+                    alert(data.error || 'Failed to cancel export');
+                }
             } catch (err) {
                 console.error('Cancel export error:', err);
+                alert('Failed to cancel export: ' + err.message);
             }
         }
 
