@@ -1,13 +1,88 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/iconidentify/xgrabba/pkg/crypto"
 )
+
+func TestContentTypeForPath(t *testing.T) {
+	cases := map[string]string{
+		"foo.json": "application/json",
+		"foo.js":   "application/javascript",
+		"foo.html": "text/html",
+		"foo.css":  "text/css",
+		"foo.png":  "image/png",
+		"foo.jpg":  "image/jpeg",
+		"foo.jpeg": "image/jpeg",
+		"foo.gif":  "image/gif",
+		"foo.webp": "image/webp",
+		"foo.mp4":  "video/mp4",
+		"foo.webm": "video/webm",
+		"foo.mp3":  "audio/mpeg",
+		"foo.wav":  "audio/wav",
+		"foo.svg":  "image/svg+xml",
+		"foo.ico":  "image/x-icon",
+		"foo.bin":  "application/octet-stream",
+	}
+
+	for path, expected := range cases {
+		if got := contentTypeForPath(path); got != expected {
+			t.Fatalf("contentTypeForPath(%q) = %q, want %q", path, got, expected)
+		}
+	}
+}
+
+func TestEncryptingCopyFileManifestEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	ctx := context.Background()
+
+	encCtx, err := newEncryptionContext("test-password", tmpDir)
+	if err != nil {
+		t.Fatalf("newEncryptionContext failed: %v", err)
+	}
+
+	fileSize := crypto.DefaultChunkSize + 5
+	data := bytes.Repeat([]byte{0x42}, fileSize)
+	srcPath := filepath.Join(tmpDir, "video.mp4")
+	if err := os.WriteFile(srcPath, data, 0644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	written, err := encCtx.encryptingCopyFile(ctx, srcPath, filepath.Join("data", "video.mp4"))
+	if err != nil {
+		t.Fatalf("encryptingCopyFile failed: %v", err)
+	}
+	if written != int64(fileSize) {
+		t.Fatalf("written size = %d, want %d", written, fileSize)
+	}
+
+	entry, ok := encCtx.manifest[filepath.ToSlash(filepath.Join("data", "video.mp4"))]
+	if !ok {
+		t.Fatalf("manifest entry missing")
+	}
+	if entry.OriginalSize != int64(fileSize) {
+		t.Fatalf("OriginalSize = %d, want %d", entry.OriginalSize, fileSize)
+	}
+	if entry.ChunkCount != 2 {
+		t.Fatalf("ChunkCount = %d, want 2", entry.ChunkCount)
+	}
+	if entry.ContentType != "video/mp4" {
+		t.Fatalf("ContentType = %q, want video/mp4", entry.ContentType)
+	}
+
+	encPath := filepath.Join(encCtx.encDir, entry.EncryptedName)
+	if _, err := os.Stat(encPath); err != nil {
+		t.Fatalf("encrypted file missing: %v", err)
+	}
+}
 
 func TestExportService_GetAvailableVolumes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -593,10 +668,10 @@ func TestCopyViewerBinaries_Integration(t *testing.T) {
 		name string
 		size int
 	}{
-		{"xgrabba-viewer.exe", 5492224},        // Windows - 5.2MB
-		{"xgrabba-viewer-mac-arm64", 5081890},  // Mac ARM - 4.8MB
-		{"xgrabba-viewer-mac-amd64", 5370336},  // Mac Intel - 5.1MB
-		{"xgrabba-viewer-linux", 5247128},      // Linux - 5.0MB
+		{"xgrabba-viewer.exe", 5492224},       // Windows - 5.2MB
+		{"xgrabba-viewer-mac-arm64", 5081890}, // Mac ARM - 4.8MB
+		{"xgrabba-viewer-mac-amd64", 5370336}, // Mac Intel - 5.1MB
+		{"xgrabba-viewer-linux", 5247128},     // Linux - 5.0MB
 	}
 
 	// Create fake binaries with deterministic content

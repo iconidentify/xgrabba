@@ -1479,39 +1479,39 @@ type DateRange struct {
 
 // ExportProgress tracks export progress.
 type ExportProgress struct {
-	Phase        string `json:"phase"`
-	TotalTweets  int    `json:"total_tweets"`
-	ExportedTweets int  `json:"exported_tweets"`
-	TotalFiles   int    `json:"total_files"`
-	CopiedFiles  int    `json:"copied_files"`
-	Error        string `json:"error,omitempty"`
+	Phase          string `json:"phase"`
+	TotalTweets    int    `json:"total_tweets"`
+	ExportedTweets int    `json:"exported_tweets"`
+	TotalFiles     int    `json:"total_files"`
+	CopiedFiles    int    `json:"copied_files"`
+	Error          string `json:"error,omitempty"`
 }
 
 // ExportResult contains the result of an export operation.
 type ExportResult struct {
-	DestPath      string    `json:"dest_path"`
-	TweetsCount   int       `json:"tweets_count"`
-	MediaCount    int       `json:"media_count"`
-	TotalSize     int64     `json:"total_size_bytes"`
-	ExportedAt    time.Time `json:"exported_at"`
+	DestPath    string    `json:"dest_path"`
+	TweetsCount int       `json:"tweets_count"`
+	MediaCount  int       `json:"media_count"`
+	TotalSize   int64     `json:"total_size_bytes"`
+	ExportedAt  time.Time `json:"exported_at"`
 }
 
 // ExportedTweet is the structure used in tweets-data.json for offline viewing.
 type ExportedTweet struct {
-	TweetID       string             `json:"tweet_id"`
-	URL           string             `json:"url"`
-	Author        ExportedAuthor     `json:"author"`
-	Text          string             `json:"text"`
-	PostedAt      time.Time          `json:"posted_at"`
-	ArchivedAt    time.Time          `json:"archived_at"`
-	Media         []ExportedMedia    `json:"media"`
+	TweetID       string              `json:"tweet_id"`
+	URL           string              `json:"url"`
+	Author        ExportedAuthor      `json:"author"`
+	Text          string              `json:"text"`
+	PostedAt      time.Time           `json:"posted_at"`
+	ArchivedAt    time.Time           `json:"archived_at"`
+	Media         []ExportedMedia     `json:"media"`
 	Metrics       domain.TweetMetrics `json:"metrics"`
-	AITitle       string             `json:"ai_title"`
-	AISummary     string             `json:"ai_summary,omitempty"`
-	AITags        []string           `json:"ai_tags,omitempty"`
-	AIContentType string             `json:"ai_content_type,omitempty"`
-	AITopics      []string           `json:"ai_topics,omitempty"`
-	ArchivePath   string             `json:"archive_path"` // Relative path for media lookup
+	AITitle       string              `json:"ai_title"`
+	AISummary     string              `json:"ai_summary,omitempty"`
+	AITags        []string            `json:"ai_tags,omitempty"`
+	AIContentType string              `json:"ai_content_type,omitempty"`
+	AITopics      []string            `json:"ai_topics,omitempty"`
+	ArchivePath   string              `json:"archive_path"` // Relative path for media lookup
 }
 
 // ExportedAuthor contains author info for offline viewing.
@@ -1803,8 +1803,8 @@ func (s *ExportService) exportTweet(ctx context.Context, tweet *domain.Tweet, da
 	}
 
 	exported := &ExportedTweet{
-		TweetID:       string(tweet.ID),
-		URL:           tweet.URL,
+		TweetID: string(tweet.ID),
+		URL:     tweet.URL,
 		Author: ExportedAuthor{
 			ID:          tweet.Author.ID,
 			Username:    tweet.Author.Username,
@@ -1957,9 +1957,22 @@ func copyFile(src, dst string) (int64, error) {
 // This allows encrypting files as they're copied, so unencrypted data never touches the USB.
 type encryptionContext struct {
 	encryptor *crypto.Encryptor
-	encDir    string                     // Directory for encrypted files
-	manifest  map[string]string          // Maps original relative path to encrypted filename
-	mu        sync.Mutex                 // Protects manifest
+	encDir    string                   // Directory for encrypted files
+	manifest  map[string]manifestEntry // Maps original relative path to manifest entry
+	mu        sync.Mutex               // Protects manifest
+}
+
+type manifestEntry struct {
+	EncryptedName string `json:"enc_name"`
+	OriginalSize  int64  `json:"original_size"`
+	ChunkCount    int    `json:"chunk_count"`
+	ContentType   string `json:"content_type"`
+}
+
+type manifestFile struct {
+	Version   int                      `json:"version"`
+	ChunkSize int                      `json:"chunk_size"`
+	Entries   map[string]manifestEntry `json:"entries"`
 }
 
 // newEncryptionContext creates a new encryption context for streaming encryption.
@@ -1977,7 +1990,7 @@ func newEncryptionContext(password, destPath string) (*encryptionContext, error)
 	return &encryptionContext{
 		encryptor: enc,
 		encDir:    encDir,
-		manifest:  make(map[string]string),
+		manifest:  make(map[string]manifestEntry),
 	}, nil
 }
 
@@ -1985,8 +1998,15 @@ func newEncryptionContext(password, destPath string) (*encryptionContext, error)
 // The encrypted file is written to the encrypted directory with an obfuscated name.
 // Returns the number of source bytes read (not encrypted bytes written).
 func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPath string) (int64, error) {
+	srcStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	normalizedRelPath := filepath.ToSlash(relPath)
+
 	// Generate obfuscated name based on hash of path
-	hash := sha256.Sum256([]byte(relPath))
+	hash := sha256.Sum256([]byte(normalizedRelPath))
 	encName := hex.EncodeToString(hash[:8]) + ".enc"
 	dst := filepath.Join(ec.encDir, encName)
 
@@ -1997,8 +2017,16 @@ func (ec *encryptionContext) encryptingCopyFile(ctx context.Context, src, relPat
 	}
 
 	// Add to manifest
+	chunkSize := int64(crypto.DefaultChunkSize)
+	chunkCount := int((srcStat.Size() + chunkSize - 1) / chunkSize)
+	contentType := contentTypeForPath(normalizedRelPath)
 	ec.mu.Lock()
-	ec.manifest[relPath] = encName
+	ec.manifest[normalizedRelPath] = manifestEntry{
+		EncryptedName: encName,
+		OriginalSize:  srcStat.Size(),
+		ChunkCount:    chunkCount,
+		ContentType:   contentType,
+	}
 	ec.mu.Unlock()
 
 	return written, nil
@@ -2016,7 +2044,11 @@ func (ec *encryptionContext) writeManifestAndData(destPath string, tweetsData []
 	}
 
 	// Encrypt and write manifest
-	manifestData, err := json.Marshal(ec.manifest)
+	manifestData, err := json.Marshal(manifestFile{
+		Version:   2,
+		ChunkSize: crypto.DefaultChunkSize,
+		Entries:   ec.manifest,
+	})
 	if err != nil {
 		return fmt.Errorf("marshal manifest: %w", err)
 	}
@@ -2092,9 +2124,9 @@ func (s *ExportService) copyViewerBinaries(binDir, destPath string) error {
 		dest string
 	}{
 		{"xgrabba-viewer.exe", "xgrabba-viewer.exe"},
-		{"xgrabba-viewer-mac", "xgrabba-viewer-mac"},               // Universal binary if available
-		{"xgrabba-viewer-mac-arm64", "xgrabba-viewer-mac-arm64"},   // Apple Silicon
-		{"xgrabba-viewer-mac-amd64", "xgrabba-viewer-mac-amd64"},   // Intel Mac
+		{"xgrabba-viewer-mac", "xgrabba-viewer-mac"},             // Universal binary if available
+		{"xgrabba-viewer-mac-arm64", "xgrabba-viewer-mac-arm64"}, // Apple Silicon
+		{"xgrabba-viewer-mac-amd64", "xgrabba-viewer-mac-amd64"}, // Intel Mac
 		{"xgrabba-viewer-linux", "xgrabba-viewer-linux"},
 	}
 
@@ -2316,6 +2348,42 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func contentTypeForPath(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".json":
+		return "application/json"
+	case ".js":
+		return "application/javascript"
+	case ".html":
+		return "text/html"
+	case ".css":
+		return "text/css"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".svg":
+		return "image/svg+xml"
+	case ".ico":
+		return "image/x-icon"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // generateOfflineHTML generates the offline viewer HTML.

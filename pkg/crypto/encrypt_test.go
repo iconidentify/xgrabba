@@ -3,6 +3,7 @@ package crypto
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -373,6 +374,130 @@ func TestBackwardCompatibility(t *testing.T) {
 	// Both should produce the same plaintext
 	if !bytes.Equal(v1Decrypted, v2Decrypted) {
 		t.Error("v1 and v2 decrypted content should match")
+	}
+}
+
+func TestDecryptChunkAt(t *testing.T) {
+	password := "chunk-test!"
+	plaintext := make([]byte, DefaultChunkSize+123)
+	for i := range plaintext {
+		plaintext[i] = byte(i % 251)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		t.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	var encrypted bytes.Buffer
+	_, err = enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+	if err != nil {
+		t.Fatalf("EncryptStream failed: %v", err)
+	}
+
+	reader := bytes.NewReader(encrypted.Bytes())
+	header, err := ReadV2HeaderAt(reader)
+	if err != nil {
+		t.Fatalf("ReadV2HeaderAt failed: %v", err)
+	}
+	key := DeriveKey(password, header.Salt)
+
+	chunk0, err := DecryptChunkAt(reader, key, header, 0, DefaultChunkSize)
+	if err != nil {
+		t.Fatalf("DecryptChunkAt chunk 0 failed: %v", err)
+	}
+	if !bytes.Equal(chunk0, plaintext[:DefaultChunkSize]) {
+		t.Fatalf("chunk 0 mismatch")
+	}
+
+	lastLen := len(plaintext) - DefaultChunkSize
+	chunk1, err := DecryptChunkAt(reader, key, header, 1, lastLen)
+	if err != nil {
+		t.Fatalf("DecryptChunkAt chunk 1 failed: %v", err)
+	}
+	if !bytes.Equal(chunk1, plaintext[DefaultChunkSize:]) {
+		t.Fatalf("chunk 1 mismatch")
+	}
+}
+
+func TestReadV2HeaderAt_InvalidMagic(t *testing.T) {
+	data := make([]byte, HeaderSizeV2)
+	copy(data[0:4], []byte("NOPE"))
+	reader := bytes.NewReader(data)
+
+	_, err := ReadV2HeaderAt(reader)
+	if err == nil || !errors.Is(err, ErrInvalidMagic) {
+		t.Fatalf("expected ErrInvalidMagic, got %v", err)
+	}
+}
+
+func TestReadV2HeaderAt_InvalidVersion(t *testing.T) {
+	data := make([]byte, HeaderSizeV2)
+	copy(data[0:4], MagicBytes)
+	binary.LittleEndian.PutUint32(data[4:8], FormatVersion) // v1
+	reader := bytes.NewReader(data)
+
+	_, err := ReadV2HeaderAt(reader)
+	if err == nil || !errors.Is(err, ErrInvalidVersion) {
+		t.Fatalf("expected ErrInvalidVersion, got %v", err)
+	}
+}
+
+func TestDecryptChunkAt_WrongKey(t *testing.T) {
+	password := "chunk-test!"
+	plaintext := make([]byte, DefaultChunkSize)
+	for i := range plaintext {
+		plaintext[i] = byte(i % 251)
+	}
+
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		t.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	var encrypted bytes.Buffer
+	_, err = enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+	if err != nil {
+		t.Fatalf("EncryptStream failed: %v", err)
+	}
+
+	reader := bytes.NewReader(encrypted.Bytes())
+	header, err := ReadV2HeaderAt(reader)
+	if err != nil {
+		t.Fatalf("ReadV2HeaderAt failed: %v", err)
+	}
+	wrongKey := DeriveKey("wrong-password", header.Salt)
+
+	_, err = DecryptChunkAt(reader, wrongKey, header, 0, DefaultChunkSize)
+	if err == nil || !errors.Is(err, ErrDecryptFailed) {
+		t.Fatalf("expected ErrDecryptFailed, got %v", err)
+	}
+}
+
+func TestDecryptChunkAt_InvalidIndex(t *testing.T) {
+	password := "chunk-test!"
+	plaintext := make([]byte, DefaultChunkSize)
+	enc, err := NewEncryptor(password)
+	if err != nil {
+		t.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	var encrypted bytes.Buffer
+	_, err = enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+	if err != nil {
+		t.Fatalf("EncryptStream failed: %v", err)
+	}
+
+	reader := bytes.NewReader(encrypted.Bytes())
+	header, err := ReadV2HeaderAt(reader)
+	if err != nil {
+		t.Fatalf("ReadV2HeaderAt failed: %v", err)
+	}
+	key := DeriveKey(password, header.Salt)
+
+	_, err = DecryptChunkAt(reader, key, header, -1, DefaultChunkSize)
+	if err == nil {
+		t.Fatalf("expected error for invalid chunk index")
 	}
 }
 

@@ -46,8 +46,8 @@ const (
 	HeaderSizeV2 = 4 + 4 + SaltSize + NonceSize + 4
 
 	// Pipeline constants for high-performance streaming
-	pipelineDepth = 4                     // chunks in flight for async I/O
-	writerBufSize = 4 * 1024 * 1024       // 4MB bufio buffer for output
+	pipelineDepth = 4               // chunks in flight for async I/O
+	writerBufSize = 4 * 1024 * 1024 // 4MB bufio buffer for output
 )
 
 var (
@@ -56,6 +56,93 @@ var (
 	ErrDecryptFailed  = errors.New("decryption failed: wrong password or corrupted data")
 	ErrCancelled      = errors.New("encryption cancelled")
 )
+
+// V2Header describes the streaming encryption header.
+type V2Header struct {
+	Salt      []byte
+	BaseNonce []byte
+	ChunkSize uint32
+}
+
+// ReadV2HeaderAt reads and validates a v2 header from a ReaderAt.
+func ReadV2HeaderAt(r io.ReaderAt) (V2Header, error) {
+	header := make([]byte, HeaderSizeV2)
+	n, err := r.ReadAt(header, 0)
+	if err != nil && n != len(header) {
+		return V2Header{}, fmt.Errorf("read header: %w", err)
+	}
+	if string(header[0:4]) != MagicBytes {
+		return V2Header{}, ErrInvalidMagic
+	}
+	version := binary.LittleEndian.Uint32(header[4:8])
+	if version != FormatVersionV2 {
+		return V2Header{}, ErrInvalidVersion
+	}
+	salt := make([]byte, SaltSize)
+	baseNonce := make([]byte, NonceSize)
+	copy(salt, header[8:8+SaltSize])
+	copy(baseNonce, header[8+SaltSize:8+SaltSize+NonceSize])
+	chunkSize := binary.LittleEndian.Uint32(header[8+SaltSize+NonceSize:])
+	return V2Header{
+		Salt:      salt,
+		BaseNonce: baseNonce,
+		ChunkSize: chunkSize,
+	}, nil
+}
+
+// DecryptChunkAt decrypts a single chunk by index from a v2-encrypted file.
+// expectedPlainLen should be the plain chunk length (useful for validating last chunk).
+func DecryptChunkAt(r io.ReaderAt, key []byte, header V2Header, chunkIndex int, expectedPlainLen int) ([]byte, error) {
+	if chunkIndex < 0 {
+		return nil, fmt.Errorf("invalid chunk index: %d", chunkIndex)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("create cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create GCM: %w", err)
+	}
+
+	chunkSize := int64(header.ChunkSize)
+	chunkOffset := int64(HeaderSizeV2) + int64(chunkIndex)*(4+chunkSize+GCMTagSize)
+	lenBuf := make([]byte, 4)
+	if _, err := r.ReadAt(lenBuf, chunkOffset); err != nil {
+		return nil, fmt.Errorf("read chunk length: %w", err)
+	}
+	plainLen := int(binary.LittleEndian.Uint32(lenBuf))
+	if plainLen == 0 {
+		return nil, fmt.Errorf("unexpected end marker at chunk %d", chunkIndex)
+	}
+	if plainLen > int(header.ChunkSize) {
+		return nil, fmt.Errorf("invalid chunk length: %d > %d", plainLen, header.ChunkSize)
+	}
+	if expectedPlainLen > 0 && plainLen != expectedPlainLen {
+		return nil, fmt.Errorf("unexpected chunk length: got %d expected %d", plainLen, expectedPlainLen)
+	}
+
+	ciphertextLen := plainLen + GCMTagSize
+	ciphertext := make([]byte, ciphertextLen)
+	if _, err := r.ReadAt(ciphertext, chunkOffset+4); err != nil {
+		return nil, fmt.Errorf("read ciphertext: %w", err)
+	}
+
+	chunkNonce := make([]byte, NonceSize)
+	copy(chunkNonce, header.BaseNonce)
+	counterBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(counterBytes, uint64(chunkIndex))
+	for i := 0; i < 8 && i < NonceSize; i++ {
+		chunkNonce[i] ^= counterBytes[i]
+	}
+
+	plaintext, err := gcm.Open(nil, chunkNonce, ciphertext, nil)
+	if err != nil {
+		return nil, ErrDecryptFailed
+	}
+
+	return plaintext, nil
+}
 
 // chunkPool provides reusable chunk buffers to reduce allocation pressure
 // when encrypting multiple files sequentially.
