@@ -1,4 +1,4 @@
-.PHONY: build run test lint clean docker helm build-export build-viewer build-all
+.PHONY: build run test lint clean docker helm build-export build-viewer build-tui build-all
 
 # Variables
 BINARY_NAME=xgrabba
@@ -13,6 +13,29 @@ build:
 # Build export CLI
 build-export:
 	go build $(LDFLAGS) -o bin/xgrabba-export ./cmd/export
+
+# Build TUI for current platform
+build-tui:
+	go build $(LDFLAGS) -o bin/xgrabba-tui ./cmd/xgrabba-tui
+
+# Build cross-platform TUI binaries
+build-tui-all:
+	@echo "Building TUI for Linux..."
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/xgrabba-tui-linux ./cmd/xgrabba-tui
+	@echo "Building TUI for macOS AMD64..."
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o bin/xgrabba-tui-mac-amd64 ./cmd/xgrabba-tui
+	@echo "Building TUI for macOS ARM64..."
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o bin/xgrabba-tui-mac-arm64 ./cmd/xgrabba-tui
+	@echo "Creating macOS universal binary..."
+	@if command -v lipo >/dev/null 2>&1; then \
+		lipo -create -output bin/xgrabba-tui-mac bin/xgrabba-tui-mac-amd64 bin/xgrabba-tui-mac-arm64; \
+		rm bin/xgrabba-tui-mac-amd64 bin/xgrabba-tui-mac-arm64; \
+	else \
+		mv bin/xgrabba-tui-mac-amd64 bin/xgrabba-tui-mac; \
+		rm -f bin/xgrabba-tui-mac-arm64; \
+		echo "lipo not available, using AMD64 binary only"; \
+	fi
+	@echo "Done! TUI binaries in bin/"
 
 # Build viewer for current platform
 build-viewer:
@@ -39,8 +62,8 @@ build-viewer-all:
 	fi
 	@echo "Done! Viewers in bin/"
 
-# Build everything including export tools
-build-all: build build-export build-viewer-all
+# Build everything including export tools and TUI
+build-all: build build-export build-tui build-viewer-all build-tui-all
 
 run:
 	go run ./cmd/server

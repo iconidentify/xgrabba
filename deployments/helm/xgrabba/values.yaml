@@ -77,7 +77,7 @@ config:
     maxRetries: 3
   grok:
     baseUrl: "https://api.x.ai/v1"
-    timeout: "30s"
+    timeout: "5m"
     model: "grok-3"
   whisper:
     enabled: true
