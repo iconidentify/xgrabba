@@ -45,6 +45,7 @@ func NewRouter(
 	r.Get("/ui", uiHandler.Index)        // Full archive browser
 	r.Get("/quick", uiHandler.Quick)     // Mobile-optimized quick archive
 	r.Get("/q", uiHandler.Quick)         // Short alias for mobile
+	r.Get("/videos", uiHandler.Videos)   // Dedicated video browser
 	r.Get("/admin/events", uiHandler.AdminEvents) // Admin activity log
 
 	// OAuth callback must be unauthenticated because it's a browser redirect from X.

@@ -27,3 +27,10 @@ var QuickHTML []byte
 //
 //go:embed admin_events.html
 var AdminEventsHTML []byte
+
+// VideosHTML is the dedicated video browser page.
+// Optimized for browsing and viewing video content with advanced filtering,
+// sorting by duration, and a premium video player with fullscreen support.
+//
+//go:embed videos.html
+var VideosHTML []byte

@@ -48,3 +48,9 @@ func (h *UIHandler) AdminEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(ui.AdminEventsHTML)
 }
+
+// Videos serves the dedicated video browser page.
+func (h *UIHandler) Videos(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(ui.VideosHTML)
+}
