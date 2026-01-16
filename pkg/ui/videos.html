@@ -1278,6 +1278,9 @@ if (!OFFLINE_MODE && !API_KEY) {
     }
 }
 
+// Debug logging
+console.log('[videos] Init - OFFLINE_MODE:', OFFLINE_MODE, 'API_KEY length:', API_KEY?.length || 0);
+
 // Update navigation links with API key (only in online mode)
 if (!OFFLINE_MODE && API_KEY) {
     document.getElementById('homeLink').href = '/ui?key=' + encodeURIComponent(API_KEY);
@@ -1361,9 +1364,14 @@ function debounce(fn, delay) {
 
 // Add API key to URL for authentication
 function addApiKey(url) {
-    if (!url) return url;
+    if (!url) return '';
     if (OFFLINE_MODE) return url;
-    if (!API_KEY) return url;
+    if (!API_KEY) {
+        console.warn('[videos] addApiKey called but API_KEY is empty, url:', url);
+        return url;
+    }
+    // Only add key to our API URLs (starting with /)
+    if (!url.startsWith('/')) return url;
     const separator = url.includes('?') ? '&' : '?';
     return url + separator + 'key=' + encodeURIComponent(API_KEY);
 }
@@ -1450,6 +1458,17 @@ async function fetchVideos() {
                 });
             }
         }
+
+        // Debug: log first video's URLs to verify data extraction
+        if (state.videos.length > 0) {
+            const first = state.videos[0];
+            console.log('[videos] First video URLs:', {
+                url: first.url,
+                thumbnailUrl: first.thumbnailUrl,
+                authorAvatar: first.authorAvatar
+            });
+        }
+        console.log('[videos] Total videos extracted:', state.videos.length);
 
         applyFiltersAndSort();
 
@@ -1560,13 +1579,14 @@ function renderVideos() {
     grid.innerHTML = state.filteredVideos.map((video, index) => {
         const progress = state.watchProgress[video.id] || 0;
         const progressPercent = video.duration > 0 ? (progress / video.duration) * 100 : 0;
-        const thumbSrc = addApiKey(video.thumbnailUrl || '');
-        const avatarSrc = video.authorAvatar ? addApiKey(video.authorAvatar) : '';
+        // Build URLs with API key - don't use escapeHtml on URLs as it can break query params
+        const thumbSrc = addApiKey(video.thumbnailUrl);
+        const avatarSrc = addApiKey(video.authorAvatar);
 
         return `
             <div class="video-card" data-index="${index}">
                 <div class="video-thumbnail">
-                    <img src="${escapeHtml(thumbSrc)}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
+                    ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">` : '<div class="video-thumb-placeholder"></div>'}
                     <div class="video-play-overlay">
                         <div class="video-play-btn">
                             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1582,7 +1602,7 @@ function renderVideos() {
                 </div>
                 <div class="video-info">
                     <div class="video-author">
-                        ${avatarSrc ? `<img class="video-avatar" src="${escapeHtml(avatarSrc)}" alt="" onerror="this.style.display='none'">` : ''}
+                        ${avatarSrc ? `<img class="video-avatar" src="${avatarSrc}" alt="" onerror="this.style.display='none'">` : ''}
                         <span class="video-author-name">@${escapeHtml(video.author)}</span>
                     </div>
                     <div class="video-title">${escapeHtml(video.title)}</div>
@@ -1751,10 +1771,10 @@ function renderQueue() {
     queueList.innerHTML = videos.map((video, i) => {
         const actualIndex = start + i;
         const isActive = actualIndex === state.currentIndex;
-        const queueThumbSrc = addApiKey(video.thumbnailUrl || '');
+        const queueThumbSrc = addApiKey(video.thumbnailUrl);
         return `
             <div class="queue-item ${isActive ? 'active' : ''}" data-index="${actualIndex}">
-                <img class="queue-thumb" src="${escapeHtml(queueThumbSrc)}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
+                ${queueThumbSrc ? `<img class="queue-thumb" src="${queueThumbSrc}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">` : ''}
                 <div class="queue-info">
                     <div class="queue-title">${escapeHtml(video.title)}</div>
                     <div class="queue-meta">${formatDuration(video.duration)} - @${escapeHtml(video.author)}</div>
