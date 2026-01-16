@@ -93,6 +93,8 @@ func NewRouter(
 		r.Post("/tweets/{tweetID}/resync", tweetHandler.Resync)
 		r.Get("/tweets/{tweetID}/ai-status", tweetHandler.CheckAIAnalysisStatus)
 		r.Get("/tweets/{tweetID}/diagnostics", tweetHandler.GetDiagnostics)
+		r.Post("/tweets/{tweetID}/media/{mediaIndex}/essay", tweetHandler.GenerateEssay)
+		r.Get("/tweets/{tweetID}/media/{mediaIndex}/essay", tweetHandler.GetEssay)
 
 		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)

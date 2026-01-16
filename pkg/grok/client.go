@@ -24,6 +24,8 @@ type Client interface {
 	AnalyzeContent(ctx context.Context, req ContentAnalysisRequest) (*ContentAnalysisResponse, error)
 	// AnalyzeContentWithVision analyzes content including actual images for rich metadata.
 	AnalyzeContentWithVision(ctx context.Context, req VisionAnalysisRequest) (*ContentAnalysisResponse, error)
+	// GenerateEssay creates a high-quality markdown essay from a video transcript.
+	GenerateEssay(ctx context.Context, req EssayRequest) (*EssayResponse, error)
 }
 
 // ContentAnalysisRequest contains information for analyzing tweet content.
@@ -52,6 +54,19 @@ type ContentAnalysisResponse struct {
 	Tags        []string // Searchable keywords/tags
 	ContentType string   // e.g., "documentary", "news", "comedy", "sports", etc.
 	Topics      []string // Main topics discussed or shown
+}
+
+// EssayRequest contains information for generating an essay from a transcript.
+type EssayRequest struct {
+	Transcript  string // Full video transcript
+	ContentType string // Detected content type (documentary, lecture, etc.) - optional hint
+}
+
+// EssayResponse contains the generated essay.
+type EssayResponse struct {
+	Title     string // Essay title
+	Essay     string // Full markdown essay
+	WordCount int    // Word count of the essay
 }
 
 // FilenameRequest contains information for generating a filename.
@@ -617,4 +632,126 @@ func FallbackFilename(username string, postedAt time.Time, tweetText string) str
 
 	filename := fmt.Sprintf("%s_%s_%s", username, date, description)
 	return sanitizeFilename(filename)
+}
+
+// GenerateEssay creates a high-quality markdown essay from a video transcript.
+// The essay is presented as an original standalone piece - no references to the source video or transcript.
+func (c *HTTPClient) GenerateEssay(ctx context.Context, req EssayRequest) (*EssayResponse, error) {
+	if req.Transcript == "" {
+		return nil, fmt.Errorf("transcript is required for essay generation")
+	}
+
+	// Use the best available model for essay generation
+	model := c.model
+	if !strings.Contains(model, "vision") {
+		// For essay generation, we want the most capable text model
+		model = "grok-3" // Use Grok 3 for highest quality essays
+	}
+
+	systemPrompt := `You are an expert academic writer tasked with transforming a raw transcript into a cohesive, original essay.
+
+CRITICAL REQUIREMENTS:
+1. Transform the transcript into a well-structured essay with introduction, body paragraphs, and conclusion
+2. Faithfully cover ALL key points, arguments, facts, and narratives from the transcript
+3. Use formal language, smooth transitions, and engaging prose suitable for a general audience
+4. NEVER mention or reference the transcript, video, source, or the fact this is derived from any source
+5. Present it as an original standalone essay on the topic
+6. Do NOT inject any personal opinions, commentary, or value judgments about the content
+7. Report the information objectively and neutrally, even if the content is controversial
+8. Let the facts and arguments speak for themselves without editorial framing
+
+OUTPUT FORMAT:
+Return your response as JSON with exactly two fields:
+{
+  "title": "An Appropriate Essay Title Based on the Content",
+  "essay": "The full markdown essay content here..."
+}
+
+ESSAY FORMATTING:
+- Use markdown for structure (## for section headings, **bold** for emphasis)
+- Write in clear paragraphs with logical flow
+- Include smooth transitions between sections
+- Aim for comprehensive coverage - the essay should be thorough
+- Keep the title concise but descriptive (5-12 words typically)
+
+Return ONLY valid JSON, no markdown code blocks, no explanation.`
+
+	userPrompt := fmt.Sprintf("Transform this transcript into a polished essay:\n\n%s", req.Transcript)
+
+	chatReq := chatRequest{
+		Model: model,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+	}
+
+	body, err := json.Marshal(chatReq)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var chatResp chatResponse
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("API error: %s", chatResp.Error.Message)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from Grok")
+	}
+
+	// Parse the JSON response
+	content := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	// Clean up potential markdown code blocks
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+
+	var result struct {
+		Title string `json:"title"`
+		Essay string `json:"essay"`
+	}
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		// If JSON parsing fails, try to extract content directly
+		// This handles cases where the model returns plain text
+		return &EssayResponse{
+			Title:     "Essay",
+			Essay:     content,
+			WordCount: len(strings.Fields(content)),
+		}, nil
+	}
+
+	return &EssayResponse{
+		Title:     result.Title,
+		Essay:     result.Essay,
+		WordCount: len(strings.Fields(result.Essay)),
+	}, nil
 }

@@ -6398,6 +6398,359 @@
             outline: 2px solid var(--accent-primary);
             outline-offset: 2px;
         }
+
+        /* Essay Modal - Premium Reading Experience */
+        .essay-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .essay-modal-overlay.active {
+            display: flex;
+        }
+
+        .essay-modal {
+            background: #faf9f7;
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .essay-modal.windowed {
+            max-width: 800px;
+            max-height: 90vh;
+            height: auto;
+            border-radius: 12px;
+            margin: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .essay-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #faf9f7;
+            flex-shrink: 0;
+        }
+
+        .essay-header-title {
+            font-family: "Georgia", "Times New Roman", serif;
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .essay-header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .essay-header-btn {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #666;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+
+        .essay-header-btn:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
+            color: #333;
+        }
+
+        .essay-header-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .essay-close-btn {
+            background: none;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            color: #666;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .essay-close-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .essay-close-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .essay-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 48px 24px 80px;
+            background: #faf9f7;
+        }
+
+        .essay-content-inner {
+            max-width: 680px;
+            margin: 0 auto;
+            font-family: "Georgia", "Times New Roman", serif;
+            color: #1a1a1a;
+            line-height: 1.8;
+        }
+
+        .essay-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            line-height: 1.2;
+            color: #0a0a0a;
+            text-align: center;
+            font-family: "Georgia", "Times New Roman", serif;
+        }
+
+        .essay-body {
+            font-size: 1.125rem;
+        }
+
+        .essay-body p {
+            margin-bottom: 1.5rem;
+            text-align: justify;
+            hyphens: auto;
+        }
+
+        .essay-body h2 {
+            font-size: 1.5rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            color: #0a0a0a;
+        }
+
+        .essay-body h3 {
+            font-size: 1.25rem;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .essay-body strong {
+            font-weight: 600;
+        }
+
+        .essay-body em {
+            font-style: italic;
+        }
+
+        .essay-body blockquote {
+            border-left: 3px solid #ddd;
+            padding-left: 1.5rem;
+            margin: 1.5rem 0;
+            color: #555;
+            font-style: italic;
+        }
+
+        .essay-body ul, .essay-body ol {
+            margin: 1.5rem 0;
+            padding-left: 2rem;
+        }
+
+        .essay-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        .essay-meta {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .essay-word-count {
+            font-size: 0.875rem;
+            color: #888;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Essay indicator badge on tweet cards */
+        .essay-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .essay-indicator:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+        }
+
+        .essay-indicator svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* Generate Essay Button */
+        .generate-essay-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .generate-essay-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        }
+
+        .generate-essay-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .generate-essay-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .generate-essay-btn.generating {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        /* Essay section in detail panel */
+        .detail-essay-section {
+            margin-top: 12px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.05));
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 8px;
+        }
+
+        .detail-essay-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .detail-essay-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .detail-essay-title svg {
+            width: 16px;
+            height: 16px;
+            color: #f59e0b;
+        }
+
+        .detail-essay-preview {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .read-essay-btn {
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .read-essay-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+
+        /* Scrollbar styling for essay */
+        .essay-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .essay-content::-webkit-scrollbar-track {
+            background: #f0f0f0;
+        }
+
+        .essay-content::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        .essay-content::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+
+        @media (max-width: 768px) {
+            .essay-modal.windowed {
+                margin: 0;
+                border-radius: 0;
+                max-height: 100%;
+            }
+
+            .essay-title {
+                font-size: 1.75rem;
+            }
+
+            .essay-body {
+                font-size: 1rem;
+            }
+
+            .essay-content {
+                padding: 32px 16px 60px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -7173,6 +7526,33 @@
                             <button class="btn btn-secondary" id="bookmarksBtn" onclick="openBookmarksModal()">Open</button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Essay Reader Modal -->
+    <div class="essay-modal-overlay" id="essayModalOverlay" onclick="if(event.target === this) closeEssayModal()">
+        <div class="essay-modal" id="essayModal">
+            <div class="essay-header">
+                <span class="essay-header-title">Essay</span>
+                <div class="essay-header-actions">
+                    <button class="essay-header-btn" onclick="toggleEssayFullscreen()" title="Toggle fullscreen">
+                        <svg id="essayFullscreenIcon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                        </svg>
+                        <span id="essayFullscreenText">Fullscreen</span>
+                    </button>
+                    <button class="essay-close-btn" onclick="closeEssayModal()" title="Close">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="essay-content" id="essayContent">
+                <div class="essay-content-inner" id="essayContentInner">
+                    <!-- Essay content will be inserted here -->
                 </div>
             </div>
         </div>
@@ -8028,6 +8408,7 @@
                                     </svg>
                                     ${tweet.media_count || 0}
                                 </span>
+                                ${renderEssayIndicator(tweet)}
                             </div>
                             <div class="tweet-actions">
                                 <button class="btn btn-secondary" onclick="event.stopPropagation(); openTweetDetail('${tweet.tweet_id}')">View</button>
@@ -8111,6 +8492,7 @@
                                     </svg>
                                     ${tweet.media_count || 0}
                                 </span>
+                                ${renderEssayIndicator(tweet)}
                             </div>
                             <div class="tweet-actions">
                                 <button class="btn btn-secondary" onclick="event.stopPropagation(); openTweetDetail('${tweet.tweet_id}')">View</button>
@@ -8490,6 +8872,9 @@
                                 <div class="transcript-toggle-hint" style="text-align:center; padding:8px 0; font-size:12px; color:var(--brand-start); cursor:pointer;" onclick="toggleInlineTranscript(this.parentElement)">Show full transcript</div>
                             </div>
                         ` : ''}
+
+                        <!-- Essay Section (for videos with transcripts) -->
+                        ${renderEssaySection(tweet)}
 
                         <!-- Notes Section -->
                         ${OFFLINE_MODE ? (
@@ -12063,6 +12448,397 @@
             }
         }
         checkActiveExport();
+
+        // ============================================
+        // Essay Feature Functions
+        // ============================================
+
+        let currentEssayData = null;
+        let essayFullscreen = false;
+
+        // Open essay modal and display the essay
+        async function openEssayModal(tweetId, mediaIndex) {
+            const overlay = document.getElementById('essayModalOverlay');
+            const modal = document.getElementById('essayModal');
+            const contentInner = document.getElementById('essayContentInner');
+
+            // Show loading state
+            contentInner.innerHTML = '<div style="text-align:center;padding:48px;color:#666;">Loading essay...</div>';
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await response.json();
+
+                if (data.status !== 'completed' || !data.essay) {
+                    contentInner.innerHTML = `<div style="text-align:center;padding:48px;color:#666;">
+                        <p>Essay not available</p>
+                        <p style="font-size:14px;margin-top:8px;">${data.message || 'No essay has been generated for this media.'}</p>
+                    </div>`;
+                    return;
+                }
+
+                currentEssayData = data;
+                renderEssay(data);
+            } catch (err) {
+                console.error('Failed to load essay:', err);
+                contentInner.innerHTML = `<div style="text-align:center;padding:48px;color:#c00;">
+                    Failed to load essay: ${err.message}
+                </div>`;
+            }
+        }
+
+        // Render essay content with markdown parsing
+        function renderEssay(data) {
+            const contentInner = document.getElementById('essayContentInner');
+
+            // Simple markdown to HTML conversion
+            const essayHtml = parseMarkdown(data.essay);
+
+            contentInner.innerHTML = `
+                <h1 class="essay-title">${escapeHtml(data.title)}</h1>
+                <div class="essay-meta">
+                    <span class="essay-word-count">${data.word_count.toLocaleString()} words</span>
+                </div>
+                <div class="essay-body">${essayHtml}</div>
+            `;
+        }
+
+        // Simple markdown parser
+        function parseMarkdown(md) {
+            if (!md) return '';
+
+            let html = escapeHtml(md);
+
+            // Headers
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+            // Bold and italic
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+            html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+
+            // Blockquotes
+            html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // Lists
+            html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+
+            // Wrap consecutive list items
+            html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+            // Paragraphs (double newlines)
+            html = html.split(/\n\n+/).map(para => {
+                para = para.trim();
+                if (!para) return '';
+                // Don't wrap if already block element
+                if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol') || para.startsWith('<blockquote')) {
+                    return para;
+                }
+                return `<p>${para.replace(/\n/g, ' ')}</p>`;
+            }).join('\n');
+
+            return html;
+        }
+
+        // Close essay modal
+        function closeEssayModal() {
+            const overlay = document.getElementById('essayModalOverlay');
+            const modal = document.getElementById('essayModal');
+
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+
+            // Reset fullscreen state
+            if (essayFullscreen) {
+                modal.classList.add('windowed');
+                essayFullscreen = false;
+                updateFullscreenButton();
+            }
+
+            currentEssayData = null;
+        }
+
+        // Toggle fullscreen mode
+        function toggleEssayFullscreen() {
+            const modal = document.getElementById('essayModal');
+            essayFullscreen = !essayFullscreen;
+
+            if (essayFullscreen) {
+                modal.classList.remove('windowed');
+            } else {
+                modal.classList.add('windowed');
+            }
+
+            updateFullscreenButton();
+        }
+
+        function updateFullscreenButton() {
+            const icon = document.getElementById('essayFullscreenIcon');
+            const text = document.getElementById('essayFullscreenText');
+
+            if (essayFullscreen) {
+                icon.innerHTML = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
+                text.textContent = 'Exit Fullscreen';
+            } else {
+                icon.innerHTML = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>';
+                text.textContent = 'Fullscreen';
+            }
+        }
+
+        // Generate essay for a media item
+        async function generateEssay(tweetId, mediaIndex, btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('generating');
+                btn.innerHTML = `
+                    <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+                    </svg>
+                    Generating...
+                `;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await response.json();
+
+                if (data.status === 'generating') {
+                    // Poll for completion
+                    pollEssayStatus(tweetId, mediaIndex, btn);
+                } else if (data.status === 'completed') {
+                    // Essay already exists, just open it
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.classList.remove('generating');
+                        btn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                            </svg>
+                            Read Essay
+                        `;
+                        btn.onclick = () => openEssayModal(tweetId, mediaIndex);
+                    }
+                    openEssayModal(tweetId, mediaIndex);
+                }
+            } catch (err) {
+                console.error('Essay generation failed:', err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('generating');
+                    btn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H9V7h3v10z"/>
+                        </svg>
+                        Generate Essay
+                    `;
+                }
+                alert('Failed to generate essay: ' + err.message);
+            }
+        }
+
+        // Poll for essay generation completion
+        async function pollEssayStatus(tweetId, mediaIndex, btn) {
+            const maxAttempts = 60; // 2 minutes max
+            let attempts = 0;
+
+            const poll = async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.classList.remove('generating');
+                            btn.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                                </svg>
+                                Read Essay
+                            `;
+                            btn.onclick = () => openEssayModal(tweetId, mediaIndex);
+                        }
+                        // Refresh the detail view to show essay section
+                        if (currentTweetDetail && currentTweetDetail.tweet_id === tweetId) {
+                            openTweetDetail(tweetId);
+                        }
+                        return;
+                    } else if (data.status === 'failed') {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.classList.remove('generating');
+                            btn.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H9V7h3v10z"/>
+                                </svg>
+                                Generate Essay
+                            `;
+                        }
+                        alert('Essay generation failed: ' + (data.message || 'Unknown error'));
+                        return;
+                    }
+
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 2000);
+                    } else {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.classList.remove('generating');
+                            btn.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H9V7h3v10z"/>
+                                </svg>
+                                Generate Essay
+                            `;
+                        }
+                        alert('Essay generation timed out. Please try again.');
+                    }
+                } catch (err) {
+                    console.error('Poll error:', err);
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 2000);
+                    }
+                }
+            };
+
+            setTimeout(poll, 2000);
+        }
+
+        // Check if media has essay
+        function hasEssay(media) {
+            return media && media.essay && media.essay_status === 'completed';
+        }
+
+        // Check if media has transcript (required for essay)
+        function hasTranscript(media) {
+            return media && media.transcript && media.transcript.trim().length > 0;
+        }
+
+        // Render essay indicator for tweet cards
+        function renderEssayIndicator(tweet) {
+            if (!tweet.media) return '';
+
+            const mediaWithEssay = tweet.media.findIndex(m => hasEssay(m));
+            if (mediaWithEssay === -1) return '';
+
+            return `
+                <span class="essay-indicator" onclick="event.stopPropagation(); openEssayModal('${tweet.tweet_id}', ${mediaWithEssay})" title="Read Essay">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    Essay
+                </span>
+            `;
+        }
+
+        // Render essay section for detail panel
+        function renderEssaySection(tweet) {
+            if (!tweet.media) return '';
+
+            // Find first video with transcript
+            const videoIndex = tweet.media.findIndex(m =>
+                (m.type === 'video' || (m.content_type && m.content_type.startsWith('video/'))) && hasTranscript(m)
+            );
+
+            if (videoIndex === -1) return '';
+
+            const media = tweet.media[videoIndex];
+
+            // If essay exists, show it
+            if (hasEssay(media)) {
+                const preview = media.essay.substring(0, 200).replace(/[#*_]/g, '') + '...';
+                return `
+                    <div class="detail-essay-section">
+                        <div class="detail-essay-header">
+                            <div class="detail-essay-title">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                                </svg>
+                                ${escapeHtml(media.essay_title || 'Essay')}
+                            </div>
+                            <span style="font-size:11px;color:var(--text-muted);">${media.essay_word_count?.toLocaleString() || 0} words</span>
+                        </div>
+                        <div class="detail-essay-preview">${escapeHtml(preview)}</div>
+                        <button class="read-essay-btn" onclick="openEssayModal('${tweet.tweet_id}', ${videoIndex})">
+                            Read Full Essay
+                        </button>
+                    </div>
+                `;
+            }
+
+            // If generating, show status
+            if (media.essay_status === 'generating') {
+                return `
+                    <div class="detail-essay-section">
+                        <div class="detail-essay-header">
+                            <div class="detail-essay-title">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                                </svg>
+                                Essay
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;">
+                            <div class="spinner" style="width:16px;height:16px;"></div>
+                            Generating essay...
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Show generate button
+            return `
+                <div class="detail-essay-section" style="background:var(--bg-primary);border-color:var(--border-subtle);">
+                    <div class="detail-essay-header">
+                        <div class="detail-essay-title" style="color:var(--text-secondary);">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                            </svg>
+                            Generate Essay
+                        </div>
+                    </div>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+                        Transform this video's transcript into a well-written essay using AI.
+                    </p>
+                    <button class="generate-essay-btn" id="generateEssayBtn_${tweet.tweet_id}" onclick="generateEssay('${tweet.tweet_id}', ${videoIndex}, this)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                        </svg>
+                        Generate Essay
+                    </button>
+                </div>
+            `;
+        }
+
+        // Escape key handler for essay modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const essayOverlay = document.getElementById('essayModalOverlay');
+                if (essayOverlay && essayOverlay.classList.contains('active')) {
+                    closeEssayModal();
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        });
     </script>
 </body>
 </html>

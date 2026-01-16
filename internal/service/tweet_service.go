@@ -2124,3 +2124,211 @@ func getContentType(filename string) string {
 		return "application/octet-stream"
 	}
 }
+
+// EssayGenerationResponse is returned after essay generation.
+type EssayGenerationResponse struct {
+	TweetID    domain.TweetID `json:"tweet_id"`
+	MediaIndex int            `json:"media_index"`
+	Title      string         `json:"title"`
+	WordCount  int            `json:"word_count"`
+	Status     string         `json:"status"`
+	Message    string         `json:"message"`
+}
+
+// GenerateEssay generates a markdown essay from a video transcript.
+// The essay is stored in the media's Essay field and saved to disk.
+func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID, mediaIndex int) (*EssayGenerationResponse, error) {
+	s.tweetsMu.Lock()
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		s.tweetsMu.Unlock()
+		return nil, domain.ErrVideoNotFound
+	}
+
+	// Validate media index
+	if mediaIndex < 0 || mediaIndex >= len(tweet.Media) {
+		s.tweetsMu.Unlock()
+		return nil, fmt.Errorf("invalid media index: %d", mediaIndex)
+	}
+
+	media := &tweet.Media[mediaIndex]
+
+	// Check if this media has a transcript
+	if media.Transcript == "" {
+		s.tweetsMu.Unlock()
+		return nil, fmt.Errorf("media has no transcript available")
+	}
+
+	// Check if essay generation is already in progress
+	if media.EssayStatus == "generating" {
+		s.tweetsMu.Unlock()
+		return &EssayGenerationResponse{
+			TweetID:    tweetID,
+			MediaIndex: mediaIndex,
+			Status:     "generating",
+			Message:    "Essay generation already in progress",
+		}, nil
+	}
+
+	// Check if essay already exists
+	if media.Essay != "" && media.EssayStatus == "completed" {
+		s.tweetsMu.Unlock()
+		return &EssayGenerationResponse{
+			TweetID:    tweetID,
+			MediaIndex: mediaIndex,
+			Title:      media.EssayTitle,
+			WordCount:  media.EssayWordCount,
+			Status:     "completed",
+			Message:    "Essay already exists",
+		}, nil
+	}
+
+	// Mark as generating
+	media.EssayStatus = "generating"
+	media.EssayError = ""
+	archivePath := tweet.ArchivePath
+	s.tweetsMu.Unlock()
+
+	// Save intermediate state
+	s.saveTweetMetadata(tweet)
+
+	s.logger.Info("starting essay generation",
+		"tweet_id", tweetID,
+		"media_index", mediaIndex,
+		"transcript_length", len(media.Transcript))
+
+	// Call Grok to generate the essay
+	essayResp, err := s.grokClient.GenerateEssay(ctx, grok.EssayRequest{
+		Transcript:  media.Transcript,
+		ContentType: tweet.AIContentType,
+	})
+
+	s.tweetsMu.Lock()
+	// Re-fetch media pointer in case slice was modified
+	if mediaIndex < len(tweet.Media) {
+		media = &tweet.Media[mediaIndex]
+	}
+
+	if err != nil {
+		s.logger.Error("essay generation failed",
+			"tweet_id", tweetID,
+			"media_index", mediaIndex,
+			"error", err)
+		media.EssayStatus = "failed"
+		media.EssayError = err.Error()
+		s.tweetsMu.Unlock()
+		s.saveTweetMetadata(tweet)
+		return nil, fmt.Errorf("essay generation failed: %w", err)
+	}
+
+	// Store the essay
+	media.Essay = essayResp.Essay
+	media.EssayTitle = essayResp.Title
+	media.EssayWordCount = essayResp.WordCount
+	media.EssayStatus = "completed"
+	media.EssayError = ""
+	s.tweetsMu.Unlock()
+
+	// Save to disk
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		s.logger.Error("failed to save essay metadata", "error", err)
+	}
+
+	// Also save the essay as a standalone markdown file
+	essayFilename := fmt.Sprintf("essay_%d.md", mediaIndex)
+	essayPath := filepath.Join(archivePath, essayFilename)
+	essayContent := fmt.Sprintf("# %s\n\n%s", essayResp.Title, essayResp.Essay)
+	if err := os.WriteFile(essayPath, []byte(essayContent), 0644); err != nil {
+		s.logger.Warn("failed to save essay file", "path", essayPath, "error", err)
+	}
+
+	s.logger.Info("essay generation completed",
+		"tweet_id", tweetID,
+		"media_index", mediaIndex,
+		"title", essayResp.Title,
+		"word_count", essayResp.WordCount)
+
+	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryAI, "Essay generated",
+		domain.EventMetadata{
+			"tweet_id":   string(tweetID),
+			"title":      essayResp.Title,
+			"word_count": essayResp.WordCount,
+		})
+
+	return &EssayGenerationResponse{
+		TweetID:    tweetID,
+		MediaIndex: mediaIndex,
+		Title:      essayResp.Title,
+		WordCount:  essayResp.WordCount,
+		Status:     "completed",
+		Message:    "Essay generated successfully",
+	}, nil
+}
+
+// GetEssay retrieves the essay for a specific media item.
+func (s *TweetService) GetEssay(ctx context.Context, tweetID domain.TweetID, mediaIndex int) (*EssayGenerationResponse, error) {
+	s.tweetsMu.RLock()
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		s.tweetsMu.RUnlock()
+		return nil, domain.ErrVideoNotFound
+	}
+
+	if mediaIndex < 0 || mediaIndex >= len(tweet.Media) {
+		s.tweetsMu.RUnlock()
+		return nil, fmt.Errorf("invalid media index: %d", mediaIndex)
+	}
+
+	media := tweet.Media[mediaIndex]
+	s.tweetsMu.RUnlock()
+
+	return &EssayGenerationResponse{
+		TweetID:    tweetID,
+		MediaIndex: mediaIndex,
+		Title:      media.EssayTitle,
+		WordCount:  media.EssayWordCount,
+		Status:     media.EssayStatus,
+		Message:    media.EssayError,
+	}, nil
+}
+
+// StartGenerateEssay starts essay generation in the background.
+func (s *TweetService) StartGenerateEssay(tweetID domain.TweetID, mediaIndex int) error {
+	s.tweetsMu.RLock()
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		s.tweetsMu.RUnlock()
+		return domain.ErrVideoNotFound
+	}
+
+	if mediaIndex < 0 || mediaIndex >= len(tweet.Media) {
+		s.tweetsMu.RUnlock()
+		return fmt.Errorf("invalid media index: %d", mediaIndex)
+	}
+
+	media := tweet.Media[mediaIndex]
+	if media.Transcript == "" {
+		s.tweetsMu.RUnlock()
+		return fmt.Errorf("media has no transcript available")
+	}
+
+	if media.EssayStatus == "generating" {
+		s.tweetsMu.RUnlock()
+		return fmt.Errorf("essay generation already in progress")
+	}
+	s.tweetsMu.RUnlock()
+
+	// Run in background
+	go func() {
+		ctx := context.Background()
+		_, err := s.GenerateEssay(ctx, tweetID, mediaIndex)
+		if err != nil {
+			s.logger.Error("background essay generation failed",
+				"tweet_id", tweetID,
+				"media_index", mediaIndex,
+				"error", err)
+		}
+	}()
+
+	return nil
+}

@@ -1067,3 +1067,127 @@ func (h *TweetHandler) BackfillTruncated(w http.ResponseWriter, r *http.Request)
 		Message: fmt.Sprintf("Queued %d tweets for backfill (processing with 10s delay between each to avoid rate limits)", len(truncatedIDs)),
 	})
 }
+
+// EssayResponse contains essay data for API responses.
+type EssayResponse struct {
+	TweetID    string `json:"tweet_id"`
+	MediaIndex int    `json:"media_index"`
+	Title      string `json:"title,omitempty"`
+	Essay      string `json:"essay,omitempty"`
+	WordCount  int    `json:"word_count,omitempty"`
+	Status     string `json:"status"`
+	Message    string `json:"message,omitempty"`
+}
+
+// GenerateEssay handles POST /api/v1/tweets/{tweetID}/media/{mediaIndex}/essay
+// Generates a markdown essay from the video's transcript using AI.
+func (h *TweetHandler) GenerateEssay(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	mediaIndexStr := chi.URLParam(r, "mediaIndex")
+
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	mediaIndex, err := strconv.Atoi(mediaIndexStr)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid media index")
+		return
+	}
+
+	h.logger.Info("essay generation request", "tweet_id", tweetID, "media_index", mediaIndex)
+
+	// Start essay generation in background
+	err = h.tweetSvc.StartGenerateEssay(domain.TweetID(tweetID), mediaIndex)
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		if strings.Contains(err.Error(), "no transcript") {
+			h.writeError(w, http.StatusBadRequest, "media has no transcript - essay generation requires a transcript")
+			return
+		}
+		if strings.Contains(err.Error(), "already in progress") {
+			h.writeJSON(w, http.StatusConflict, EssayResponse{
+				TweetID:    tweetID,
+				MediaIndex: mediaIndex,
+				Status:     "generating",
+				Message:    "Essay generation already in progress",
+			})
+			return
+		}
+		h.logger.Error("essay generation failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to start essay generation")
+		return
+	}
+
+	h.writeJSON(w, http.StatusAccepted, EssayResponse{
+		TweetID:    tweetID,
+		MediaIndex: mediaIndex,
+		Status:     "generating",
+		Message:    "Essay generation started",
+	})
+}
+
+// GetEssay handles GET /api/v1/tweets/{tweetID}/media/{mediaIndex}/essay
+// Returns the essay for a specific media item if it exists.
+func (h *TweetHandler) GetEssay(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	mediaIndexStr := chi.URLParam(r, "mediaIndex")
+
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	mediaIndex, err := strconv.Atoi(mediaIndexStr)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid media index")
+		return
+	}
+
+	// Get full tweet to access essay data
+	stored, err := h.tweetSvc.GetFullTweet(r.Context(), domain.TweetID(tweetID))
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("get essay failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get essay")
+		return
+	}
+
+	if mediaIndex < 0 || mediaIndex >= len(stored.Media) {
+		h.writeError(w, http.StatusBadRequest, "invalid media index")
+		return
+	}
+
+	media := stored.Media[mediaIndex]
+
+	// Check if essay exists
+	if media.Essay == "" {
+		status := media.EssayStatus
+		if status == "" {
+			status = "not_generated"
+		}
+		h.writeJSON(w, http.StatusOK, EssayResponse{
+			TweetID:    tweetID,
+			MediaIndex: mediaIndex,
+			Status:     status,
+			Message:    media.EssayError,
+		})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, EssayResponse{
+		TweetID:    tweetID,
+		MediaIndex: mediaIndex,
+		Title:      media.EssayTitle,
+		Essay:      media.Essay,
+		WordCount:  media.EssayWordCount,
+		Status:     media.EssayStatus,
+	})
+}

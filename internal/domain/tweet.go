@@ -95,6 +95,13 @@ type Media struct {
 	// Transcript fields for videos
 	Transcript         string `json:"transcript,omitempty"`          // Full audio transcript
 	TranscriptLanguage string `json:"transcript_language,omitempty"` // Detected language (ISO-639-1)
+
+	// Essay fields - AI-generated essays from transcript
+	Essay         string `json:"essay,omitempty"`          // Full markdown essay
+	EssayTitle    string `json:"essay_title,omitempty"`    // Essay title
+	EssayStatus   string `json:"essay_status,omitempty"`   // pending, generating, completed, failed
+	EssayError    string `json:"essay_error,omitempty"`    // Error message if generation failed
+	EssayWordCount int   `json:"essay_word_count,omitempty"` // Word count of the essay
 }
 
 // MediaType represents the type of media.
