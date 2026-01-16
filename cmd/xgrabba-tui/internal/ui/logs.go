@@ -33,9 +33,15 @@ func (a *App) createLogsPanel() {
 
 	// Key bindings
 	a.logsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Allow navigation keys to pass through to global handler
 		switch event.Key() {
+		case tcell.KeyEscape, tcell.KeyF1, tcell.KeyF2, tcell.KeyF3, tcell.KeyF4, tcell.KeyF5, tcell.KeyF6:
+			return event // Pass through to global handler
 		case tcell.KeyRune:
+			// Allow navigation number keys and 'q' to pass through
 			switch event.Rune() {
+			case '1', '2', '3', '4', '5', '6', 'q', 'Q', '?':
+				return event // Pass through to global handler
 			case 'm', 'M':
 				a.streamLogsByLabel("app.kubernetes.io/name=xgrabba")
 				return nil

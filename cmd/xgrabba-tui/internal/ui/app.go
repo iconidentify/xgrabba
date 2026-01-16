@@ -217,6 +217,8 @@ func (a *App) switchPanel(panel Panel) {
 		a.app.SetFocus(a.podsTable)
 	case PanelLogs:
 		a.pages.SwitchToPage("logs")
+		// Auto-start showing all logs when entering the logs panel
+		go a.streamAllLogs()
 	case PanelUpgrade:
 		a.pages.SwitchToPage("upgrade")
 	case PanelExec:
