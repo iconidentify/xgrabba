@@ -6793,6 +6793,13 @@
                 </svg>
             </button>
 
+            <!-- Videos Browser -->
+            <a href="/videos" class="header-btn" title="Video Browser" style="text-decoration: none;">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                </svg>
+            </a>
+
             <!-- Activity Log (Admin) -->
             <a href="/admin/events" class="header-btn" title="Activity Log" style="text-decoration: none;">
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -7577,11 +7584,15 @@
             window.history.replaceState({}, '', window.location.pathname);
         }
 
-        // Update events link to include API key for seamless navigation
+        // Update navigation links to include API key for seamless navigation
         if (API_KEY) {
             const eventsLink = document.querySelector('a[href="/admin/events"]');
             if (eventsLink) {
                 eventsLink.href = '/admin/events?key=' + encodeURIComponent(API_KEY);
+            }
+            const videosLink = document.querySelector('a[href="/videos"]');
+            if (videosLink) {
+                videosLink.href = '/videos?key=' + encodeURIComponent(API_KEY);
             }
         }
 
@@ -11080,9 +11091,10 @@
                 if (el) el.style.display = 'none';
             });
 
-            // Hide settings/stats button and admin events link (no IDs, need to select differently)
+            // Hide settings/stats button and navigation links (no IDs, need to select differently)
             document.querySelectorAll('.header-btn[onclick*="toggleStatsModal"]').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.header-btn[href*="/admin/events"]').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.header-btn[href*="/videos"]').forEach(el => el.style.display = 'none');
             // Also hide the divider before settings since export group is hidden
             document.querySelectorAll('.header-divider').forEach(el => el.style.display = 'none');
 
