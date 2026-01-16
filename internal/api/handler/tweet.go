@@ -1222,12 +1222,50 @@ func (h *TweetHandler) GetEssay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+		h.writeJSON(w, http.StatusOK, EssayResponse{
+			TweetID:    tweetID,
+			MediaIndex: mediaIndex,
+			Title:      media.EssayTitle,
+			Essay:      media.Essay,
+			WordCount:  media.EssayWordCount,
+			Status:     media.EssayStatus,
+		})
+}
+
+// DeleteEssay handles DELETE /api/v1/tweets/{tweetID}/media/{mediaIndex}/essay
+// Deletes an existing essay for a specific media item.
+func (h *TweetHandler) DeleteEssay(w http.ResponseWriter, r *http.Request) {
+	tweetID := chi.URLParam(r, "tweetID")
+	mediaIndexStr := chi.URLParam(r, "mediaIndex")
+
+	if tweetID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing tweet ID")
+		return
+	}
+
+	mediaIndex, err := strconv.Atoi(mediaIndexStr)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid media index")
+		return
+	}
+
+	h.logger.Info("essay deletion request", "tweet_id", tweetID, "media_index", mediaIndex)
+
+	err = h.tweetSvc.DeleteEssay(r.Context(), domain.TweetID(tweetID), mediaIndex)
+	if err != nil {
+		if errors.Is(err, domain.ErrVideoNotFound) {
+			h.writeError(w, http.StatusNotFound, "tweet not found")
+			return
+		}
+		h.logger.Error("essay deletion failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to delete essay")
+		return
+	}
+
 	h.writeJSON(w, http.StatusOK, EssayResponse{
 		TweetID:    tweetID,
 		MediaIndex: mediaIndex,
-		Title:      media.EssayTitle,
-		Essay:      media.Essay,
-		WordCount:  media.EssayWordCount,
-		Status:     media.EssayStatus,
+		Status:     "deleted",
+		Message:    "Essay deleted successfully",
 	})
 }

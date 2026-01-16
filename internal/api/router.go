@@ -95,6 +95,7 @@ func NewRouter(
 		r.Get("/tweets/{tweetID}/diagnostics", tweetHandler.GetDiagnostics)
 		r.Post("/tweets/{tweetID}/media/{mediaIndex}/essay", tweetHandler.GenerateEssay)
 		r.Get("/tweets/{tweetID}/media/{mediaIndex}/essay", tweetHandler.GetEssay)
+		r.Delete("/tweets/{tweetID}/media/{mediaIndex}/essay", tweetHandler.DeleteEssay)
 
 		// Video operations (legacy - kept for backwards compatibility)
 		r.Post("/videos", videoHandler.Submit)

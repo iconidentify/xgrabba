@@ -12670,6 +12670,79 @@
             }
         }
 
+        // Delete essay for a media item
+        async function deleteEssay(tweetId, mediaIndex, btn) {
+            if (!confirm('Are you sure you want to delete this essay? This action cannot be undone.')) {
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Deleting...';
+            }
+
+            try {
+                const response = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
+                    method: 'DELETE',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ message: 'Failed to delete essay' }));
+                    throw new Error(error.message || 'Failed to delete essay');
+                }
+
+                // Refresh the detail view to show generate button
+                if (currentTweetDetail && currentTweetDetail.tweet_id === tweetId) {
+                    openTweetDetail(tweetId);
+                }
+            } catch (err) {
+                console.error('Essay deletion failed:', err);
+                alert('Failed to delete essay: ' + err.message);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Delete';
+                }
+            }
+        }
+
+        // Regenerate essay (delete old one and generate new)
+        async function regenerateEssay(tweetId, mediaIndex, btn) {
+            if (!confirm('This will delete the current essay and generate a new one. Continue?')) {
+                return;
+            }
+
+            // First delete the existing essay
+            try {
+                const deleteResponse = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
+                    method: 'DELETE',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (!deleteResponse.ok) {
+                    const error = await deleteResponse.json().catch(() => ({ message: 'Failed to delete essay' }));
+                    throw new Error(error.message || 'Failed to delete essay');
+                }
+
+                // Refresh the detail view to show generate button with style selection
+                if (currentTweetDetail && currentTweetDetail.tweet_id === tweetId) {
+                    openTweetDetail(tweetId);
+                }
+
+                // Wait a moment for UI to update, then show a message
+                setTimeout(() => {
+                    alert('Essay deleted. Please select a style and click "Generate Essay" to create a new one.');
+                }, 100);
+            } catch (err) {
+                console.error('Essay regeneration failed:', err);
+                alert('Failed to delete essay: ' + err.message);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Regenerate';
+                }
+            }
+        }
+
         // Poll for essay generation completion
         async function pollEssayStatus(tweetId, mediaIndex, btn) {
             const maxAttempts = 60; // 2 minutes max
@@ -12782,7 +12855,7 @@
 
             const media = tweet.media[videoIndex];
 
-            // If essay exists, show it
+            // If essay exists, show it with delete/regenerate options
             if (hasEssay(media)) {
                 const preview = media.essay.substring(0, 200).replace(/[#*_]/g, '') + '...';
                 return `
@@ -12797,12 +12870,20 @@
                             <span style="font-size:11px;color:var(--text-muted);">${media.essay_word_count?.toLocaleString() || 0} words</span>
                         </div>
                         <div class="detail-essay-preview">${escapeHtml(preview)}</div>
-                        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:0;font-style:italic;">
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:12px;font-style:italic;">
                             Generated exclusively from the video transcript
                         </p>
-                        <button class="read-essay-btn" onclick="openEssayModal('${tweet.tweet_id}', ${videoIndex})">
-                            Read Full Essay
-                        </button>
+                        <div style="display:flex;gap:8px;">
+                            <button class="read-essay-btn" onclick="openEssayModal('${tweet.tweet_id}', ${videoIndex})" style="flex:1;">
+                                Read Full Essay
+                            </button>
+                            <button class="read-essay-btn" onclick="regenerateEssay('${tweet.tweet_id}', ${videoIndex}, this)" style="flex:1;background:linear-gradient(135deg, #3b82f6, #2563eb);">
+                                Regenerate
+                            </button>
+                            <button class="read-essay-btn" onclick="deleteEssay('${tweet.tweet_id}', ${videoIndex}, this)" style="flex:1;background:linear-gradient(135deg, #ef4444, #dc2626);">
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 `;
             }

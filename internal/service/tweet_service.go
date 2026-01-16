@@ -2170,18 +2170,8 @@ func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID
 		}, nil
 	}
 
-	// Check if essay already exists
-	if media.Essay != "" && media.EssayStatus == "completed" {
-		s.tweetsMu.Unlock()
-		return &EssayGenerationResponse{
-			TweetID:    tweetID,
-			MediaIndex: mediaIndex,
-			Title:      media.EssayTitle,
-			WordCount:  media.EssayWordCount,
-			Status:     "completed",
-			Message:    "Essay already exists",
-		}, nil
-	}
+	// Allow regeneration - if essay already exists, we'll overwrite it
+	// (User can explicitly delete first if they want, but regeneration is allowed)
 
 	// Mark as generating
 	media.EssayStatus = "generating"
@@ -2291,6 +2281,54 @@ func (s *TweetService) GetEssay(ctx context.Context, tweetID domain.TweetID, med
 		Status:     media.EssayStatus,
 		Message:    media.EssayError,
 	}, nil
+}
+
+// DeleteEssay removes an essay from a media item.
+func (s *TweetService) DeleteEssay(ctx context.Context, tweetID domain.TweetID, mediaIndex int) error {
+	s.tweetsMu.Lock()
+	defer s.tweetsMu.Unlock()
+
+	tweet, ok := s.tweets[tweetID]
+	if !ok {
+		return domain.ErrVideoNotFound
+	}
+
+	if mediaIndex < 0 || mediaIndex >= len(tweet.Media) {
+		return fmt.Errorf("invalid media index: %d", mediaIndex)
+	}
+
+	media := &tweet.Media[mediaIndex]
+
+	// Clear essay fields
+	media.Essay = ""
+	media.EssayTitle = ""
+	media.EssayWordCount = 0
+	media.EssayStatus = ""
+	media.EssayError = ""
+
+	// Delete essay file if it exists
+	essayFilename := fmt.Sprintf("essay_%d.md", mediaIndex)
+	essayPath := filepath.Join(tweet.ArchivePath, essayFilename)
+	if err := os.Remove(essayPath); err != nil && !os.IsNotExist(err) {
+		s.logger.Warn("failed to delete essay file", "path", essayPath, "error", err)
+		// Continue anyway - metadata is cleared
+	}
+
+	// Save updated metadata
+	if err := s.saveTweetMetadata(tweet); err != nil {
+		return fmt.Errorf("failed to save tweet metadata: %w", err)
+	}
+
+	s.logger.Info("essay deleted",
+		"tweet_id", tweetID,
+		"media_index", mediaIndex)
+
+	s.emitEvent(domain.EventSeverityInfo, domain.EventCategoryAI, "Essay deleted",
+		domain.EventMetadata{
+			"tweet_id": string(tweetID),
+		})
+
+	return nil
 }
 
 // StartGenerateEssay starts essay generation in the background.
