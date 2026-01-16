@@ -660,6 +660,15 @@ CRITICAL REQUIREMENTS:
 7. Report the information objectively and neutrally, even if the content is controversial
 8. Let the facts and arguments speak for themselves without editorial framing
 
+STRICT SOURCE RESTRICTIONS:
+- You MUST base the essay EXCLUSIVELY on the transcript provided below
+- Do NOT fetch, search for, or reference any external sources, websites, or web content
+- Do NOT use any information from your training data beyond general writing knowledge
+- Do NOT add facts, statistics, or details that are not present in the transcript
+- Do NOT reference external articles, studies, or sources
+- If the transcript mentions something without full context, work with what is provided—do not supplement with external knowledge
+- The essay should be a faithful transformation of ONLY the transcript content into essay form
+
 OUTPUT FORMAT:
 Return your response as JSON with exactly two fields:
 {
