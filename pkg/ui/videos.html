@@ -1391,24 +1391,42 @@ async function fetchVideos() {
             // Use embedded offline data
             tweets = OFFLINE_TWEETS;
         } else {
-            // Fetch from API
-            const res = await fetch('/api/v1/tweets?limit=5000', {
-                headers: { 'X-API-Key': API_KEY }
-            });
+            // Fetch all tweets using pagination
+            const batchSize = 1000;
+            let offset = 0;
+            let hasMore = true;
+            let totalExpected = 0;
 
-            if (res.status === 401) {
-                const key = prompt('API key invalid. Enter your xgrabba API key:');
-                if (key) {
-                    localStorage.setItem('xgrabba_api_key', key);
-                    location.reload();
+            while (hasMore) {
+                const res = await fetch(`/api/v1/tweets?limit=${batchSize}&offset=${offset}`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (res.status === 401) {
+                    const key = prompt('API key invalid. Enter your xgrabba API key:');
+                    if (key) {
+                        localStorage.setItem('xgrabba_api_key', key);
+                        location.reload();
+                    }
+                    return;
                 }
-                return;
+
+                if (!res.ok) throw new Error('Failed to fetch');
+
+                const data = await res.json();
+                const batch = data.tweets || [];
+                tweets = tweets.concat(batch);
+
+                totalExpected = data.total || 0;
+                hasMore = data.has_more && batch.length > 0;
+                offset += batch.length;
+
+                // Update loading status
+                document.querySelector('#loadingState span').textContent =
+                    `Loading tweets... ${tweets.length}/${totalExpected}`;
             }
 
-            if (!res.ok) throw new Error('Failed to fetch');
-
-            const data = await res.json();
-            tweets = data.tweets || [];
+            console.log('[videos] Fetched all tweets:', tweets.length, 'of', totalExpected);
         }
 
         // Extract videos from tweets
