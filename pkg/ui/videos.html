@@ -1258,14 +1258,19 @@ body {
 // =============================================================================
 
 const params = new URLSearchParams(window.location.search);
-let API_KEY = params.get('key') || localStorage.getItem('xgrabba_api_key') || '';
 
-if (params.get('key')) {
+// Offline mode detection - OFFLINE_DATA is set by exported archives
+const OFFLINE_MODE = typeof window.OFFLINE_DATA !== 'undefined';
+let OFFLINE_TWEETS = OFFLINE_MODE ? (window.OFFLINE_DATA.tweets || []) : [];
+
+let API_KEY = OFFLINE_MODE ? '' : (params.get('key') || localStorage.getItem('xgrabba_api_key') || '');
+
+if (!OFFLINE_MODE && params.get('key')) {
     localStorage.setItem('xgrabba_api_key', params.get('key'));
     window.history.replaceState({}, '', window.location.pathname);
 }
 
-if (!API_KEY) {
+if (!OFFLINE_MODE && !API_KEY) {
     const key = prompt('Enter your xgrabba API key:');
     if (key) {
         localStorage.setItem('xgrabba_api_key', key);
@@ -1273,11 +1278,17 @@ if (!API_KEY) {
     }
 }
 
-// Update navigation links with API key
-if (API_KEY) {
+// Update navigation links with API key (only in online mode)
+if (!OFFLINE_MODE && API_KEY) {
     document.getElementById('homeLink').href = '/ui?key=' + encodeURIComponent(API_KEY);
     document.getElementById('archiveLink').href = '/ui?key=' + encodeURIComponent(API_KEY);
     document.getElementById('eventsLink').href = '/admin/events?key=' + encodeURIComponent(API_KEY);
+}
+
+// In offline mode, hide navigation to other pages
+if (OFFLINE_MODE) {
+    const navLinks = document.querySelector('.nav-links');
+    if (navLinks) navLinks.style.display = 'none';
 }
 
 // =============================================================================
@@ -1348,6 +1359,15 @@ function debounce(fn, delay) {
     };
 }
 
+// Add API key to URL for authentication
+function addApiKey(url) {
+    if (!url) return url;
+    if (OFFLINE_MODE) return url;
+    if (!API_KEY) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'key=' + encodeURIComponent(API_KEY);
+}
+
 // =============================================================================
 // API Functions
 // =============================================================================
@@ -1357,39 +1377,59 @@ async function fetchVideos() {
     showLoading();
 
     try {
-        const res = await fetch('/api/v1/tweets?limit=500', {
-            headers: { 'X-API-Key': API_KEY }
-        });
+        let tweets = [];
 
-        if (res.status === 401) {
-            const key = prompt('API key invalid. Enter your xgrabba API key:');
-            if (key) {
-                localStorage.setItem('xgrabba_api_key', key);
-                location.reload();
+        if (OFFLINE_MODE) {
+            // Use embedded offline data
+            tweets = OFFLINE_TWEETS;
+        } else {
+            // Fetch from API
+            const res = await fetch('/api/v1/tweets?limit=2000', {
+                headers: { 'X-API-Key': API_KEY }
+            });
+
+            if (res.status === 401) {
+                const key = prompt('API key invalid. Enter your xgrabba API key:');
+                if (key) {
+                    localStorage.setItem('xgrabba_api_key', key);
+                    location.reload();
+                }
+                return;
             }
-            return;
+
+            if (!res.ok) throw new Error('Failed to fetch');
+
+            const data = await res.json();
+            tweets = data.tweets || [];
         }
-
-        if (!res.ok) throw new Error('Failed to fetch');
-
-        const data = await res.json();
 
         // Extract videos from tweets
         state.videos = [];
-        for (const tweet of data.tweets || []) {
+        for (const tweet of tweets) {
             if (!tweet.media) continue;
 
             for (let i = 0; i < tweet.media.length; i++) {
                 const media = tweet.media[i];
                 if (media.type !== 'video' && media.type !== 'gif') continue;
 
+                // Handle URL for both online and offline modes
+                // In offline mode, use local_path; in online mode, use url
+                const mediaUrl = OFFLINE_MODE
+                    ? (media.local_path || media.url)
+                    : (media.url || `/api/v1/tweets/${tweet.tweet_id}/media/${media.filename || i}`);
+
+                // Handle thumbnail URL
+                const thumbUrl = OFFLINE_MODE
+                    ? (media.thumbnail_path || media.local_path || media.url)
+                    : (media.thumbnail_url || media.url);
+
                 state.videos.push({
                     id: `${tweet.tweet_id}_${i}`,
                     tweetId: tweet.tweet_id,
                     mediaIndex: i,
                     type: media.type,
-                    url: media.url,
-                    thumbnailUrl: media.thumbnail_url,
+                    url: mediaUrl,
+                    thumbnailUrl: thumbUrl,
                     duration: media.duration || 0,
                     transcript: media.transcript || '',
                     transcriptLanguage: media.transcript_language || '',
@@ -1520,11 +1560,13 @@ function renderVideos() {
     grid.innerHTML = state.filteredVideos.map((video, index) => {
         const progress = state.watchProgress[video.id] || 0;
         const progressPercent = video.duration > 0 ? (progress / video.duration) * 100 : 0;
+        const thumbSrc = addApiKey(video.thumbnailUrl || '');
+        const avatarSrc = video.authorAvatar ? addApiKey(video.authorAvatar) : '';
 
         return `
             <div class="video-card" data-index="${index}">
                 <div class="video-thumbnail">
-                    <img src="${escapeHtml(video.thumbnailUrl || '')}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
+                    <img src="${escapeHtml(thumbSrc)}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
                     <div class="video-play-overlay">
                         <div class="video-play-btn">
                             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1540,7 +1582,7 @@ function renderVideos() {
                 </div>
                 <div class="video-info">
                     <div class="video-author">
-                        ${video.authorAvatar ? `<img class="video-avatar" src="${escapeHtml(video.authorAvatar)}" alt="" onerror="this.style.display='none'">` : ''}
+                        ${avatarSrc ? `<img class="video-avatar" src="${escapeHtml(avatarSrc)}" alt="" onerror="this.style.display='none'">` : ''}
                         <span class="video-author-name">@${escapeHtml(video.author)}</span>
                     </div>
                     <div class="video-title">${escapeHtml(video.title)}</div>
@@ -1612,8 +1654,8 @@ function openVideo(index) {
     state.currentVideo = state.filteredVideos[index];
     const video = state.currentVideo;
 
-    // Set video source
-    player.src = video.url;
+    // Set video source with API key for authentication
+    player.src = addApiKey(video.url);
 
     // Restore progress
     const savedProgress = state.watchProgress[video.id] || 0;
@@ -1709,9 +1751,10 @@ function renderQueue() {
     queueList.innerHTML = videos.map((video, i) => {
         const actualIndex = start + i;
         const isActive = actualIndex === state.currentIndex;
+        const queueThumbSrc = addApiKey(video.thumbnailUrl || '');
         return `
             <div class="queue-item ${isActive ? 'active' : ''}" data-index="${actualIndex}">
-                <img class="queue-thumb" src="${escapeHtml(video.thumbnailUrl || '')}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
+                <img class="queue-thumb" src="${escapeHtml(queueThumbSrc)}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">
                 <div class="queue-info">
                     <div class="queue-title">${escapeHtml(video.title)}</div>
                     <div class="queue-meta">${formatDuration(video.duration)} - @${escapeHtml(video.author)}</div>
