@@ -50,6 +50,9 @@ type App struct {
 	podsTable      *tview.Table
 	logsView       *tview.TextView
 	upgradeView    *tview.Flex
+	upgradeCheckButton   *tview.Button
+	upgradeButton        *tview.Button
+	upgradeForceButton   *tview.Button
 	execView       *tview.Flex
 	sshView        *tview.Flex
 	helpView       *tview.TextView
@@ -221,6 +224,10 @@ func (a *App) switchPanel(panel Panel) {
 		go a.streamAllLogs()
 	case PanelUpgrade:
 		a.pages.SwitchToPage("upgrade")
+		// Set focus on the check button so buttons are navigable
+		if a.upgradeCheckButton != nil {
+			a.app.SetFocus(a.upgradeCheckButton)
+		}
 	case PanelExec:
 		a.pages.SwitchToPage("exec")
 	case PanelSSH:

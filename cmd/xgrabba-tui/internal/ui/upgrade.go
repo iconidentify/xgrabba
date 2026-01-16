@@ -35,28 +35,28 @@ func (a *App) createUpgradePanel() {
 	// Buttons
 	buttonFlex := tview.NewFlex()
 
-	checkButton := tview.NewButton("Check for Updates").SetSelectedFunc(func() {
+	a.upgradeCheckButton = tview.NewButton("Check for Updates").SetSelectedFunc(func() {
 		go a.checkForUpdates(availableBox)
 	})
-	checkButton.SetBackgroundColor(tcell.ColorDarkCyan)
+	a.upgradeCheckButton.SetBackgroundColor(tcell.ColorDarkCyan)
 
-	upgradeButton := tview.NewButton("Upgrade").SetSelectedFunc(func() {
+	a.upgradeButton = tview.NewButton("Upgrade").SetSelectedFunc(func() {
 		go a.performUpgrade(progressBox)
 	})
-	upgradeButton.SetBackgroundColor(tcell.ColorDarkGreen)
+	a.upgradeButton.SetBackgroundColor(tcell.ColorDarkGreen)
 
-	forceButton := tview.NewButton("Force Upgrade").SetSelectedFunc(func() {
+	a.upgradeForceButton = tview.NewButton("Force Upgrade").SetSelectedFunc(func() {
 		go a.performUpgrade(progressBox)
 	})
-	forceButton.SetBackgroundColor(tcell.ColorDarkRed)
+	a.upgradeForceButton.SetBackgroundColor(tcell.ColorDarkRed)
 
 	buttonFlex.
 		AddItem(nil, 0, 1, false).
-		AddItem(checkButton, 20, 0, true).
+		AddItem(a.upgradeCheckButton, 20, 0, true).
 		AddItem(nil, 2, 0, false).
-		AddItem(upgradeButton, 12, 0, false).
+		AddItem(a.upgradeButton, 12, 0, false).
 		AddItem(nil, 2, 0, false).
-		AddItem(forceButton, 16, 0, false).
+		AddItem(a.upgradeForceButton, 16, 0, false).
 		AddItem(nil, 0, 1, false)
 
 	// Top row - current and available versions
@@ -70,19 +70,87 @@ func (a *App) createUpgradePanel() {
 		AddItem(buttonFlex, 3, 0, true).
 		AddItem(progressBox, 0, 1, false)
 
-	// Navigation between buttons
-	a.upgradeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab:
-			// Cycle through buttons
-			if a.app.GetFocus() == checkButton {
-				a.app.SetFocus(upgradeButton)
-			} else if a.app.GetFocus() == upgradeButton {
-				a.app.SetFocus(forceButton)
+	// Navigation between buttons - handle at button level
+	navigateButtons := func(direction int) {
+		currentFocus := a.app.GetFocus()
+		if currentFocus == a.upgradeCheckButton {
+			if direction > 0 {
+				a.app.SetFocus(a.upgradeButton)
 			} else {
-				a.app.SetFocus(checkButton)
+				a.app.SetFocus(a.upgradeForceButton)
 			}
+		} else if currentFocus == a.upgradeButton {
+			if direction > 0 {
+				a.app.SetFocus(a.upgradeForceButton)
+			} else {
+				a.app.SetFocus(a.upgradeCheckButton)
+			}
+		} else if currentFocus == a.upgradeForceButton {
+			if direction > 0 {
+				a.app.SetFocus(a.upgradeCheckButton)
+			} else {
+				a.app.SetFocus(a.upgradeButton)
+			}
+		}
+	}
+
+	// Set input capture on each button for arrow key navigation
+	a.upgradeCheckButton.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyRight:
+			a.app.SetFocus(a.upgradeButton)
 			return nil
+		case tcell.KeyLeft:
+			a.app.SetFocus(a.upgradeForceButton)
+			return nil
+		case tcell.KeyTab:
+			navigateButtons(1)
+			return nil
+		}
+		return event
+	})
+
+	a.upgradeButton.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyRight:
+			a.app.SetFocus(a.upgradeForceButton)
+			return nil
+		case tcell.KeyLeft:
+			a.app.SetFocus(a.upgradeCheckButton)
+			return nil
+		case tcell.KeyTab:
+			navigateButtons(1)
+			return nil
+		}
+		return event
+	})
+
+	a.upgradeForceButton.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyRight:
+			a.app.SetFocus(a.upgradeCheckButton)
+			return nil
+		case tcell.KeyLeft:
+			a.app.SetFocus(a.upgradeButton)
+			return nil
+		case tcell.KeyTab:
+			navigateButtons(1)
+			return nil
+		}
+		return event
+	})
+
+	// Global navigation keys should pass through
+	a.upgradeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Allow global navigation keys to pass through
+		switch event.Key() {
+		case tcell.KeyEscape, tcell.KeyF1, tcell.KeyF2, tcell.KeyF3, tcell.KeyF4, tcell.KeyF5, tcell.KeyF6:
+			return event
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '1', '2', '3', '4', '5', '6', 'q', 'Q', '?':
+				return event
+			}
 		}
 		return event
 	})
