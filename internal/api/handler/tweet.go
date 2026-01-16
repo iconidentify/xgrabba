@@ -93,6 +93,12 @@ type MediaPreview struct {
 	Duration           int    `json:"duration,omitempty"`
 	Transcript         string `json:"transcript,omitempty"`
 	TranscriptLanguage string `json:"transcript_language,omitempty"`
+	// Essay fields
+	Essay         string `json:"essay,omitempty"`
+	EssayTitle    string `json:"essay_title,omitempty"`
+	EssayStatus   string `json:"essay_status,omitempty"`
+	EssayError    string `json:"essay_error,omitempty"`
+	EssayWordCount int   `json:"essay_word_count,omitempty"`
 }
 
 // TweetListResponse contains paginated tweet list.
@@ -218,6 +224,11 @@ func (h *TweetHandler) buildTweetListResponse(tweets []*domain.Tweet, total, lim
 				Duration:           m.Duration,
 				Transcript:         m.Transcript,
 				TranscriptLanguage: m.TranscriptLanguage,
+				Essay:              m.Essay,
+				EssayTitle:         m.EssayTitle,
+				EssayStatus:        m.EssayStatus,
+				EssayError:         m.EssayError,
+				EssayWordCount:     m.EssayWordCount,
 			}
 			// For videos, use locally downloaded thumbnail; for images, use the image itself
 			if m.Type == domain.MediaTypeVideo || m.Type == domain.MediaTypeGIF {
@@ -662,6 +673,12 @@ type MediaFileResponse struct {
 	AITags             []string `json:"ai_tags,omitempty"`
 	AIContentType      string   `json:"ai_content_type,omitempty"`
 	AITopics           []string `json:"ai_topics,omitempty"`
+	// Essay fields
+	Essay         string `json:"essay,omitempty"`
+	EssayTitle    string `json:"essay_title,omitempty"`
+	EssayStatus   string `json:"essay_status,omitempty"`
+	EssayError    string `json:"essay_error,omitempty"`
+	EssayWordCount int   `json:"essay_word_count,omitempty"`
 }
 
 // MediaListResponse contains the list of media files.
@@ -861,6 +878,11 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 			AITags:        m.AITags,
 			AIContentType: m.AIContentType,
 			AITopics:      m.AITopics,
+			Essay:         m.Essay,
+			EssayTitle:    m.EssayTitle,
+			EssayStatus:   m.EssayStatus,
+			EssayError:    m.EssayError,
+			EssayWordCount: m.EssayWordCount,
 		}
 		// Include transcript for videos
 		if m.Transcript != "" {
