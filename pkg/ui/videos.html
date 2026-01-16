@@ -1422,8 +1422,8 @@ async function fetchVideos() {
                 offset += batch.length;
 
                 // Update loading status
-                document.querySelector('#loadingState span').textContent =
-                    `Loading tweets... ${tweets.length}/${totalExpected}`;
+                const loadingText = document.querySelector('#loadingState p');
+                if (loadingText) loadingText.textContent = `Loading videos... ${tweets.length}/${totalExpected}`;
             }
 
             console.log('[videos] Fetched all tweets:', tweets.length, 'of', totalExpected);
