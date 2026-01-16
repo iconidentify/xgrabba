@@ -1101,6 +1101,11 @@ type EssayResponse struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// GenerateEssayRequest contains the request body for essay generation.
+type GenerateEssayRequest struct {
+	Style string `json:"style,omitempty"` // "magazine" or "academic" (default: "academic")
+}
+
 // GenerateEssay handles POST /api/v1/tweets/{tweetID}/media/{mediaIndex}/essay
 // Generates a markdown essay from the video's transcript using AI.
 func (h *TweetHandler) GenerateEssay(w http.ResponseWriter, r *http.Request) {
@@ -1118,10 +1123,23 @@ func (h *TweetHandler) GenerateEssay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("essay generation request", "tweet_id", tweetID, "media_index", mediaIndex)
+	// Parse request body for style
+	var reqBody GenerateEssayRequest
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&reqBody)
+	}
+
+	// Validate style if provided
+	style := reqBody.Style
+	if style != "" && style != "magazine" && style != "academic" {
+		h.writeError(w, http.StatusBadRequest, "invalid style: must be 'magazine' or 'academic'")
+		return
+	}
+
+	h.logger.Info("essay generation request", "tweet_id", tweetID, "media_index", mediaIndex, "style", style)
 
 	// Start essay generation in background
-	err = h.tweetSvc.StartGenerateEssay(domain.TweetID(tweetID), mediaIndex)
+	err = h.tweetSvc.StartGenerateEssay(domain.TweetID(tweetID), mediaIndex, style)
 	if err != nil {
 		if errors.Is(err, domain.ErrVideoNotFound) {
 			h.writeError(w, http.StatusNotFound, "tweet not found")

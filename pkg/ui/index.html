@@ -12615,10 +12615,24 @@
                 `;
             }
 
+            // Get selected style
+            const styleInputs = document.querySelectorAll(`input[name="essayStyle_${tweetId}"]`);
+            let selectedStyle = 'academic'; // default
+            for (const input of styleInputs) {
+                if (input.checked) {
+                    selectedStyle = input.value;
+                    break;
+                }
+            }
+
             try {
                 const response = await fetch(`/api/v1/tweets/${tweetId}/media/${mediaIndex}/essay`, {
                     method: 'POST',
-                    headers: { 'X-API-Key': API_KEY }
+                    headers: { 
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ style: selectedStyle })
                 });
                 const data = await response.json();
 
@@ -12813,7 +12827,7 @@
                 `;
             }
 
-            // Show generate button
+            // Show generate button with style selection
             return `
                 <div class="detail-essay-section" style="background:var(--bg-primary);border-color:var(--border-subtle);">
                     <div class="detail-essay-header">
@@ -12827,6 +12841,21 @@
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
                         Generate an essay using AI based <strong>solely on the video transcript</strong>. The essay is created exclusively from the spoken words in the transcript—no other content (tweet text, images, or metadata) is used as source material.
                     </p>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600;">Essay Style:</label>
+                        <div style="display:flex;gap:16px;">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                                <input type="radio" name="essayStyle_${tweet.tweet_id}" value="academic" checked style="cursor:pointer;">
+                                <span>Academic</span>
+                                <span style="font-size:11px;color:var(--text-muted);margin-left:4px;">(Formal, objective)</span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                                <input type="radio" name="essayStyle_${tweet.tweet_id}" value="magazine" style="cursor:pointer;">
+                                <span>Magazine</span>
+                                <span style="font-size:11px;color:var(--text-muted);margin-left:4px;">(Casual, engaging)</span>
+                            </label>
+                        </div>
+                    </div>
                     <button class="generate-essay-btn" id="generateEssayBtn_${tweet.tweet_id}" onclick="generateEssay('${tweet.tweet_id}', ${videoIndex}, this)">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>

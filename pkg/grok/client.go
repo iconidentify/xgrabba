@@ -60,6 +60,7 @@ type ContentAnalysisResponse struct {
 type EssayRequest struct {
 	Transcript  string // Full video transcript
 	ContentType string // Detected content type (documentary, lecture, etc.) - optional hint
+	Style       string // Essay style: "magazine" or "academic" (default: "academic")
 }
 
 // EssayResponse contains the generated essay.
@@ -648,17 +649,66 @@ func (c *HTTPClient) GenerateEssay(ctx context.Context, req EssayRequest) (*Essa
 		model = "grok-3" // Use Grok 3 for highest quality essays
 	}
 
-	systemPrompt := `You are an expert academic writer tasked with transforming a raw transcript into a cohesive, original essay.
+	// Default to academic style if not specified
+	style := req.Style
+	if style == "" {
+		style = "academic"
+	}
+
+	var systemPrompt string
+	if style == "magazine" {
+		systemPrompt = `You are an expert magazine writer tasked with transforming a raw transcript into an engaging, article-style piece.
+
+CRITICAL REQUIREMENTS:
+1. Transform the transcript into a well-structured magazine article with an engaging hook, body, and conclusion
+2. Faithfully cover ALL key points, arguments, facts, and narratives from the transcript
+3. Use a casual, accessible tone suitable for a general magazine audience
+4. Write in an engaging, narrative style that draws readers in
+5. NEVER mention or reference the transcript, video, source, or the fact this is derived from any source
+6. Present it as an original standalone article on the topic
+7. You may use a more conversational tone and engaging storytelling techniques
+8. Feel free to use vivid descriptions and narrative flow to make the content compelling
+9. The goal is to relay the documentary content in an accessible, magazine-style format
+
+STRICT SOURCE RESTRICTIONS:
+- You MUST base the article EXCLUSIVELY on the transcript provided below
+- Do NOT fetch, search for, or reference any external sources, websites, or web content
+- Do NOT use any information from your training data beyond general writing knowledge
+- Do NOT add facts, statistics, or details that are not present in the transcript
+- Do NOT reference external articles, studies, or sources
+- If the transcript mentions something without full context, work with what is provided—do not supplement with external knowledge
+- The article should be a faithful transformation of ONLY the transcript content into magazine article form
+
+OUTPUT FORMAT:
+Return your response as JSON with exactly two fields:
+{
+  "title": "An Engaging Article Title Based on the Content",
+  "essay": "The full markdown article content here..."
+}
+
+ARTICLE FORMATTING:
+- Use markdown for structure (## for section headings, **bold** for emphasis)
+- Write in clear paragraphs with engaging narrative flow
+- Include smooth transitions between sections
+- Use a casual, accessible tone throughout
+- Keep the title catchy and engaging (5-12 words typically)
+
+Return ONLY valid JSON, no markdown code blocks, no explanation.`
+	} else {
+		// Academic style (default)
+		systemPrompt = `You are an expert academic writer tasked with transforming a raw transcript into a cohesive, original essay.
 
 CRITICAL REQUIREMENTS:
 1. Transform the transcript into a well-structured essay with introduction, body paragraphs, and conclusion
 2. Faithfully cover ALL key points, arguments, facts, and narratives from the transcript
-3. Use formal language, smooth transitions, and engaging prose suitable for a general audience
-4. NEVER mention or reference the transcript, video, source, or the fact this is derived from any source
-5. Present it as an original standalone essay on the topic
-6. Do NOT inject any personal opinions, commentary, or value judgments about the content
-7. Report the information objectively and neutrally, even if the content is controversial
-8. Let the facts and arguments speak for themselves without editorial framing
+3. Use formal, academic language with smooth transitions and objective analysis
+4. Maintain objectivity and neutrality throughout—present information without bias
+5. NEVER mention or reference the transcript, video, source, or the fact this is derived from any source
+6. Present it as an original standalone academic essay on the topic
+7. Do NOT inject any personal opinions, commentary, or value judgments about the content
+8. Report the information objectively and neutrally, even if the content is controversial
+9. Let the facts and arguments speak for themselves without editorial framing
+10. Use academic conventions: clear thesis, evidence-based arguments, logical structure
 
 STRICT SOURCE RESTRICTIONS:
 - You MUST base the essay EXCLUSIVELY on the transcript provided below
@@ -667,7 +717,7 @@ STRICT SOURCE RESTRICTIONS:
 - Do NOT add facts, statistics, or details that are not present in the transcript
 - Do NOT reference external articles, studies, or sources
 - If the transcript mentions something without full context, work with what is provided—do not supplement with external knowledge
-- The essay should be a faithful transformation of ONLY the transcript content into essay form
+- The essay should be a faithful transformation of ONLY the transcript content into academic essay form
 
 OUTPUT FORMAT:
 Return your response as JSON with exactly two fields:
@@ -682,8 +732,10 @@ ESSAY FORMATTING:
 - Include smooth transitions between sections
 - Aim for comprehensive coverage - the essay should be thorough
 - Keep the title concise but descriptive (5-12 words typically)
+- Maintain formal academic tone throughout
 
 Return ONLY valid JSON, no markdown code blocks, no explanation.`
+	}
 
 	userPrompt := fmt.Sprintf("Transform this transcript into a polished essay:\n\n%s", req.Transcript)
 

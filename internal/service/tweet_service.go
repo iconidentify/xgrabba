@@ -2137,7 +2137,7 @@ type EssayGenerationResponse struct {
 
 // GenerateEssay generates a markdown essay from a video transcript.
 // The essay is stored in the media's Essay field and saved to disk.
-func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID, mediaIndex int) (*EssayGenerationResponse, error) {
+func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID, mediaIndex int, style string) (*EssayGenerationResponse, error) {
 	s.tweetsMu.Lock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
@@ -2201,6 +2201,7 @@ func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID
 	essayResp, err := s.grokClient.GenerateEssay(ctx, grok.EssayRequest{
 		Transcript:  media.Transcript,
 		ContentType: tweet.AIContentType,
+		Style:       style,
 	})
 
 	s.tweetsMu.Lock()
@@ -2293,7 +2294,7 @@ func (s *TweetService) GetEssay(ctx context.Context, tweetID domain.TweetID, med
 }
 
 // StartGenerateEssay starts essay generation in the background.
-func (s *TweetService) StartGenerateEssay(tweetID domain.TweetID, mediaIndex int) error {
+func (s *TweetService) StartGenerateEssay(tweetID domain.TweetID, mediaIndex int, style string) error {
 	s.tweetsMu.RLock()
 	tweet, ok := s.tweets[tweetID]
 	if !ok {
@@ -2321,11 +2322,12 @@ func (s *TweetService) StartGenerateEssay(tweetID domain.TweetID, mediaIndex int
 	// Run in background
 	go func() {
 		ctx := context.Background()
-		_, err := s.GenerateEssay(ctx, tweetID, mediaIndex)
+		_, err := s.GenerateEssay(ctx, tweetID, mediaIndex, style)
 		if err != nil {
 			s.logger.Error("background essay generation failed",
 				"tweet_id", tweetID,
 				"media_index", mediaIndex,
+				"style", style,
 				"error", err)
 		}
 	}()
