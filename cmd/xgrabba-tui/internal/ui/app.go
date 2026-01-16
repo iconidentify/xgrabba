@@ -53,6 +53,7 @@ type App struct {
 	upgradeCheckButton   *tview.Button
 	upgradeButton        *tview.Button
 	upgradeForceButton   *tview.Button
+	upgradeCurrentBox    *tview.TextView
 	execView       *tview.Flex
 	sshView        *tview.Flex
 	helpView       *tview.TextView
@@ -228,6 +229,10 @@ func (a *App) switchPanel(panel Panel) {
 		if a.upgradeCheckButton != nil {
 			a.app.SetFocus(a.upgradeCheckButton)
 		}
+		// Refresh current version display when entering upgrade panel
+		if a.upgradeCurrentBox != nil {
+			go a.updateCurrentVersion(a.upgradeCurrentBox)
+		}
 	case PanelExec:
 		a.pages.SwitchToPage("exec")
 	case PanelSSH:
@@ -328,6 +333,10 @@ func (a *App) refreshStatus() {
 	a.app.QueueUpdateDraw(func() {
 		a.updateDashboard()
 		a.updatePodsTable()
+		// Update upgrade panel current version if it exists
+		if a.upgradeCurrentBox != nil {
+			go a.updateCurrentVersion(a.upgradeCurrentBox)
+		}
 	})
 
 	issueCount := len(status.Issues)

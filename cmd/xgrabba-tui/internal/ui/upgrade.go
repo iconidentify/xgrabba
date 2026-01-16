@@ -155,6 +155,9 @@ func (a *App) createUpgradePanel() {
 		return event
 	})
 
+	// Store reference to current box for updates
+	a.upgradeCurrentBox = currentBox
+
 	// Initial data load
 	go a.updateCurrentVersion(currentBox)
 }
@@ -167,6 +170,28 @@ func (a *App) updateCurrentVersion(view *tview.TextView) {
 	})
 
 	status := a.getStatus()
+
+	// If status is not available, fetch it directly
+	if status == nil {
+		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+		defer cancel()
+
+		var err error
+		status, err = a.k8sClient.GetStatus(ctx)
+		if err != nil {
+			a.app.QueueUpdateDraw(func() {
+				view.Clear()
+				fmt.Fprintf(view, "[red]Error fetching status:[white]\n%v\n", err)
+				fmt.Fprintln(view, "[dim]Press 'r' to refresh[white]")
+			})
+			return
+		}
+
+		// Update cached status
+		a.statusMu.Lock()
+		a.status = status
+		a.statusMu.Unlock()
+	}
 
 	a.app.QueueUpdateDraw(func() {
 		view.Clear()
