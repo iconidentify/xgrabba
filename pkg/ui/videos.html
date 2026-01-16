@@ -1392,7 +1392,7 @@ async function fetchVideos() {
             tweets = OFFLINE_TWEETS;
         } else {
             // Fetch from API
-            const res = await fetch('/api/v1/tweets?limit=2000', {
+            const res = await fetch('/api/v1/tweets?limit=5000', {
                 headers: { 'X-API-Key': API_KEY }
             });
 
