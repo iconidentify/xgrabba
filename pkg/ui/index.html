@@ -7535,7 +7535,10 @@
     <div class="essay-modal-overlay" id="essayModalOverlay" onclick="if(event.target === this) closeEssayModal()">
         <div class="essay-modal" id="essayModal">
             <div class="essay-header">
-                <span class="essay-header-title">Essay</span>
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                    <span class="essay-header-title">Essay</span>
+                    <span style="font-size:11px;color:#888;font-style:italic;">Generated from transcript only</span>
+                </div>
                 <div class="essay-header-actions">
                     <button class="essay-header-btn" onclick="toggleEssayFullscreen()" title="Toggle fullscreen">
                         <svg id="essayFullscreenIcon" viewBox="0 0 24 24" fill="currentColor">
@@ -12502,6 +12505,9 @@
                 <h1 class="essay-title">${escapeHtml(data.title)}</h1>
                 <div class="essay-meta">
                     <span class="essay-word-count">${data.word_count.toLocaleString()} words</span>
+                    <div style="margin-top:8px;font-size:0.75rem;color:#999;font-style:italic;">
+                        Generated exclusively from the video transcript
+                    </div>
                 </div>
                 <div class="essay-body">${essayHtml}</div>
             `;
@@ -12777,6 +12783,9 @@
                             <span style="font-size:11px;color:var(--text-muted);">${media.essay_word_count?.toLocaleString() || 0} words</span>
                         </div>
                         <div class="detail-essay-preview">${escapeHtml(preview)}</div>
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:0;font-style:italic;">
+                            Generated exclusively from the video transcript
+                        </p>
                         <button class="read-essay-btn" onclick="openEssayModal('${tweet.tweet_id}', ${videoIndex})">
                             Read Full Essay
                         </button>
@@ -12816,7 +12825,7 @@
                         </div>
                     </div>
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
-                        Transform this video's transcript into a well-written essay using AI.
+                        Generate an essay using AI based <strong>solely on the video transcript</strong>. The essay is created exclusively from the spoken words in the transcript—no other content (tweet text, images, or metadata) is used as source material.
                     </p>
                     <button class="generate-essay-btn" id="generateEssayBtn_${tweet.tweet_id}" onclick="generateEssay('${tweet.tweet_id}', ${videoIndex}, this)">
                         <svg viewBox="0 0 24 24" fill="currentColor">

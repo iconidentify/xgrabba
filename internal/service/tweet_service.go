@@ -2156,7 +2156,7 @@ func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID
 	// Check if this media has a transcript
 	if media.Transcript == "" {
 		s.tweetsMu.Unlock()
-		return nil, fmt.Errorf("media has no transcript available")
+		return nil, fmt.Errorf("media has no transcript available - essay generation requires a transcript. Essays are generated exclusively from the video transcript only.")
 	}
 
 	// Check if essay generation is already in progress

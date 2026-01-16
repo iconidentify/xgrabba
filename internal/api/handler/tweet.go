@@ -1128,7 +1128,7 @@ func (h *TweetHandler) GenerateEssay(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.Contains(err.Error(), "no transcript") {
-			h.writeError(w, http.StatusBadRequest, "media has no transcript - essay generation requires a transcript")
+			h.writeError(w, http.StatusBadRequest, "media has no transcript - essay generation requires a transcript. Essays are generated exclusively from the video transcript only.")
 			return
 		}
 		if strings.Contains(err.Error(), "already in progress") {
