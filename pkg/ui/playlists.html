@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playlists - xgrabba</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2314b8a6'/%3E%3Cstop offset='100%25' stop-color='%230891b2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M20 8 L8 8 L8 40' stroke='url(%23g)' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M108 8 L120 8 L120 40' stroke='url(%23g)' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M20 120 L8 120 L8 88' stroke='url(%23g)' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M108 120 L120 120 L120 88' stroke='url(%23g)' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M40 40 L88 88 M88 40 L40 88' stroke='%23e7e9ea' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E">
+    <style>
+:root {
+    --brand-start: #14b8a6;
+    --brand-end: #0891b2;
+    --brand-gradient: linear-gradient(135deg, #14b8a6, #0891b2);
+    --bg-primary: #0f1419;
+    --bg-secondary: #16181c;
+    --bg-hover: #1d1f23;
+    --bg-elevated: #202327;
+    --bg-overlay: rgba(0, 0, 0, 0.85);
+    --border-color: #2f3336;
+    --border-subtle: #252829;
+    --text-primary: #e7e9ea;
+    --text-secondary: #71767b;
+    --text-muted: #536471;
+    --accent-primary: #1d9bf0;
+    --accent-hover: #1a8cd8;
+    --accent-subtle: rgba(29, 155, 240, 0.1);
+    --danger: #f4212e;
+    --success: #00ba7c;
+    --warning: #ffad1f;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.4;
+    font-size: 14px;
+    overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Header */
+.header {
+    background: rgba(15, 20, 25, 0.9);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 12px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+}
+
+.header-inner {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.logo svg { width: 32px; height: 32px; }
+.logo span { background: var(--brand-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.nav-link:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-link.active { background: var(--accent-subtle); color: var(--accent-primary); }
+.nav-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+@media (max-width: 768px) {
+    .nav-link { padding: 8px; }
+    .nav-link span { display: none; }
+}
+
+/* Main Layout */
+.main {
+    display: flex;
+    height: calc(100vh - 57px);
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+/* Sidebar - Playlist List */
+.sidebar {
+    width: 320px;
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+}
+
+.sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-title {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: none;
+}
+
+.btn-primary {
+    background: var(--brand-gradient);
+    color: white;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-hover);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    opacity: 0.9;
+}
+
+.btn-icon {
+    padding: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn svg { width: 16px; height: 16px; }
+
+/* Playlist List */
+.playlist-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.playlist-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.playlist-item:hover {
+    background: var(--bg-hover);
+}
+
+.playlist-item.active {
+    background: var(--accent-subtle);
+    border-left: 3px solid var(--accent-primary);
+}
+
+.playlist-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.playlist-icon svg { width: 20px; height: 20px; }
+
+.playlist-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.playlist-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.playlist-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    margin-bottom: 16px;
+}
+
+/* Content Area */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.content-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.content-title-area {
+    flex: 1;
+    min-width: 0;
+}
+
+.content-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.content-description {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.content-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Player Section */
+.player-section {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.player-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.video-player {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.video-player video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.player-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 8px 0;
+}
+
+.player-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.now-playing {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.now-playing-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.player-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.player-btn:hover {
+    background: var(--bg-hover);
+}
+
+.player-btn.playing {
+    background: var(--accent-primary);
+}
+
+.player-btn svg { width: 18px; height: 18px; }
+
+.progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.progress-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--brand-gradient);
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+/* Playlist Items */
+.playlist-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+}
+
+.playlist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.playlist-video-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.playlist-video-item:hover {
+    background: var(--bg-hover);
+}
+
+.playlist-video-item.playing {
+    border-color: var(--accent-primary);
+    background: var(--accent-subtle);
+}
+
+.playlist-video-item.dragging {
+    opacity: 0.5;
+}
+
+.drag-handle {
+    color: var(--text-muted);
+    cursor: grab;
+    padding: 4px;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.drag-handle svg { width: 16px; height: 16px; }
+
+.item-number {
+    width: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.item-thumbnail {
+    width: 80px;
+    height: 45px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.item-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.item-title {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.item-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.item-duration {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.item-remove {
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.playlist-video-item:hover .item-remove {
+    opacity: 1;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg-overlay);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-overlay.visible {
+    display: flex;
+}
+
+.modal {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color var(--transition-fast);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.form-input::placeholder {
+    color: var(--text-muted);
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Delete Confirmation */
+.confirm-message {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.confirm-message svg {
+    width: 48px;
+    height: 48px;
+    color: var(--danger);
+    margin-bottom: 12px;
+}
+
+.confirm-message p {
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.confirm-message strong {
+    color: var(--text-primary);
+}
+
+/* No Selection State */
+.no-selection {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    padding: 40px;
+}
+
+.no-selection svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.no-selection h2 {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+/* Toast Notification */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1100;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all var(--transition-normal);
+}
+
+.toast.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error { border-left: 3px solid var(--danger); }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .main {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-subtle);
+        max-height: 40vh;
+    }
+
+    .content {
+        min-height: 60vh;
+    }
+}
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <svg viewBox="0 0 128 128" fill="none">
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#14b8a6"/>
+                            <stop offset="100%" stop-color="#0891b2"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M20 8 L8 8 L8 40" stroke="url(#logoGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <path d="M108 8 L120 8 L120 40" stroke="url(#logoGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <path d="M20 120 L8 120 L8 88" stroke="url(#logoGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <path d="M108 120 L120 120 L120 88" stroke="url(#logoGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <path d="M40 40 L88 88 M88 40 L40 88" stroke="#e7e9ea" stroke-width="12" stroke-linecap="round"/>
+                </svg>
+                <span>xgrabba</span>
+            </a>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    <span>Archive</span>
+                </a>
+                <a href="/videos" class="nav-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span>Videos</span>
+                </a>
+                <a href="/playlists" class="nav-link active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <span>Playlists</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2 class="sidebar-title">Playlists</h2>
+                <button class="btn btn-primary" onclick="showCreateModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New
+                </button>
+            </div>
+            <div class="playlist-list" id="playlistList">
+                <div class="empty-state" id="emptyState">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6"/>
+                        <line x1="8" y1="12" x2="21" y2="12"/>
+                        <line x1="8" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="6" x2="3.01" y2="6"/>
+                        <line x1="3" y1="12" x2="3.01" y2="12"/>
+                        <line x1="3" y1="18" x2="3.01" y2="18"/>
+                    </svg>
+                    <p>No playlists yet</p>
+                    <button class="btn btn-secondary" onclick="showCreateModal()">Create your first playlist</button>
+                </div>
+            </div>
+        </aside>
+
+        <div class="content" id="contentArea">
+            <div class="no-selection" id="noSelection">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+                <h2>Select a playlist</h2>
+                <p>Choose a playlist from the sidebar to view and play its contents</p>
+            </div>
+
+            <div id="playlistView" style="display: none; flex-direction: column; flex: 1;">
+                <div class="content-header">
+                    <div class="content-title-area">
+                        <h1 class="content-title" id="playlistTitle"></h1>
+                        <p class="content-description" id="playlistDescription"></p>
+                    </div>
+                    <div class="content-actions">
+                        <button class="btn btn-secondary" onclick="shufflePlay()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                            Shuffle
+                        </button>
+                        <button class="btn btn-primary" onclick="playAll()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Play All
+                        </button>
+                        <button class="btn btn-icon" onclick="showEditModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn btn-icon" onclick="showDeleteModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="player-section" id="playerSection" style="display: none;">
+                    <div class="player-container">
+                        <div class="video-player">
+                            <video id="videoPlayer" controls></video>
+                        </div>
+                        <div class="player-controls">
+                            <div class="player-info">
+                                <div class="now-playing">Now Playing</div>
+                                <div class="now-playing-title" id="nowPlayingTitle">-</div>
+                            </div>
+                            <div class="player-buttons">
+                                <button class="player-btn" onclick="previousVideo()" title="Previous">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                                </button>
+                                <button class="player-btn" id="playPauseBtn" onclick="togglePlayPause()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                                <button class="player-btn" onclick="nextVideo()" title="Next">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="progress-bar">
+                            <span id="currentIndex">0</span> / <span id="totalItems">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="playlist-content" id="playlistContent">
+                    <div class="playlist-items" id="playlistItems"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create/Edit Modal -->
+    <div class="modal-overlay" id="playlistModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">New Playlist</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" id="playlistNameInput" placeholder="My Playlist">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description (optional)</label>
+                    <textarea class="form-input" id="playlistDescInput" placeholder="Add a description..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="modalSaveBtn" onclick="savePlaylist()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Delete Playlist</h3>
+                <button class="modal-close" onclick="closeDeleteModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-message">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <p>Are you sure you want to delete</p>
+                    <strong id="deletePlaylistName"></strong>
+                    <p style="margin-top: 8px;">This action cannot be undone.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+// Offline mode detection
+const OFFLINE_MODE = typeof window.OFFLINE_DATA !== 'undefined';
+let OFFLINE_TWEETS = OFFLINE_MODE ? (window.OFFLINE_DATA.tweets || []) : [];
+let OFFLINE_PLAYLISTS = OFFLINE_MODE ? (window.OFFLINE_DATA.playlists || []) : [];
+
+const params = new URLSearchParams(window.location.search);
+let API_KEY = OFFLINE_MODE ? '' : (params.get('key') || localStorage.getItem('xgrabba_api_key') || '');
+
+if (!OFFLINE_MODE && params.get('key')) {
+    localStorage.setItem('xgrabba_api_key', params.get('key'));
+}
+
+if (!OFFLINE_MODE && !API_KEY) {
+    API_KEY = prompt('Enter API Key:');
+    if (API_KEY) localStorage.setItem('xgrabba_api_key', API_KEY);
+}
+
+console.log('[playlists] Init - OFFLINE_MODE:', OFFLINE_MODE);
+
+// State
+let playlists = [];
+let selectedPlaylist = null;
+let playlistTweets = [];
+let currentVideoIndex = -1;
+let isPlaying = false;
+let shuffledOrder = null;
+let editingPlaylist = null;
+
+// Elements
+const playlistList = document.getElementById('playlistList');
+const emptyState = document.getElementById('emptyState');
+const noSelection = document.getElementById('noSelection');
+const playlistView = document.getElementById('playlistView');
+const playlistItems = document.getElementById('playlistItems');
+const playerSection = document.getElementById('playerSection');
+const videoPlayer = document.getElementById('videoPlayer');
+
+// API helpers
+async function apiRequest(path, options = {}) {
+    if (OFFLINE_MODE) {
+        throw new Error('API not available in offline mode');
+    }
+    const res = await fetch(`/api/v1${path}`, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+            ...options.headers
+        }
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+}
+
+// Toast
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type} visible`;
+    setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
+// Load playlists
+async function loadPlaylists() {
+    try {
+        if (OFFLINE_MODE) {
+            playlists = OFFLINE_PLAYLISTS;
+        } else {
+            playlists = await apiRequest('/playlists');
+        }
+        renderPlaylistList();
+    } catch (err) {
+        console.error('Failed to load playlists:', err);
+        showToast('Failed to load playlists', 'error');
+    }
+}
+
+function renderPlaylistList() {
+    if (playlists.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+    }
+    emptyState.style.display = 'none';
+
+    const items = playlists.map(p => `
+        <div class="playlist-item ${selectedPlaylist?.id === p.id ? 'active' : ''}" onclick="selectPlaylist('${p.id}')">
+            <div class="playlist-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+            </div>
+            <div class="playlist-info">
+                <div class="playlist-name">${escapeHtml(p.name)}</div>
+                <div class="playlist-meta">${p.item_count || 0} items</div>
+            </div>
+        </div>
+    `).join('');
+
+    playlistList.innerHTML = items + emptyState.outerHTML;
+}
+
+async function selectPlaylist(id) {
+    try {
+        if (OFFLINE_MODE) {
+            selectedPlaylist = playlists.find(p => p.id === id);
+        } else {
+            selectedPlaylist = await apiRequest(`/playlists/${id}`);
+        }
+
+        noSelection.style.display = 'none';
+        playlistView.style.display = 'flex';
+
+        document.getElementById('playlistTitle').textContent = selectedPlaylist.name;
+        document.getElementById('playlistDescription').textContent = selectedPlaylist.description || '';
+
+        await loadPlaylistItems();
+        renderPlaylistList();
+    } catch (err) {
+        console.error('Failed to load playlist:', err);
+        showToast('Failed to load playlist', 'error');
+    }
+}
+
+async function loadPlaylistItems() {
+    if (!selectedPlaylist) return;
+
+    playlistTweets = [];
+    const items = selectedPlaylist.items || [];
+
+    if (items.length === 0) {
+        playlistItems.innerHTML = `
+            <div class="empty-state">
+                <p>This playlist is empty</p>
+                <p style="font-size: 12px;">Add videos from the Archive or Videos page</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Load tweet data for each item
+    for (const tweetId of items) {
+        try {
+            let tweet;
+            if (OFFLINE_MODE) {
+                tweet = OFFLINE_TWEETS.find(t => t.tweet_id === tweetId);
+            } else {
+                tweet = await apiRequest(`/tweets/${tweetId}`);
+            }
+            if (tweet) {
+                playlistTweets.push(tweet);
+            }
+        } catch (err) {
+            console.warn('Failed to load tweet:', tweetId);
+        }
+    }
+
+    renderPlaylistItems();
+}
+
+function getMediaUrl(tweet, url) {
+    if (OFFLINE_MODE) return url;
+    return `/api/v1/tweets/${tweet.tweet_id}/media/${url.split('/').pop()}?key=${API_KEY}`;
+}
+
+function getThumbnailUrl(tweet) {
+    if (!tweet.media || tweet.media.length === 0) return null;
+    const media = tweet.media[0];
+    if (OFFLINE_MODE) {
+        return media.thumbnail_url || media.url;
+    }
+    const filename = (media.thumbnail_url || media.url || '').split('/').pop();
+    return filename ? `/api/v1/tweets/${tweet.tweet_id}/media/${filename}?key=${API_KEY}` : null;
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function renderPlaylistItems() {
+    playlistItems.innerHTML = playlistTweets.map((tweet, index) => {
+        const thumb = getThumbnailUrl(tweet);
+        const duration = tweet.media?.[0]?.duration || 0;
+        const title = tweet.ai_title || tweet.text?.substring(0, 50) || `Video ${index + 1}`;
+
+        return `
+            <div class="playlist-video-item ${currentVideoIndex === index ? 'playing' : ''}"
+                 draggable="true"
+                 data-index="${index}"
+                 onclick="playVideo(${index})">
+                <div class="drag-handle" title="Drag to reorder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="8" y2="6.01"/>
+                        <line x1="16" y1="6" x2="16" y2="6.01"/>
+                        <line x1="8" y1="12" x2="8" y2="12.01"/>
+                        <line x1="16" y1="12" x2="16" y2="12.01"/>
+                        <line x1="8" y1="18" x2="8" y2="18.01"/>
+                        <line x1="16" y1="18" x2="16" y2="18.01"/>
+                    </svg>
+                </div>
+                <div class="item-number">${index + 1}</div>
+                <div class="item-thumbnail">
+                    ${thumb ? `<img src="${thumb}" alt="">` : ''}
+                </div>
+                <div class="item-info">
+                    <div class="item-title">${escapeHtml(title)}</div>
+                    <div class="item-meta">@${tweet.author || 'unknown'}</div>
+                </div>
+                ${duration ? `<div class="item-duration">${formatDuration(duration)}</div>` : ''}
+                <button class="btn btn-icon item-remove" onclick="removeItem(event, '${tweet.tweet_id}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    // Setup drag and drop
+    setupDragAndDrop();
+}
+
+function setupDragAndDrop() {
+    const items = playlistItems.querySelectorAll('.playlist-video-item');
+    let draggedItem = null;
+
+    items.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            draggedItem = null;
+            saveOrder();
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!draggedItem || draggedItem === item) return;
+
+            const rect = item.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+
+            if (e.clientY < mid) {
+                item.parentNode.insertBefore(draggedItem, item);
+            } else {
+                item.parentNode.insertBefore(draggedItem, item.nextSibling);
+            }
+        });
+    });
+}
+
+async function saveOrder() {
+    if (OFFLINE_MODE || !selectedPlaylist) return;
+
+    const items = playlistItems.querySelectorAll('.playlist-video-item');
+    const newOrder = Array.from(items).map(item => {
+        const idx = parseInt(item.dataset.index);
+        return playlistTweets[idx]?.tweet_id;
+    }).filter(Boolean);
+
+    try {
+        await apiRequest(`/playlists/${selectedPlaylist.id}/reorder`, {
+            method: 'PUT',
+            body: JSON.stringify({ items: newOrder })
+        });
+
+        // Update local state
+        const reorderedTweets = newOrder.map(id => playlistTweets.find(t => t.tweet_id === id));
+        playlistTweets = reorderedTweets;
+        selectedPlaylist.items = newOrder;
+        renderPlaylistItems();
+    } catch (err) {
+        console.error('Failed to save order:', err);
+        showToast('Failed to save order', 'error');
+        renderPlaylistItems(); // Revert visual order
+    }
+}
+
+async function removeItem(event, tweetId) {
+    event.stopPropagation();
+    if (OFFLINE_MODE) {
+        showToast('Cannot modify playlists in offline mode', 'error');
+        return;
+    }
+
+    try {
+        await apiRequest(`/playlists/${selectedPlaylist.id}/items/${tweetId}`, { method: 'DELETE' });
+        playlistTweets = playlistTweets.filter(t => t.tweet_id !== tweetId);
+        selectedPlaylist.items = selectedPlaylist.items.filter(id => id !== tweetId);
+        renderPlaylistItems();
+        showToast('Removed from playlist');
+    } catch (err) {
+        console.error('Failed to remove item:', err);
+        showToast('Failed to remove item', 'error');
+    }
+}
+
+// Player
+function playVideo(index) {
+    if (index < 0 || index >= playlistTweets.length) return;
+
+    currentVideoIndex = index;
+    const tweet = playlistTweets[shuffledOrder ? shuffledOrder[index] : index];
+
+    if (!tweet.media || tweet.media.length === 0) {
+        showToast('No video available', 'error');
+        return;
+    }
+
+    const media = tweet.media.find(m => m.type === 'video' || m.type === 'gif') || tweet.media[0];
+    const videoUrl = getMediaUrl(tweet, media.url || media.local_path);
+
+    playerSection.style.display = 'block';
+    videoPlayer.src = videoUrl;
+    videoPlayer.play();
+    isPlaying = true;
+
+    document.getElementById('nowPlayingTitle').textContent = tweet.ai_title || tweet.text?.substring(0, 50) || 'Untitled';
+    document.getElementById('currentIndex').textContent = index + 1;
+    document.getElementById('totalItems').textContent = playlistTweets.length;
+
+    updatePlayPauseButton();
+    renderPlaylistItems();
+}
+
+function playAll() {
+    shuffledOrder = null;
+    if (playlistTweets.length > 0) {
+        playVideo(0);
+    }
+}
+
+function shufflePlay() {
+    if (playlistTweets.length === 0) return;
+
+    shuffledOrder = [...Array(playlistTweets.length).keys()];
+    for (let i = shuffledOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledOrder[i], shuffledOrder[j]] = [shuffledOrder[j], shuffledOrder[i]];
+    }
+
+    playVideo(0);
+    showToast('Shuffle mode enabled');
+}
+
+function nextVideo() {
+    if (currentVideoIndex < playlistTweets.length - 1) {
+        playVideo(currentVideoIndex + 1);
+    }
+}
+
+function previousVideo() {
+    if (currentVideoIndex > 0) {
+        playVideo(currentVideoIndex - 1);
+    }
+}
+
+function togglePlayPause() {
+    if (videoPlayer.paused) {
+        videoPlayer.play();
+        isPlaying = true;
+    } else {
+        videoPlayer.pause();
+        isPlaying = false;
+    }
+    updatePlayPauseButton();
+}
+
+function updatePlayPauseButton() {
+    const btn = document.getElementById('playPauseBtn');
+    if (isPlaying) {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        btn.classList.add('playing');
+    } else {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        btn.classList.remove('playing');
+    }
+}
+
+videoPlayer.addEventListener('ended', () => {
+    if (currentVideoIndex < playlistTweets.length - 1) {
+        playVideo(currentVideoIndex + 1);
+    } else {
+        isPlaying = false;
+        updatePlayPauseButton();
+    }
+});
+
+videoPlayer.addEventListener('play', () => {
+    isPlaying = true;
+    updatePlayPauseButton();
+});
+
+videoPlayer.addEventListener('pause', () => {
+    isPlaying = false;
+    updatePlayPauseButton();
+});
+
+// Modals
+function showCreateModal() {
+    editingPlaylist = null;
+    document.getElementById('modalTitle').textContent = 'New Playlist';
+    document.getElementById('modalSaveBtn').textContent = 'Create';
+    document.getElementById('playlistNameInput').value = '';
+    document.getElementById('playlistDescInput').value = '';
+    document.getElementById('playlistModal').classList.add('visible');
+    document.getElementById('playlistNameInput').focus();
+}
+
+function showEditModal() {
+    if (!selectedPlaylist) return;
+    editingPlaylist = selectedPlaylist;
+    document.getElementById('modalTitle').textContent = 'Edit Playlist';
+    document.getElementById('modalSaveBtn').textContent = 'Save';
+    document.getElementById('playlistNameInput').value = selectedPlaylist.name;
+    document.getElementById('playlistDescInput').value = selectedPlaylist.description || '';
+    document.getElementById('playlistModal').classList.add('visible');
+    document.getElementById('playlistNameInput').focus();
+}
+
+function closeModal() {
+    document.getElementById('playlistModal').classList.remove('visible');
+    editingPlaylist = null;
+}
+
+async function savePlaylist() {
+    if (OFFLINE_MODE) {
+        showToast('Cannot modify playlists in offline mode', 'error');
+        return;
+    }
+
+    const name = document.getElementById('playlistNameInput').value.trim();
+    const description = document.getElementById('playlistDescInput').value.trim();
+
+    if (!name) {
+        showToast('Please enter a name', 'error');
+        return;
+    }
+
+    try {
+        if (editingPlaylist) {
+            await apiRequest(`/playlists/${editingPlaylist.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ name, description })
+            });
+            showToast('Playlist updated');
+            selectedPlaylist.name = name;
+            selectedPlaylist.description = description;
+            document.getElementById('playlistTitle').textContent = name;
+            document.getElementById('playlistDescription').textContent = description;
+        } else {
+            const newPlaylist = await apiRequest('/playlists', {
+                method: 'POST',
+                body: JSON.stringify({ name, description })
+            });
+            showToast('Playlist created');
+            playlists.push(newPlaylist);
+        }
+
+        closeModal();
+        renderPlaylistList();
+    } catch (err) {
+        console.error('Failed to save playlist:', err);
+        showToast(err.message || 'Failed to save playlist', 'error');
+    }
+}
+
+function showDeleteModal() {
+    if (!selectedPlaylist) return;
+    document.getElementById('deletePlaylistName').textContent = selectedPlaylist.name;
+    document.getElementById('deleteModal').classList.add('visible');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('visible');
+}
+
+async function confirmDelete() {
+    if (OFFLINE_MODE) {
+        showToast('Cannot modify playlists in offline mode', 'error');
+        return;
+    }
+
+    if (!selectedPlaylist) return;
+
+    try {
+        await apiRequest(`/playlists/${selectedPlaylist.id}`, { method: 'DELETE' });
+        showToast('Playlist deleted');
+
+        playlists = playlists.filter(p => p.id !== selectedPlaylist.id);
+        selectedPlaylist = null;
+        playlistTweets = [];
+        currentVideoIndex = -1;
+
+        playlistView.style.display = 'none';
+        noSelection.style.display = 'flex';
+        playerSection.style.display = 'none';
+
+        closeDeleteModal();
+        renderPlaylistList();
+    } catch (err) {
+        console.error('Failed to delete playlist:', err);
+        showToast('Failed to delete playlist', 'error');
+    }
+}
+
+// Utilities
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    switch (e.key) {
+        case ' ':
+            e.preventDefault();
+            if (currentVideoIndex >= 0) togglePlayPause();
+            break;
+        case 'ArrowRight':
+            nextVideo();
+            break;
+        case 'ArrowLeft':
+            previousVideo();
+            break;
+        case 'Escape':
+            closeModal();
+            closeDeleteModal();
+            break;
+    }
+});
+
+// Init
+loadPlaylists();
+    </script>
+</body>
+</html>

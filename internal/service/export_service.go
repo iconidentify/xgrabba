@@ -25,6 +25,7 @@ import (
 // ExportService handles exporting the archive to portable formats.
 type ExportService struct {
 	tweetSvc      *TweetService
+	playlistSvc   *PlaylistService
 	logger        *slog.Logger
 	eventEmitter  domain.EventEmitter
 	storagePath   string // Base storage path for persistence
@@ -68,9 +69,10 @@ type Volume struct {
 }
 
 // NewExportService creates a new export service.
-func NewExportService(tweetSvc *TweetService, logger *slog.Logger, eventEmitter domain.EventEmitter, storagePath string) *ExportService {
+func NewExportService(tweetSvc *TweetService, playlistSvc *PlaylistService, logger *slog.Logger, eventEmitter domain.EventEmitter, storagePath string) *ExportService {
 	svc := &ExportService{
 		tweetSvc:     tweetSvc,
+		playlistSvc:  playlistSvc,
 		logger:       logger,
 		eventEmitter: eventEmitter,
 		storagePath:  storagePath,
@@ -601,6 +603,14 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 			"exported_date":  exportedAt.Format("January 2, 2006"),
 			"exported_time":  exportedAt.Format("3:04 PM MST"),
 		},
+	}
+
+	// Include playlists if available
+	if s.playlistSvc != nil {
+		playlists, err := s.playlistSvc.GetAll(ctx)
+		if err == nil && len(playlists) > 0 {
+			tweetsData["playlists"] = playlists
+		}
 	}
 
 	tweetsJSON, err := json.MarshalIndent(tweetsData, "", "  ")
@@ -1634,6 +1644,14 @@ func (s *ExportService) ExportToUSB(ctx context.Context, opts ExportOptions) (*E
 		"version":     "1.0",
 	}
 
+	// Include playlists if available
+	if s.playlistSvc != nil {
+		playlists, err := s.playlistSvc.GetAll(ctx)
+		if err == nil && len(playlists) > 0 {
+			tweetsData["playlists"] = playlists
+		}
+	}
+
 	tweetsJSON, err := json.MarshalIndent(tweetsData, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal tweets data: %w", err)
@@ -2169,9 +2187,9 @@ func (ec *encryptionContext) writeManifestAndData(destPath string, tweetsData []
 	return nil
 }
 
-// copyOfflineUI generates the offline-capable index.html.
-// It creates a loader page that fetches tweets-data.json, sets OFFLINE_DATA,
-// and then includes the main UI which will detect offline mode automatically.
+// copyOfflineUI generates the offline-capable UI files (index.html, videos.html, playlists.html).
+// It creates loader pages that fetch tweets-data.json, set OFFLINE_DATA,
+// and then include the main UI which will detect offline mode automatically.
 func (s *ExportService) copyOfflineUI(destPath string) error {
 	// Use the embedded shared UI (same UI as main server)
 	// The HTML has offline mode support built-in via OFFLINE_DATA detection
@@ -2179,14 +2197,38 @@ func (s *ExportService) copyOfflineUI(destPath string) error {
 		// Inject offline data loader script into the shared UI
 		offlineHTML := injectOfflineDataLoader(string(ui.IndexHTML))
 		s.logger.Info("writing index.html from shared UI", "path", destPath)
-		return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
+		if err := writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644); err != nil {
+			return err
+		}
+	} else {
+		// Fallback: generate a standalone offline viewer if shared UI not available
+		// This should never happen in normal builds but provides safety
+		s.logger.Warn("shared UI not available, using standalone offline viewer")
+		offlineHTML := generateOfflineHTML()
+		if err := writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644); err != nil {
+			return err
+		}
 	}
 
-	// Fallback: generate a standalone offline viewer if shared UI not available
-	// This should never happen in normal builds but provides safety
-	s.logger.Warn("shared UI not available, using standalone offline viewer")
-	offlineHTML := generateOfflineHTML()
-	return writeFileSync(filepath.Join(destPath, "index.html"), []byte(offlineHTML), 0644)
+	// Copy videos.html with offline data loader
+	if len(ui.VideosHTML) > 0 {
+		offlineVideosHTML := injectOfflineDataLoader(string(ui.VideosHTML))
+		s.logger.Info("writing videos.html from shared UI", "path", destPath)
+		if err := writeFileSync(filepath.Join(destPath, "videos.html"), []byte(offlineVideosHTML), 0644); err != nil {
+			return err
+		}
+	}
+
+	// Copy playlists.html with offline data loader (if available)
+	if len(ui.PlaylistsHTML) > 0 {
+		offlinePlaylistsHTML := injectOfflineDataLoader(string(ui.PlaylistsHTML))
+		s.logger.Info("writing playlists.html from shared UI", "path", destPath)
+		if err := writeFileSync(filepath.Join(destPath, "playlists.html"), []byte(offlinePlaylistsHTML), 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // injectOfflineDataLoader modifies the HTML to load tweets-data.json synchronously before main script

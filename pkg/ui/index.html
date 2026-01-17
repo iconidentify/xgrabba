@@ -6902,6 +6902,14 @@
                 <span class="btn-label">Videos</span>
             </a>
 
+            <!-- Playlists -->
+            <a href="/playlists" class="header-btn" title="Playlists" style="text-decoration: none;">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/>
+                </svg>
+                <span class="btn-label">Playlists</span>
+            </a>
+
             <!-- Activity Log (Admin) -->
             <a href="/admin/events" class="header-btn" title="Activity Log" style="text-decoration: none;">
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -7022,6 +7030,40 @@
                     </svg>
                     Delete
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Playlist Modal -->
+    <div class="modal-overlay" id="playlistModal" role="dialog" aria-modal="true" aria-labelledby="playlistModalTitle">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="playlistModalTitle">Add to Playlist</h2>
+                <button class="modal-close" onclick="closePlaylistModal()" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="playlistListContainer" style="max-height: 300px; overflow-y: auto;">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                    <button class="btn btn-secondary" style="width: 100%;" onclick="showCreatePlaylistInModal()">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 16px; height: 16px;">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        Create New Playlist
+                    </button>
+                </div>
+                <div id="createPlaylistInline" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                    <input type="text" id="newPlaylistNameInput" class="text-input" placeholder="Playlist name" style="width: 100%; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" style="flex: 1;" onclick="cancelCreatePlaylist()">Cancel</button>
+                        <button class="btn btn-primary" style="flex: 1;" onclick="createPlaylistAndAdd()">Create</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -7296,6 +7338,12 @@
                             <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
                         </svg>
                         Resync
+                    </button>
+                    <button class="detail-action-btn" id="detailAddToPlaylist" onclick="showAddToPlaylistModal(currentTweetDetail?.tweet_id)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zM3 16h7v-2H3v2zm11.41 6L17 19.41 19.59 22 21 20.59 18.41 18 21 15.41 19.59 14 17 16.59 14.41 14 13 15.41 15.59 18 13 20.59 14.41 22z"/>
+                        </svg>
+                        Add to Playlist
                     </button>
                     <button class="detail-action-btn danger" onclick="const id = currentTweetDetail?.tweet_id; closeDetailPanel(); showDeleteModal(id)">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -10927,6 +10975,154 @@
             `;
             closeDeleteModal();
         });
+
+        // ========================
+        // Playlist Functions
+        // ========================
+
+        let playlistCache = [];
+        let playlistTargetTweetId = null;
+
+        async function loadPlaylists() {
+            try {
+                const response = await fetch('/api/v1/playlists', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (response.ok) {
+                    playlistCache = await response.json();
+                }
+            } catch (error) {
+                console.error('Failed to load playlists:', error);
+            }
+        }
+
+        function showAddToPlaylistModal(tweetId) {
+            if (!tweetId) return;
+            playlistTargetTweetId = tweetId;
+            document.getElementById('playlistModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            renderPlaylistList();
+        }
+
+        function closePlaylistModal() {
+            playlistTargetTweetId = null;
+            document.getElementById('playlistModal').classList.remove('active');
+            document.getElementById('createPlaylistInline').style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        async function renderPlaylistList() {
+            const container = document.getElementById('playlistListContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+            await loadPlaylists();
+
+            if (playlistCache.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No playlists yet. Create one below.</p>';
+                return;
+            }
+
+            container.innerHTML = playlistCache.map(p => `
+                <div class="playlist-select-item" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.15s ease;"
+                     onclick="addToPlaylist('${p.id}')"
+                     onmouseover="this.style.background='var(--bg-hover)'"
+                     onmouseout="this.style.background='transparent'">
+                    <div style="width: 36px; height: 36px; border-radius: 6px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 18px; height: 18px; color: var(--text-muted);">
+                            <path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/>
+                        </svg>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${p.item_count || 0} items</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addToPlaylist(playlistId) {
+            if (!playlistTargetTweetId) return;
+
+            try {
+                const response = await fetch(`/api/v1/playlists/${playlistId}/items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({ tweet_id: playlistTargetTweetId })
+                });
+
+                if (response.ok || response.status === 204) {
+                    showToast('Added to playlist', 'success');
+                    closePlaylistModal();
+                } else {
+                    const text = await response.text();
+                    showToast(text || 'Failed to add to playlist', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to add to playlist:', error);
+                showToast('Failed to add to playlist', 'error');
+            }
+        }
+
+        function showCreatePlaylistInModal() {
+            document.getElementById('createPlaylistInline').style.display = 'block';
+            document.getElementById('newPlaylistNameInput').value = '';
+            document.getElementById('newPlaylistNameInput').focus();
+        }
+
+        function cancelCreatePlaylist() {
+            document.getElementById('createPlaylistInline').style.display = 'none';
+        }
+
+        async function createPlaylistAndAdd() {
+            const name = document.getElementById('newPlaylistNameInput').value.trim();
+            if (!name) {
+                showToast('Please enter a playlist name', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/playlists', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({ name })
+                });
+
+                if (response.ok) {
+                    const newPlaylist = await response.json();
+                    // Add the tweet to the new playlist
+                    if (playlistTargetTweetId) {
+                        await fetch(`/api/v1/playlists/${newPlaylist.id}/items`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-API-Key': API_KEY
+                            },
+                            body: JSON.stringify({ tweet_id: playlistTargetTweetId })
+                        });
+                    }
+                    showToast('Created playlist and added item', 'success');
+                    closePlaylistModal();
+                } else {
+                    const text = await response.text();
+                    showToast(text || 'Failed to create playlist', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to create playlist:', error);
+                showToast('Failed to create playlist', 'error');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         // ========================
         // Backfill Truncated Tweets

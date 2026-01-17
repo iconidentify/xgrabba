@@ -45,6 +45,18 @@ var (
 
 	// ErrMediaNotFound is returned when a media file cannot be found.
 	ErrMediaNotFound = errors.New("media file not found")
+
+	// ErrPlaylistNotFound is returned when a playlist cannot be found.
+	ErrPlaylistNotFound = errors.New("playlist not found")
+
+	// ErrDuplicatePlaylist is returned when a playlist with the same name already exists.
+	ErrDuplicatePlaylist = errors.New("playlist with this name already exists")
+
+	// ErrEmptyPlaylistName is returned when a playlist name is empty.
+	ErrEmptyPlaylistName = errors.New("playlist name cannot be empty")
+
+	// ErrTweetNotInPlaylist is returned when trying to remove a tweet that's not in the playlist.
+	ErrTweetNotInPlaylist = errors.New("tweet not in playlist")
 )
 
 // VideoError wraps an error with video context.

@@ -80,8 +80,8 @@ func main() {
 		nil, // No event emitter for CLI
 	)
 
-	// Create export service (no storage path for CLI, no persistence)
-	exportSvc := service.NewExportService(tweetSvc, logger, nil, "")
+	// Create export service (no storage path for CLI, no persistence, no playlist service)
+	exportSvc := service.NewExportService(tweetSvc, nil, logger, nil, "")
 
 	// Setup context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())

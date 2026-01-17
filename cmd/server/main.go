@@ -74,6 +74,8 @@ func main() {
 	// Initialize dependencies
 	videoRepo := repository.NewFilesystemVideoRepository(cfg.Storage)
 	jobRepo := repository.NewInMemoryJobRepository()
+	playlistRepo := repository.NewFilesystemPlaylistRepository(cfg.Storage.BasePath)
+	playlistSvc := service.NewPlaylistService(playlistRepo, logger)
 	grokClient := grok.NewClient(cfg.Grok)
 	dl := downloader.NewHTTPDownloader(cfg.Download)
 
@@ -131,7 +133,7 @@ func main() {
 	)
 
 	// Initialize export service with storage path for state persistence
-	exportSvc := service.NewExportService(tweetSvc, logger, eventSvc, cfg.Storage.BasePath)
+	exportSvc := service.NewExportService(tweetSvc, playlistSvc, logger, eventSvc, cfg.Storage.BasePath)
 
 	// Start AI metadata backfill in background for legacy tweets
 	backfillCtx, cancelBackfill := context.WithCancel(context.Background())
@@ -312,8 +314,11 @@ handlers:
 	// Extension handler (browser GraphQL passthrough)
 	extensionHandler := handler.NewExtensionHandler(twitterClient)
 
+	// Playlist handler (service initialized earlier for export integration)
+	playlistHandler := handler.NewPlaylistHandler(playlistSvc, logger)
+
 	// Setup router
-	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, eventHandler, extensionHandler, cfg.Server.APIKey)
+	router := api.NewRouter(videoHandler, tweetHandler, healthHandler, uiHandler, exportHandler, bookmarksOAuthHandler, usbHandler, eventHandler, extensionHandler, playlistHandler, cfg.Server.APIKey)
 
 	// Initialize worker pool
 	pool := worker.NewPool(

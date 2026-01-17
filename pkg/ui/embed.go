@@ -34,3 +34,10 @@ var AdminEventsHTML []byte
 //
 //go:embed videos.html
 var VideosHTML []byte
+
+// PlaylistsHTML is the playlist management page.
+// Allows users to create, edit, and play curated collections of video tweets.
+// Supports both online (API) and offline (embedded data) modes.
+//
+//go:embed playlists.html
+var PlaylistsHTML []byte

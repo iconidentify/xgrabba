@@ -54,3 +54,9 @@ func (h *UIHandler) Videos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(ui.VideosHTML)
 }
+
+// Playlists serves the playlist management page.
+func (h *UIHandler) Playlists(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(ui.PlaylistsHTML)
+}

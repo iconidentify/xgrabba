@@ -1106,6 +1106,104 @@ body {
 
 .video-card { animation: fadeIn 0.3s ease, slideUp 0.3s ease; }
 .video-modal.open .video-modal-content { animation: slideUp 0.2s ease; }
+
+/* Playlist Modal */
+.playlist-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg-overlay);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 20px;
+}
+.playlist-modal-overlay.visible { display: flex; }
+.playlist-modal {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+}
+.playlist-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.playlist-modal-header h3 { font-size: 16px; font-weight: 600; margin: 0; }
+.playlist-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+}
+.playlist-modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.playlist-modal-close svg { width: 20px; height: 20px; }
+.playlist-modal-body { padding: 20px; }
+.playlist-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.playlist-item:hover { background: var(--bg-hover); }
+.playlist-item-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.playlist-item-icon svg { width: 18px; height: 18px; color: var(--text-muted); }
+.playlist-item-info { flex: 1; min-width: 0; }
+.playlist-item-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playlist-item-count { font-size: 12px; color: var(--text-secondary); }
+.btn-create-playlist {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.btn-create-playlist:hover { background: var(--bg-hover); }
+.btn-create-playlist svg { width: 16px; height: 16px; }
+.btn-primary {
+    background: var(--brand-gradient);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    cursor: pointer;
+}
+.btn-secondary {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    cursor: pointer;
+}
     </style>
 </head>
 <body>
@@ -1141,6 +1239,10 @@ body {
                 <a href="/videos" class="nav-link active">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><path d="M10 8l6 4-6 4V8z"/></svg>
                     <span>Videos</span>
+                </a>
+                <a href="/playlists" class="nav-link" id="playlistsLink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <span>Playlists</span>
                 </a>
                 <a href="/admin/events" class="nav-link" id="eventsLink">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1256,6 +1358,9 @@ body {
             <div class="video-modal-header">
                 <div class="video-modal-title" id="modalTitle">Video Title</div>
                 <div class="video-modal-actions">
+                    <button class="modal-action-btn" id="addToPlaylistBtn" title="Add to Playlist">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>
+                    </button>
                     <button class="modal-action-btn" id="pipBtn" title="Picture-in-Picture">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><rect x="12" y="10" width="8" height="6" rx="1" ry="1"/></svg>
                     </button>
@@ -1373,6 +1478,34 @@ body {
                         </div>
                     </div>
                 </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Playlist Modal -->
+    <div class="playlist-modal-overlay" id="playlistModal">
+        <div class="playlist-modal">
+            <div class="playlist-modal-header">
+                <h3>Add to Playlist</h3>
+                <button class="playlist-modal-close" onclick="closePlaylistModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="playlist-modal-body">
+                <div id="playlistListContainer" style="max-height: 300px; overflow-y: auto;"></div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                    <button class="btn-create-playlist" onclick="showCreatePlaylistInModal()">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        Create New Playlist
+                    </button>
+                </div>
+                <div id="createPlaylistInline" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                    <input type="text" id="newPlaylistNameInput" placeholder="Playlist name" style="width: 100%; padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-secondary" style="flex: 1;" onclick="cancelCreatePlaylist()">Cancel</button>
+                        <button class="btn-primary" style="flex: 1;" onclick="createPlaylistAndAdd()">Create</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -2249,6 +2382,181 @@ document.addEventListener('fullscreenchange', () => {
     } else {
         // Show enter fullscreen icon
         fsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    }
+});
+
+// =============================================================================
+// Playlist Functions
+// =============================================================================
+
+let playlistCache = [];
+let playlistTargetTweetId = null;
+
+async function loadPlaylists() {
+    if (OFFLINE_MODE) {
+        playlistCache = window.OFFLINE_DATA?.playlists || [];
+        return;
+    }
+    try {
+        const response = await fetch('/api/v1/playlists', {
+            headers: { 'X-API-Key': API_KEY }
+        });
+        if (response.ok) {
+            playlistCache = await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to load playlists:', error);
+    }
+}
+
+function showAddToPlaylistModal(tweetId) {
+    if (!tweetId || OFFLINE_MODE) return;
+    playlistTargetTweetId = tweetId;
+    document.getElementById('playlistModal').classList.add('visible');
+    renderPlaylistList();
+}
+
+function closePlaylistModal() {
+    playlistTargetTweetId = null;
+    document.getElementById('playlistModal').classList.remove('visible');
+    document.getElementById('createPlaylistInline').style.display = 'none';
+}
+
+async function renderPlaylistList() {
+    const container = document.getElementById('playlistListContainer');
+    container.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div></div>';
+
+    await loadPlaylists();
+
+    if (playlistCache.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No playlists yet. Create one below.</p>';
+        return;
+    }
+
+    container.innerHTML = playlistCache.map(p => `
+        <div class="playlist-item" onclick="addToPlaylist('${p.id}')">
+            <div class="playlist-item-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>
+            </div>
+            <div class="playlist-item-info">
+                <div class="playlist-item-name">${escapeHtml(p.name)}</div>
+                <div class="playlist-item-count">${p.item_count || 0} items</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function addToPlaylist(playlistId) {
+    if (!playlistTargetTweetId) return;
+
+    try {
+        const response = await fetch(`/api/v1/playlists/${playlistId}/items`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            },
+            body: JSON.stringify({ tweet_id: playlistTargetTweetId })
+        });
+
+        if (response.ok || response.status === 204) {
+            showToast('Added to playlist');
+            closePlaylistModal();
+        } else {
+            const text = await response.text();
+            showToast(text || 'Failed to add to playlist', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to add to playlist:', error);
+        showToast('Failed to add to playlist', 'error');
+    }
+}
+
+function showCreatePlaylistInModal() {
+    document.getElementById('createPlaylistInline').style.display = 'block';
+    document.getElementById('newPlaylistNameInput').value = '';
+    document.getElementById('newPlaylistNameInput').focus();
+}
+
+function cancelCreatePlaylist() {
+    document.getElementById('createPlaylistInline').style.display = 'none';
+}
+
+async function createPlaylistAndAdd() {
+    const name = document.getElementById('newPlaylistNameInput').value.trim();
+    if (!name) {
+        showToast('Please enter a playlist name', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/v1/playlists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            },
+            body: JSON.stringify({ name })
+        });
+
+        if (response.ok) {
+            const newPlaylist = await response.json();
+            if (playlistTargetTweetId) {
+                await fetch(`/api/v1/playlists/${newPlaylist.id}/items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({ tweet_id: playlistTargetTweetId })
+                });
+            }
+            showToast('Created playlist and added item');
+            closePlaylistModal();
+        } else {
+            const text = await response.text();
+            showToast(text || 'Failed to create playlist', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to create playlist:', error);
+        showToast('Failed to create playlist', 'error');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'success') {
+    // Simple toast implementation
+    const existing = document.querySelector('.toast-message');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        padding: 12px 20px;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        z-index: 1200;
+        border-left: 3px solid ${type === 'error' ? 'var(--danger)' : 'var(--success)'};
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Add to playlist button handler
+document.getElementById('addToPlaylistBtn')?.addEventListener('click', () => {
+    if (currentVideo) {
+        showAddToPlaylistModal(currentVideo.tweet_id);
     }
 });
 

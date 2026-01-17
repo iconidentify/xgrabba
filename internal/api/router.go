@@ -21,6 +21,7 @@ func NewRouter(
 	usbHandler *handler.USBHandler,
 	eventHandler *handler.EventHandler,
 	extensionHandler *handler.ExtensionHandler,
+	playlistHandler *handler.PlaylistHandler,
 	apiKey string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -45,7 +46,8 @@ func NewRouter(
 	r.Get("/ui", uiHandler.Index)        // Full archive browser
 	r.Get("/quick", uiHandler.Quick)     // Mobile-optimized quick archive
 	r.Get("/q", uiHandler.Quick)         // Short alias for mobile
-	r.Get("/videos", uiHandler.Videos)   // Dedicated video browser
+	r.Get("/videos", uiHandler.Videos)       // Dedicated video browser
+	r.Get("/playlists", uiHandler.Playlists) // Playlist management
 	r.Get("/admin/events", uiHandler.AdminEvents) // Admin activity log
 
 	// OAuth callback must be unauthenticated because it's a browser redirect from X.
@@ -141,6 +143,19 @@ func NewRouter(
 			r.Get("/extension/credentials/status", extensionHandler.CredentialsStatus)
 			r.Post("/extension/credentials/clear", extensionHandler.ClearCredentials)
 			r.Get("/extension/test-user-lookup", extensionHandler.TestUserLookup) // Debug endpoint
+		}
+
+		// Playlist management
+		if playlistHandler != nil {
+			r.Get("/playlists", playlistHandler.List)
+			r.Post("/playlists", playlistHandler.Create)
+			r.Post("/playlists/add-multiple", playlistHandler.AddToMultiple) // Add tweet to multiple playlists
+			r.Get("/playlists/{id}", playlistHandler.Get)
+			r.Put("/playlists/{id}", playlistHandler.Update)
+			r.Delete("/playlists/{id}", playlistHandler.Delete)
+			r.Post("/playlists/{id}/items", playlistHandler.AddItem)
+			r.Delete("/playlists/{id}/items/{tweetId}", playlistHandler.RemoveItem)
+			r.Put("/playlists/{id}/reorder", playlistHandler.Reorder)
 		}
 	})
 
