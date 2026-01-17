@@ -417,11 +417,18 @@ body {
     transition: width 0.1s linear;
 }
 
+/* Playlist View Container - needs overflow hidden for scrolling to work */
+#playlistView {
+    overflow: hidden;
+    min-height: 0; /* Required for flex children to shrink and scroll */
+}
+
 /* Playlist Items */
 .playlist-content {
     flex: 1;
     overflow-y: auto;
     padding: 16px 24px;
+    min-height: 0; /* Required for flex children to shrink and scroll */
 }
 
 .playlist-items {
