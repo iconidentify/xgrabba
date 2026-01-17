@@ -1441,8 +1441,15 @@ async function savePlaylist() {
                 body: JSON.stringify({ name, description })
             });
             showToast('Playlist updated');
+            // Update selectedPlaylist
             selectedPlaylist.name = name;
             selectedPlaylist.description = description;
+            // Also update the playlists array so sidebar reflects change
+            const playlistInArray = playlists.find(p => p.id === editingPlaylist.id);
+            if (playlistInArray) {
+                playlistInArray.name = name;
+                playlistInArray.description = description;
+            }
             document.getElementById('playlistTitle').textContent = name;
             document.getElementById('playlistDescription').textContent = description;
         } else {
