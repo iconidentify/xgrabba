@@ -321,7 +321,33 @@ body {
     max-width: 800px;
     margin: 0 auto;
     padding: 20px;
+    position: relative;
 }
+
+.player-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    z-index: 10;
+}
+
+.player-close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.player-close-btn svg { width: 16px; height: 16px; }
 
 .video-player {
     width: 100%;
@@ -830,6 +856,9 @@ textarea.form-input {
 
                 <div class="player-section" id="playerSection" style="display: none;">
                     <div class="player-container">
+                        <button class="player-close-btn" onclick="closePlayer()" title="Close player">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
                         <div class="video-player">
                             <video id="videoPlayer" controls></video>
                         </div>
@@ -1333,6 +1362,16 @@ function updatePlayPauseButton() {
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
         btn.classList.remove('playing');
     }
+}
+
+function closePlayer() {
+    videoPlayer.pause();
+    videoPlayer.src = '';
+    isPlaying = false;
+    currentVideoIndex = -1;
+    playerSection.style.display = 'none';
+    updatePlayPauseButton();
+    renderPlaylistItems();
 }
 
 videoPlayer.addEventListener('ended', () => {
