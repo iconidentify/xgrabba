@@ -20,6 +20,12 @@ type Config struct {
 	SSHUser    string
 	SSHKeyPath string
 
+	// GitHub configuration
+	GitHubToken  string
+	GitHubOwner  string
+	GitHubRepo   string
+	GitHubAPIURL string
+
 	// Refresh intervals
 	StatusRefresh time.Duration
 	LogRefresh    time.Duration
@@ -37,6 +43,10 @@ func Load() *Config {
 		HelmRepo:      getEnv("XGRABBA_HELM_REPO", "oci://ghcr.io/iconidentify/charts/xgrabba"),
 		SSHUser:       getEnv("XGRABBA_SSH_USER", os.Getenv("USER")),
 		SSHKeyPath:    getEnv("XGRABBA_SSH_KEY", os.ExpandEnv("$HOME/.ssh/id_rsa")),
+		GitHubToken:   getEnv("XGRABBA_GITHUB_TOKEN", ""),
+		GitHubOwner:   getEnv("XGRABBA_GITHUB_OWNER", "iconidentify"),
+		GitHubRepo:    getEnv("XGRABBA_GITHUB_REPO", "xgrabba"),
+		GitHubAPIURL:  getEnv("XGRABBA_GITHUB_API_URL", "https://api.github.com"),
 		StatusRefresh: getDuration("XGRABBA_STATUS_REFRESH", 5*time.Second),
 		LogRefresh:    getDuration("XGRABBA_LOG_REFRESH", 1*time.Second),
 		ColorScheme:   getEnv("XGRABBA_COLOR_SCHEME", "dark"),

@@ -23,6 +23,9 @@ troubleshooting XGrabba deployments in Kubernetes environments.
 [cyan]4[white] or [cyan]F4[white]     Upgrade        - Version management
 [cyan]5[white] or [cyan]F5[white]     Execute        - Run commands in pods
 [cyan]6[white] or [cyan]F6[white]     SSH            - Connect to nodes
+[cyan]7[white] or [cyan]F7[white]     GitHub         - Actions and releases
+[cyan]8[white] or [cyan]F8[white]     Issues         - Browse and edit issues
+[cyan]9[white] or [cyan]F9[white]     Crossplane     - Packages and compositions
 [cyan]?[white]            Help           - This help screen
 [cyan]q[white]            Quit           - Exit the application
 [cyan]r[white]            Refresh        - Refresh current data
@@ -53,6 +56,7 @@ Real-time log streaming with source selection:
 [cyan]c[white]            Clear log view
 [cyan]p[white]            Scroll to end (auto-scroll)
 [cyan]Ctrl+C[white]       Stop log streaming
+[cyan]b[white]            Back to dashboard
 
 [yellow::b]UPGRADE PANEL[white]
 Manage XGrabba versions via Crossplane:
@@ -80,6 +84,23 @@ Connect to Kubernetes nodes or custom hosts:
 
 Add custom hosts using the form on the right.
 
+[yellow::b]GITHUB PANEL[white]
+View repository health at a glance:
+- Recent Actions workflow runs
+- Releases and tags
+
+[yellow::b]ISSUES PANEL[white]
+Manage GitHub issues:
+[cyan]Enter[white]        Edit selected issue
+[cyan]c[white]            Close issue
+[cyan]o[white]            Re-open issue
+[cyan]f[white]            Cycle filters (open/closed/all)
+
+[yellow::b]CROSSPLANE PANEL[white]
+Inspect Crossplane resources:
+- Providers and Configurations
+- Compositions and XRDs
+
 [yellow::b]ENVIRONMENT VARIABLES[white]
 Configure the TUI via environment variables:
 
@@ -89,6 +110,10 @@ Configure the TUI via environment variables:
 [cyan]XGRABBA_HELM_REPO[white]       Helm chart repository URL
 [cyan]XGRABBA_SSH_USER[white]        SSH username
 [cyan]XGRABBA_SSH_KEY[white]         Path to SSH private key
+[cyan]XGRABBA_GITHUB_OWNER[white]    GitHub organization/user
+[cyan]XGRABBA_GITHUB_REPO[white]     GitHub repository name
+[cyan]XGRABBA_GITHUB_TOKEN[white]    GitHub token for issue edits
+[cyan]XGRABBA_GITHUB_API_URL[white]  GitHub API URL override
 [cyan]XGRABBA_STATUS_REFRESH[white]  Status refresh interval (default: 5s)
 [cyan]XGRABBA_LOG_REFRESH[white]     Log refresh interval (default: 1s)
 

@@ -672,6 +672,53 @@ body {
     min-height: 0;
 }
 
+/* Navigation arrows on video player */
+.video-nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: white;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition-fast), background var(--transition-fast);
+    z-index: 10;
+}
+
+.video-nav-arrow:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.video-nav-arrow:disabled {
+    opacity: 0 !important;
+    cursor: default;
+}
+
+.video-player-wrapper:hover .video-nav-arrow:not(:disabled) {
+    opacity: 1;
+}
+
+.video-nav-arrow svg {
+    width: 32px;
+    height: 32px;
+}
+
+.video-nav-prev {
+    left: 0;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.video-nav-next {
+    right: 0;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
 .video-player {
     max-width: 100%;
     max-height: 100%;
@@ -854,6 +901,9 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .sidebar-section {
@@ -880,7 +930,33 @@ body {
     color: var(--text-secondary);
     line-height: 1.6;
     white-space: pre-wrap;
-    max-height: 400px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+}
+
+/* Make sidebar content panels fill available space */
+.sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+#transcriptPanel, #essayPanel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.video-essay {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    flex: 1;
     overflow-y: auto;
     padding: 12px;
     background: var(--bg-elevated);
@@ -1151,7 +1227,13 @@ body {
             <div class="video-modal-body">
                 <div class="video-player-container">
                     <div class="video-player-wrapper">
+                        <button class="video-nav-arrow video-nav-prev" id="navPrevBtn" title="Previous video">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
                         <video class="video-player" id="videoPlayer" playsinline></video>
+                        <button class="video-nav-arrow video-nav-next" id="navNextBtn" title="Next video">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
                     </div>
                     <div class="video-controls" id="videoControls">
                         <div class="video-progress-container" id="progressContainer">
@@ -1199,6 +1281,7 @@ body {
                     <div class="sidebar-tabs">
                         <button class="sidebar-tab active" data-tab="info">Info</button>
                         <button class="sidebar-tab" data-tab="transcript">Transcript</button>
+                        <button class="sidebar-tab" data-tab="essay" id="essayTab" style="display: none;">Essay</button>
                         <button class="sidebar-tab" data-tab="queue">Queue</button>
                     </div>
                     <div class="sidebar-content">
@@ -1235,6 +1318,12 @@ body {
                         </div>
                         <div class="sidebar-panel" id="transcriptPanel" style="display: none;">
                             <div class="video-transcript" id="transcriptText">No transcript available</div>
+                        </div>
+                        <div class="sidebar-panel" id="essayPanel" style="display: none;">
+                            <div class="sidebar-section">
+                                <div class="sidebar-section-title" id="essayTitle">Essay</div>
+                            </div>
+                            <div class="video-essay" id="essayText">No essay available</div>
                         </div>
                         <div class="sidebar-panel" id="queuePanel" style="display: none;">
                             <div class="queue-list" id="queueList"></div>
@@ -1360,6 +1449,24 @@ function debounce(fn, delay) {
         clearTimeout(timer);
         timer = setTimeout(() => fn(...args), delay);
     };
+}
+
+// Format video title: extract descriptive part and make it readable
+// e.g., "randallcarlson_2026-01-16_holocene_epoch_debate" -> "Holocene Epoch Debate"
+function formatTitle(title) {
+    if (!title) return 'Untitled';
+
+    // Pattern: username_YYYY-MM-DD_descriptive_title
+    const datePattern = /^\w+_\d{4}-\d{2}-\d{2}_(.+)$/;
+    const match = title.match(datePattern);
+
+    let descriptivePart = match ? match[1] : title;
+
+    // Replace underscores with spaces and title case
+    return descriptivePart
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
 }
 
 // Add API key to URL for authentication
@@ -1623,7 +1730,7 @@ function renderVideos() {
                         ${avatarSrc ? `<img class="video-avatar" src="${avatarSrc}" alt="" onerror="this.style.display='none'">` : ''}
                         <span class="video-author-name">@${escapeHtml(video.author)}</span>
                     </div>
-                    <div class="video-title">${escapeHtml(video.title)}</div>
+                    <div class="video-title">${escapeHtml(formatTitle(video.title))}</div>
                     <div class="video-meta">
                         <span class="video-meta-item">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1702,7 +1809,7 @@ function openVideo(index) {
     }
 
     // Update modal info
-    document.getElementById('modalTitle').textContent = video.title;
+    document.getElementById('modalTitle').textContent = formatTitle(video.title);
     document.getElementById('videoDescription').textContent = video.text || 'No description available';
     document.getElementById('statViews').textContent = formatNumber(video.views);
     document.getElementById('statLikes').textContent = formatNumber(video.likes);
@@ -1720,8 +1827,21 @@ function openVideo(index) {
     // Transcript
     document.getElementById('transcriptText').textContent = video.transcript || 'No transcript available';
 
+    // Essay - show tab only if essay exists
+    const essayTab = document.getElementById('essayTab');
+    const hasEssay = video.essay && video.essay.length > 0;
+    essayTab.style.display = hasEssay ? 'block' : 'none';
+    if (hasEssay) {
+        document.getElementById('essayTitle').textContent = video.essayTitle || 'Essay';
+        document.getElementById('essayText').textContent = video.essay;
+    }
+
     // Update queue
     renderQueue();
+
+    // Update navigation arrows state
+    document.getElementById('navPrevBtn').disabled = state.currentIndex === 0;
+    document.getElementById('navNextBtn').disabled = state.currentIndex === state.filteredVideos.length - 1;
 
     // Show modal
     modal.classList.add('open');
@@ -1794,7 +1914,7 @@ function renderQueue() {
             <div class="queue-item ${isActive ? 'active' : ''}" data-index="${actualIndex}">
                 ${queueThumbSrc ? `<img class="queue-thumb" src="${queueThumbSrc}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect fill=%22%23202327%22 width=%2216%22 height=%229%22/%3E%3C/svg%3E'">` : ''}
                 <div class="queue-info">
-                    <div class="queue-title">${escapeHtml(video.title)}</div>
+                    <div class="queue-title">${escapeHtml(formatTitle(video.title))}</div>
                     <div class="queue-meta">${formatDuration(video.duration)} - @${escapeHtml(video.author)}</div>
                 </div>
             </div>
@@ -1852,6 +1972,8 @@ document.getElementById('playPauseBtn').addEventListener('click', () => {
 
 document.getElementById('prevBtn').addEventListener('click', playPrevious);
 document.getElementById('nextBtn').addEventListener('click', playNext);
+document.getElementById('navPrevBtn').addEventListener('click', playPrevious);
+document.getElementById('navNextBtn').addEventListener('click', playNext);
 
 document.getElementById('muteBtn').addEventListener('click', () => {
     player.muted = !player.muted;

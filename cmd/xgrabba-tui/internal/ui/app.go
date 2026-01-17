@@ -11,6 +11,7 @@ import (
 	"github.com/rivo/tview"
 
 	"github.com/iconidentify/xgrabba/cmd/xgrabba-tui/internal/config"
+	"github.com/iconidentify/xgrabba/cmd/xgrabba-tui/internal/github"
 	"github.com/iconidentify/xgrabba/cmd/xgrabba-tui/internal/k8s"
 	"github.com/iconidentify/xgrabba/cmd/xgrabba-tui/internal/ssh"
 )
@@ -25,44 +26,65 @@ const (
 	PanelUpgrade
 	PanelExec
 	PanelSSH
+	PanelGitHub
+	PanelIssues
+	PanelCrossplane
 	PanelHelp
 )
 
 // App is the main TUI application.
 type App struct {
-	app         *tview.Application
-	pages       *tview.Pages
-	cfg         *config.Config
-	k8sClient   *k8s.Client
-	sshClient   *ssh.Client
-	status      *k8s.ClusterStatus
-	statusMu    sync.RWMutex
+	app          *tview.Application
+	pages        *tview.Pages
+	cfg          *config.Config
+	k8sClient    *k8s.Client
+	sshClient    *ssh.Client
+	githubClient *github.Client
+	status       *k8s.ClusterStatus
+	statusMu     sync.RWMutex
 	currentPanel Panel
-	ctx         context.Context
-	cancel      context.CancelFunc
+	ctx          context.Context
+	cancel       context.CancelFunc
 
 	// UI components
-	mainFlex       *tview.Flex
-	header         *tview.TextView
-	footer         *tview.TextView
-	statusBar      *tview.TextView
-	dashboardView  *tview.Flex
-	podsTable      *tview.Table
-	logsView       *tview.TextView
-	upgradeView    *tview.Flex
-	upgradeCheckButton   *tview.Button
-	upgradeButton        *tview.Button
-	upgradeForceButton   *tview.Button
-	upgradeCurrentBox    *tview.TextView
-	execView       *tview.Flex
-	sshView        *tview.Flex
-	helpView       *tview.TextView
-	commandInput   *tview.InputField
+	mainFlex                   *tview.Flex
+	header                     *tview.TextView
+	footer                     *tview.TextView
+	statusBar                  *tview.TextView
+	dashboardView              *tview.Flex
+	podsTable                  *tview.Table
+	logsView                   *tview.TextView
+	upgradeView                *tview.Flex
+	upgradeCheckButton         *tview.Button
+	upgradeButton              *tview.Button
+	upgradeForceButton         *tview.Button
+	upgradeCurrentBox          *tview.TextView
+	execView                   *tview.Flex
+	sshView                    *tview.Flex
+	githubView                 *tview.Flex
+	githubInfoView             *tview.TextView
+	githubActionsView          *tview.TextView
+	githubReleasesView         *tview.TextView
+	issuesView                 *tview.Flex
+	issuesTable                *tview.Table
+	issuesDetails              *tview.TextView
+	crossplaneView             *tview.Flex
+	crossplaneProvidersView    *tview.TextView
+	crossplaneConfigsView      *tview.TextView
+	crossplaneCompositionsView *tview.TextView
+	crossplaneXRDView          *tview.TextView
+	helpView                   *tview.TextView
+	commandInput               *tview.InputField
 
 	// State
-	selectedPod    string
-	logCancel      context.CancelFunc
-	refreshTicker  *time.Ticker
+	selectedPod      string
+	logCancel        context.CancelFunc
+	refreshTicker    *time.Ticker
+	logsAutoScroll   bool
+	issuesState      string
+	issues           []github.Issue
+	crossplaneStatus *k8s.CrossplaneStatus
+	crossplaneMu     sync.RWMutex
 }
 
 // NewApp creates a new TUI application.
@@ -70,13 +92,16 @@ func NewApp(cfg *config.Config) (*App, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	a := &App{
-		app:       tview.NewApplication(),
-		pages:     tview.NewPages(),
-		cfg:       cfg,
-		k8sClient: k8s.NewClient(cfg.Namespace, cfg.ReleaseName, cfg.KubeContext),
-		sshClient: ssh.NewClient(cfg.SSHUser, cfg.SSHKeyPath),
-		ctx:       ctx,
-		cancel:    cancel,
+		app:            tview.NewApplication(),
+		pages:          tview.NewPages(),
+		cfg:            cfg,
+		k8sClient:      k8s.NewClient(cfg.Namespace, cfg.ReleaseName, cfg.KubeContext),
+		sshClient:      ssh.NewClient(cfg.SSHUser, cfg.SSHKeyPath),
+		githubClient:   github.NewClient(cfg.GitHubToken, cfg.GitHubOwner, cfg.GitHubRepo, cfg.GitHubAPIURL),
+		ctx:            ctx,
+		cancel:         cancel,
+		logsAutoScroll: true,
+		issuesState:    "open",
 	}
 
 	a.setupUI()
@@ -96,7 +121,7 @@ func (a *App) setupUI() {
 	a.footer = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter).
-		SetText("[yellow]1[white]:Dashboard [yellow]2[white]:Pods [yellow]3[white]:Logs [yellow]4[white]:Upgrade [yellow]5[white]:Exec [yellow]6[white]:SSH [yellow]?[white]:Help [yellow]q[white]:Quit")
+		SetText("[yellow]1[white]:Dashboard [yellow]2[white]:Pods [yellow]3[white]:Logs [yellow]4[white]:Upgrade [yellow]5[white]:Exec [yellow]6[white]:SSH [yellow]7[white]:GitHub [yellow]8[white]:Issues [yellow]9[white]:Crossplane [yellow]?[white]:Help [yellow]q[white]:Quit")
 	a.footer.SetBackgroundColor(tcell.ColorDarkBlue)
 
 	// Status bar
@@ -111,6 +136,9 @@ func (a *App) setupUI() {
 	a.createUpgradePanel()
 	a.createExecPanel()
 	a.createSSHPanel()
+	a.createGitHubPanel()
+	a.createIssuesPanel()
+	a.createCrossplanePanel()
 	a.createHelpPanel()
 
 	// Add panels to pages
@@ -120,6 +148,9 @@ func (a *App) setupUI() {
 	a.pages.AddPage("upgrade", a.upgradeView, true, false)
 	a.pages.AddPage("exec", a.execView, true, false)
 	a.pages.AddPage("ssh", a.sshView, true, false)
+	a.pages.AddPage("github", a.githubView, true, false)
+	a.pages.AddPage("issues", a.issuesView, true, false)
+	a.pages.AddPage("crossplane", a.crossplaneView, true, false)
 	a.pages.AddPage("help", a.helpView, true, false)
 
 	// Main layout
@@ -167,6 +198,15 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		case '6':
 			a.switchPanel(PanelSSH)
 			return nil
+		case '7':
+			a.switchPanel(PanelGitHub)
+			return nil
+		case '8':
+			a.switchPanel(PanelIssues)
+			return nil
+		case '9':
+			a.switchPanel(PanelCrossplane)
+			return nil
 		case '?':
 			a.switchPanel(PanelHelp)
 			return nil
@@ -174,7 +214,16 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 			a.Stop()
 			return nil
 		case 'r', 'R':
-			go a.refreshStatus()
+			switch a.currentPanel {
+			case PanelGitHub:
+				go a.refreshGitHubOverview()
+			case PanelIssues:
+				go a.refreshIssues()
+			case PanelCrossplane:
+				go a.refreshCrossplaneStatus()
+			default:
+				go a.refreshStatus()
+			}
 			return nil
 		}
 	case tcell.KeyF1:
@@ -194,6 +243,15 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case tcell.KeyF6:
 		a.switchPanel(PanelSSH)
+		return nil
+	case tcell.KeyF7:
+		a.switchPanel(PanelGitHub)
+		return nil
+	case tcell.KeyF8:
+		a.switchPanel(PanelIssues)
+		return nil
+	case tcell.KeyF9:
+		a.switchPanel(PanelCrossplane)
 		return nil
 	case tcell.KeyEscape:
 		a.switchPanel(PanelDashboard)
@@ -221,6 +279,7 @@ func (a *App) switchPanel(panel Panel) {
 		a.app.SetFocus(a.podsTable)
 	case PanelLogs:
 		a.pages.SwitchToPage("logs")
+		a.app.SetFocus(a.logsView)
 		// Auto-start showing all logs when entering the logs panel
 		go a.streamAllLogs()
 	case PanelUpgrade:
@@ -237,6 +296,18 @@ func (a *App) switchPanel(panel Panel) {
 		a.pages.SwitchToPage("exec")
 	case PanelSSH:
 		a.pages.SwitchToPage("ssh")
+	case PanelGitHub:
+		a.pages.SwitchToPage("github")
+		a.app.SetFocus(a.githubView)
+		go a.refreshGitHubOverview()
+	case PanelIssues:
+		a.pages.SwitchToPage("issues")
+		a.app.SetFocus(a.issuesTable)
+		go a.refreshIssues()
+	case PanelCrossplane:
+		a.pages.SwitchToPage("crossplane")
+		a.app.SetFocus(a.crossplaneView)
+		go a.refreshCrossplaneStatus()
 	case PanelHelp:
 		a.pages.SwitchToPage("help")
 	}
@@ -260,6 +331,12 @@ func (a *App) updateHeader() {
 		panelName = "Execute Commands"
 	case PanelSSH:
 		panelName = "SSH Connections"
+	case PanelGitHub:
+		panelName = "GitHub"
+	case PanelIssues:
+		panelName = "GitHub Issues"
+	case PanelCrossplane:
+		panelName = "Crossplane"
 	case PanelHelp:
 		panelName = "Help"
 	}
@@ -352,4 +429,16 @@ func (a *App) getStatus() *k8s.ClusterStatus {
 	a.statusMu.RLock()
 	defer a.statusMu.RUnlock()
 	return a.status
+}
+
+func (a *App) setCrossplaneStatus(status *k8s.CrossplaneStatus) {
+	a.crossplaneMu.Lock()
+	defer a.crossplaneMu.Unlock()
+	a.crossplaneStatus = status
+}
+
+func (a *App) getCrossplaneStatus() *k8s.CrossplaneStatus {
+	a.crossplaneMu.RLock()
+	defer a.crossplaneMu.RUnlock()
+	return a.crossplaneStatus
 }

@@ -62,14 +62,14 @@ type Deployment struct {
 
 // DaemonSet represents a Kubernetes daemonset.
 type DaemonSet struct {
-	Name            string
-	Desired         int
-	Current         int
-	Ready           int
-	UpToDate        int
-	Available       int
-	NodeSelector    string
-	Age             string
+	Name         string
+	Desired      int
+	Current      int
+	Ready        int
+	UpToDate     int
+	Available    int
+	NodeSelector string
+	Age          string
 }
 
 // Service represents a Kubernetes service.
@@ -137,6 +137,42 @@ type ClusterStatus struct {
 	Events       []Event
 	HealthChecks []HealthStatus
 	Issues       []string
+}
+
+// CrossplanePackage represents a Crossplane package resource (Provider/Configuration).
+type CrossplanePackage struct {
+	Name        string
+	Package     string
+	Revision    string
+	Healthy     bool
+	Installed   bool
+	Message     string
+	Age         string
+	PackageType string
+}
+
+// CrossplaneComposition represents a Crossplane Composition.
+type CrossplaneComposition struct {
+	Name          string
+	CompositeKind string
+	Age           string
+}
+
+// CrossplaneXRD represents a CompositeResourceDefinition.
+type CrossplaneXRD struct {
+	Name      string
+	Kind      string
+	ClaimKind string
+	Age       string
+}
+
+// CrossplaneStatus holds Crossplane-specific status data.
+type CrossplaneStatus struct {
+	Providers      []CrossplanePackage
+	Configurations []CrossplanePackage
+	Compositions   []CrossplaneComposition
+	XRDs           []CrossplaneXRD
+	Issues         []string
 }
 
 // kubectl executes a kubectl command and returns output.
@@ -244,7 +280,7 @@ func (c *Client) GetPods(ctx context.Context) ([]Pod, error) {
 					Ready        bool   `json:"ready"`
 					RestartCount int    `json:"restartCount"`
 					State        struct {
-						Running    *struct{} `json:"running"`
+						Running    *struct{}                `json:"running"`
 						Waiting    *struct{ Reason string } `json:"waiting"`
 						Terminated *struct{ Reason string } `json:"terminated"`
 					} `json:"state"`
@@ -423,14 +459,14 @@ func (c *Client) GetServices(ctx context.Context) ([]Service, error) {
 				CreationTimestamp time.Time `json:"creationTimestamp"`
 			} `json:"metadata"`
 			Spec struct {
-				Type       string `json:"type"`
-				ClusterIP  string `json:"clusterIP"`
+				Type       string   `json:"type"`
+				ClusterIP  string   `json:"clusterIP"`
 				ClusterIPs []string `json:"clusterIPs"`
 				Ports      []struct {
-					Port       int    `json:"port"`
+					Port       int         `json:"port"`
 					TargetPort interface{} `json:"targetPort"`
-					Protocol   string `json:"protocol"`
-					Name       string `json:"name"`
+					Protocol   string      `json:"protocol"`
+					Name       string      `json:"name"`
 				} `json:"ports"`
 			} `json:"spec"`
 			Status struct {
@@ -725,14 +761,15 @@ func (c *Client) Exec(ctx context.Context, podName string, command []string) (st
 
 // ExecInteractive starts an interactive shell in a pod.
 func (c *Client) ExecInteractive(ctx context.Context, podName string, command []string) *exec.Cmd {
-	args := []string{"-n", c.namespace, "exec", "-it", podName, "--"}
+	args := []string{"exec", "-it", podName, "--"}
 	args = append(args, command...)
+	cmdArgs := args
 	if c.kubeContext != "" {
-		args = append([]string{"--context", c.kubeContext}, args...)
+		cmdArgs = append([]string{"--context", c.kubeContext}, cmdArgs...)
 	}
+	cmdArgs = append([]string{"-n", c.namespace}, cmdArgs...)
 
-	cmd := exec.CommandContext(ctx, "kubectl", args...)
-	return cmd
+	return exec.CommandContext(ctx, "kubectl", cmdArgs...)
 }
 
 // PortForward starts port forwarding to a pod.
@@ -771,6 +808,12 @@ func (c *Client) CheckHealth(ctx context.Context, podName string, port int, endp
 		Healthy:  healthy,
 		Message:  out,
 	}, nil
+}
+
+// DescribePod returns detailed pod information using kubectl describe.
+func (c *Client) DescribePod(ctx context.Context, podName string) (string, error) {
+	out, err := c.kubectl(ctx, "describe", "pod", podName)
+	return string(out), err
 }
 
 // GetPodNames returns pod names matching a label selector.
@@ -826,6 +869,189 @@ func (c *Client) WaitForDaemonSetRollout(ctx context.Context, dsName string, tim
 	args := []string{"rollout", "status", "daemonset/" + dsName, "--timeout", timeout.String()}
 	_, err := c.kubectl(ctx, args...)
 	return err
+}
+
+// GetCrossplaneStatus returns Crossplane package/composition status.
+func (c *Client) GetCrossplaneStatus(ctx context.Context) (*CrossplaneStatus, error) {
+	status := &CrossplaneStatus{}
+
+	providers, err := c.getCrossplanePackages(ctx, "providers.pkg.crossplane.io", "Provider")
+	if err == nil {
+		status.Providers = providers
+	}
+
+	configurations, err := c.getCrossplanePackages(ctx, "configurations.pkg.crossplane.io", "Configuration")
+	if err == nil {
+		status.Configurations = configurations
+	}
+
+	compositions, err := c.getCrossplaneCompositions(ctx)
+	if err == nil {
+		status.Compositions = compositions
+	}
+
+	xrds, err := c.getCrossplaneXRDs(ctx)
+	if err == nil {
+		status.XRDs = xrds
+	}
+
+	status.Issues = detectCrossplaneIssues(status)
+	return status, nil
+}
+
+func (c *Client) getCrossplanePackages(ctx context.Context, resource, packageType string) ([]CrossplanePackage, error) {
+	out, err := c.kubectlNoNS(ctx, "get", resource, "-o", "json")
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Items []struct {
+			Metadata struct {
+				Name              string    `json:"name"`
+				CreationTimestamp time.Time `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Spec struct {
+				Package string `json:"package"`
+			} `json:"spec"`
+			Status struct {
+				CurrentRevision string `json:"currentRevision"`
+				Conditions      []struct {
+					Type    string `json:"type"`
+					Status  string `json:"status"`
+					Message string `json:"message"`
+				} `json:"conditions"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(out, &result); err != nil {
+		return nil, fmt.Errorf("parse crossplane packages: %w", err)
+	}
+
+	packages := make([]CrossplanePackage, 0, len(result.Items))
+	for _, item := range result.Items {
+		pkg := CrossplanePackage{
+			Name:        item.Metadata.Name,
+			Package:     item.Spec.Package,
+			Revision:    item.Status.CurrentRevision,
+			Age:         formatAge(item.Metadata.CreationTimestamp),
+			PackageType: packageType,
+		}
+		for _, cond := range item.Status.Conditions {
+			switch cond.Type {
+			case "Healthy":
+				pkg.Healthy = cond.Status == "True"
+				if cond.Status != "True" && pkg.Message == "" {
+					pkg.Message = cond.Message
+				}
+			case "Installed":
+				pkg.Installed = cond.Status == "True"
+				if cond.Status != "True" && pkg.Message == "" {
+					pkg.Message = cond.Message
+				}
+			}
+		}
+		packages = append(packages, pkg)
+	}
+	return packages, nil
+}
+
+func (c *Client) getCrossplaneCompositions(ctx context.Context) ([]CrossplaneComposition, error) {
+	out, err := c.kubectlNoNS(ctx, "get", "compositions.apiextensions.crossplane.io", "-o", "json")
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Items []struct {
+			Metadata struct {
+				Name              string    `json:"name"`
+				CreationTimestamp time.Time `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Spec struct {
+				CompositeTypeRef struct {
+					Kind string `json:"kind"`
+				} `json:"compositeTypeRef"`
+			} `json:"spec"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(out, &result); err != nil {
+		return nil, fmt.Errorf("parse compositions: %w", err)
+	}
+
+	compositions := make([]CrossplaneComposition, 0, len(result.Items))
+	for _, item := range result.Items {
+		compositions = append(compositions, CrossplaneComposition{
+			Name:          item.Metadata.Name,
+			CompositeKind: item.Spec.CompositeTypeRef.Kind,
+			Age:           formatAge(item.Metadata.CreationTimestamp),
+		})
+	}
+	return compositions, nil
+}
+
+func (c *Client) getCrossplaneXRDs(ctx context.Context) ([]CrossplaneXRD, error) {
+	out, err := c.kubectlNoNS(ctx, "get", "compositeresourcedefinitions.apiextensions.crossplane.io", "-o", "json")
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Items []struct {
+			Metadata struct {
+				Name              string    `json:"name"`
+				CreationTimestamp time.Time `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Spec struct {
+				Names struct {
+					Kind string `json:"kind"`
+				} `json:"names"`
+				ClaimNames struct {
+					Kind string `json:"kind"`
+				} `json:"claimNames"`
+			} `json:"spec"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(out, &result); err != nil {
+		return nil, fmt.Errorf("parse xrds: %w", err)
+	}
+
+	xrds := make([]CrossplaneXRD, 0, len(result.Items))
+	for _, item := range result.Items {
+		xrds = append(xrds, CrossplaneXRD{
+			Name:      item.Metadata.Name,
+			Kind:      item.Spec.Names.Kind,
+			ClaimKind: item.Spec.ClaimNames.Kind,
+			Age:       formatAge(item.Metadata.CreationTimestamp),
+		})
+	}
+	return xrds, nil
+}
+
+func detectCrossplaneIssues(status *CrossplaneStatus) []string {
+	var issues []string
+	for _, pkg := range status.Providers {
+		if !pkg.Installed || !pkg.Healthy {
+			msg := pkg.Message
+			if msg == "" {
+				msg = "Provider not healthy"
+			}
+			issues = append(issues, fmt.Sprintf("Provider %s: %s", pkg.Name, truncate(msg, 60)))
+		}
+	}
+	for _, pkg := range status.Configurations {
+		if !pkg.Installed || !pkg.Healthy {
+			msg := pkg.Message
+			if msg == "" {
+				msg = "Configuration not healthy"
+			}
+			issues = append(issues, fmt.Sprintf("Configuration %s: %s", pkg.Name, truncate(msg, 60)))
+		}
+	}
+	return issues
 }
 
 // detectIssues identifies potential problems in the cluster status.

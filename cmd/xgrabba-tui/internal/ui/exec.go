@@ -73,10 +73,10 @@ func (a *App) createExecPanel() {
 	// Handle pod selection
 	var selectedPodForExec string
 	podList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
-		selectedPodForExec = mainText
+		selectedPodForExec = extractPodName(mainText)
 		a.app.SetFocus(a.commandInput)
 		outputView.Clear()
-		fmt.Fprintf(outputView, "[dim]Selected pod: %s[white]\n", mainText)
+		fmt.Fprintf(outputView, "[dim]Selected pod: %s[white]\n", selectedPodForExec)
 		fmt.Fprintln(outputView, "[dim]Enter a command and press Enter to execute[white]")
 	})
 
@@ -88,6 +88,8 @@ func (a *App) createExecPanel() {
 
 		cmd := a.commandInput.GetText()
 		if cmd == "" || selectedPodForExec == "" {
+			outputView.Clear()
+			fmt.Fprintln(outputView, "[yellow]Select a pod and enter a command[white]")
 			return
 		}
 

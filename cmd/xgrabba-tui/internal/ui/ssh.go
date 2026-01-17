@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -191,9 +192,9 @@ func (a *App) connectSSH(host *ssh.Host) {
 	a.app.Suspend(func() {
 		ctx := context.Background()
 		cmd := a.sshClient.Connect(ctx, host)
-		cmd.Stdin = nil  // Let the terminal handle stdin
-		cmd.Stdout = nil // Let the terminal handle stdout
-		cmd.Stderr = nil // Let the terminal handle stderr
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
 		fmt.Printf("\n--- Connecting to %s@%s:%d ---\n", host.User, host.Address, host.Port)
 		fmt.Println("Type 'exit' to return to TUI")

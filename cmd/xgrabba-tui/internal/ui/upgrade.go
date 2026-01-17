@@ -144,11 +144,11 @@ func (a *App) createUpgradePanel() {
 	a.upgradeView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Allow global navigation keys to pass through
 		switch event.Key() {
-		case tcell.KeyEscape, tcell.KeyF1, tcell.KeyF2, tcell.KeyF3, tcell.KeyF4, tcell.KeyF5, tcell.KeyF6:
+		case tcell.KeyEscape, tcell.KeyF1, tcell.KeyF2, tcell.KeyF3, tcell.KeyF4, tcell.KeyF5, tcell.KeyF6, tcell.KeyF7, tcell.KeyF8, tcell.KeyF9:
 			return event
 		case tcell.KeyRune:
 			switch event.Rune() {
-			case '1', '2', '3', '4', '5', '6', 'q', 'Q', '?':
+			case '1', '2', '3', '4', '5', '6', '7', '8', '9', 'q', 'Q', '?':
 				return event
 			}
 		}

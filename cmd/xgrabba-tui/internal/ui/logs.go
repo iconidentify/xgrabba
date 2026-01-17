@@ -29,7 +29,7 @@ func (a *App) createLogsPanel() {
 		SetChangedFunc(func() {
 			a.app.Draw()
 		})
-	a.logsView.SetBorder(true).SetTitle(" Logs - Press 'm' for main app, 'u' for USB manager, 'a' for all ")
+	a.logsView.SetBorder(true).SetTitle(" Logs - Press 'm' main, 'u' USB, 'a' all, 'p' pause, 'b' back ")
 
 	// Key bindings
 	a.logsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -40,7 +40,7 @@ func (a *App) createLogsPanel() {
 		case tcell.KeyRune:
 			// Allow navigation number keys and 'q' to pass through
 			switch event.Rune() {
-			case '1', '2', '3', '4', '5', '6', 'q', 'Q', '?':
+			case '1', '2', '3', '4', '5', '6', '7', '8', '9', 'q', 'Q', '?':
 				return event // Pass through to global handler
 			case 'm', 'M':
 				a.streamLogsByLabel("app.kubernetes.io/name=xgrabba")
@@ -56,7 +56,15 @@ func (a *App) createLogsPanel() {
 				return nil
 			case 'p', 'P':
 				// Pause/resume auto-scroll
-				a.logsView.ScrollToEnd()
+				a.logsAutoScroll = !a.logsAutoScroll
+				if a.logsAutoScroll {
+					a.updateStatusBar("[green]Log auto-scroll enabled")
+				} else {
+					a.updateStatusBar("[yellow]Log auto-scroll paused")
+				}
+				return nil
+			case 'b', 'B':
+				a.switchPanel(PanelDashboard)
 				return nil
 			}
 		case tcell.KeyCtrlC:
@@ -103,7 +111,9 @@ func (a *App) streamLogs(podName string) {
 			line := scanner.Text()
 			a.app.QueueUpdateDraw(func() {
 				fmt.Fprintln(a.logsView, colorizeLogLine(line))
-				a.logsView.ScrollToEnd()
+				if a.logsAutoScroll {
+					a.logsView.ScrollToEnd()
+				}
 			})
 		}
 	}
@@ -149,7 +159,9 @@ func (a *App) streamLogsByLabel(label string) {
 			line := scanner.Text()
 			a.app.QueueUpdateDraw(func() {
 				fmt.Fprintln(a.logsView, colorizeLogLine(line))
-				a.logsView.ScrollToEnd()
+				if a.logsAutoScroll {
+					a.logsView.ScrollToEnd()
+				}
 			})
 		}
 	}
@@ -199,7 +211,9 @@ func (a *App) streamAllLogs() {
 						timestamp := time.Now().Format("15:04:05")
 						fmt.Fprintf(a.logsView, "[dim]%s[white] [cyan]%s[white] %s\n",
 							timestamp, podName, colorizeLogLine(line))
-						a.logsView.ScrollToEnd()
+						if a.logsAutoScroll {
+							a.logsView.ScrollToEnd()
+						}
 					})
 				}
 			}

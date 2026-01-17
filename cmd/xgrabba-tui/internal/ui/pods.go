@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -176,14 +177,10 @@ func (a *App) describePod(podName string) {
 		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
 		defer cancel()
 
-		out, err := a.k8sClient.Exec(ctx, podName, []string{"sh", "-c", "echo 'Pod info retrieved'"})
+		out, err := a.k8sClient.DescribePod(ctx, podName)
 		if err != nil {
-			out = fmt.Sprintf("Error: %v", err)
+			out = fmt.Sprintf("Error fetching details: %v\n\n%s", err, out)
 		}
-
-		// Get more details via kubectl describe
-		args := []string{"describe", "pod", podName, "-n", a.cfg.Namespace}
-		_ = args
 
 		a.app.QueueUpdateDraw(func() {
 			descView := tview.NewTextView().
@@ -231,6 +228,11 @@ func (a *App) describePod(podName string) {
 				text = out
 			}
 
+			if out != "" {
+				text += "\n[yellow::b]kubectl describe output[white]\n"
+				text += out
+			}
+
 			text += "\n[dim]Press 'q' or Escape to close[white]"
 			descView.SetText(text)
 
@@ -246,9 +248,9 @@ func (a *App) shellIntoPod(podName string) {
 	a.app.Suspend(func() {
 		ctx := context.Background()
 		cmd := a.k8sClient.ExecInteractive(ctx, podName, []string{"sh"})
-		cmd.Stdin = nil // Let the terminal handle stdin
-		cmd.Stdout = nil
-		cmd.Stderr = nil
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
 		// Run interactive session
 		_ = cmd.Run()
