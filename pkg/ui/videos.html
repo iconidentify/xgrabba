@@ -2447,6 +2447,10 @@ async function renderPlaylistList() {
 }
 
 async function addToPlaylist(playlistId) {
+    if (OFFLINE_MODE) {
+        showToast('Cannot modify playlists in offline mode', 'error');
+        return;
+    }
     if (!playlistTargetTweetId) return;
 
     try {
@@ -2483,6 +2487,10 @@ function cancelCreatePlaylist() {
 }
 
 async function createPlaylistAndAdd() {
+    if (OFFLINE_MODE) {
+        showToast('Cannot create playlists in offline mode', 'error');
+        return;
+    }
     const name = document.getElementById('newPlaylistNameInput').value.trim();
     if (!name) {
         showToast('Please enter a playlist name', 'error');

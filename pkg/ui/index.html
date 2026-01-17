@@ -8139,6 +8139,7 @@
         }
 
         async function pollBatchStatus() {
+            if (OFFLINE_MODE) return; // No polling in offline mode
             // Always re-scan for new active tweets on every poll
             scanForActiveTweets();
 
@@ -8269,6 +8270,7 @@
         const CPU_HISTORY_MAX = 30;
 
         async function fetchSystemStats() {
+            if (OFFLINE_MODE) return; // No system stats in offline mode
             try {
                 const response = await fetch('/api/v1/stats', {
                     headers: { 'X-API-Key': API_KEY }
@@ -10174,6 +10176,7 @@
         // Regenerate AI metadata for a tweet
         // Check if AI analysis is in progress for a tweet
         async function checkAIAnalysisStatus(tweetId) {
+            if (OFFLINE_MODE) return false; // AI analysis not available in offline mode
             try {
                 const response = await fetch(`/api/v1/tweets/${tweetId}/ai-status`, {
                     headers: { 'X-API-Key': API_KEY }
@@ -10237,6 +10240,12 @@
             const container = document.getElementById('tweetDiagnostics');
             const codeEl = container?.querySelector('.detail-diagnostics-code') || container;
             if (!codeEl) return;
+
+            if (OFFLINE_MODE) {
+                codeEl.textContent = 'Diagnostics not available in offline mode';
+                return;
+            }
+
             codeEl.textContent = 'Loading diagnostics...';
 
             try {
@@ -10495,6 +10504,7 @@
         }
 
         async function checkForNewEntries() {
+            if (OFFLINE_MODE) return; // No new entries check in offline mode
             try {
                 const response = await fetch('/api/v1/tweets?limit=10', {
                     headers: { 'X-API-Key': API_KEY }
@@ -10984,6 +10994,10 @@
         let playlistTargetTweetId = null;
 
         async function loadPlaylists() {
+            if (OFFLINE_MODE) {
+                playlistCache = window.OFFLINE_DATA?.playlists || [];
+                return;
+            }
             try {
                 const response = await fetch('/api/v1/playlists', {
                     headers: { 'X-API-Key': API_KEY }

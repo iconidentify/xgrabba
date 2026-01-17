@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/iconidentify/xgrabba/pkg/ui"
 )
 
-// TestGenerateOfflineUIInjectsData verifies that generateOfflineUI properly injects tweet data.
+// TestGenerateOfflineUIInjectsData verifies that generateOfflineUIForPage properly injects tweet data.
 func TestGenerateOfflineUIInjectsData(t *testing.T) {
 	// Create test tweets data
 	testData := map[string]interface{}{
@@ -28,7 +30,7 @@ func TestGenerateOfflineUIInjectsData(t *testing.T) {
 		t.Fatalf("Failed to marshal test data: %v", err)
 	}
 
-	result := generateOfflineUI(tweetsJSON)
+	result := generateOfflineUIForPage(ui.IndexHTML, tweetsJSON)
 
 	// Verify result is not empty
 	if len(result) == 0 {
@@ -75,7 +77,7 @@ func TestGenerateOfflineUIWithEmptyData(t *testing.T) {
 		t.Fatalf("Failed to marshal test data: %v", err)
 	}
 
-	result := generateOfflineUI(tweetsJSON)
+	result := generateOfflineUIForPage(ui.IndexHTML, tweetsJSON)
 
 	if len(result) == 0 {
 		t.Fatal("generateOfflineUI should return content even with empty data")
@@ -94,7 +96,7 @@ func TestGenerateOfflineUIWithMalformedJSON(t *testing.T) {
 	// Pass malformed JSON
 	malformedJSON := []byte(`{"tweets": not valid json}`)
 
-	result := generateOfflineUI(malformedJSON)
+	result := generateOfflineUIForPage(ui.IndexHTML, malformedJSON)
 
 	// Should not panic and should return something
 	if len(result) == 0 {
@@ -116,7 +118,7 @@ func TestGenerateOfflineUIPreservesHTMLStructure(t *testing.T) {
 	}
 	tweetsJSON, _ := json.Marshal(testData)
 
-	result := generateOfflineUI(tweetsJSON)
+	result := generateOfflineUIForPage(ui.IndexHTML, tweetsJSON)
 	html := string(result)
 
 	// Should have exactly one of each major structural element
@@ -148,7 +150,7 @@ func TestGenerateOfflineUIUsesSharedUI(t *testing.T) {
 	}
 	tweetsJSON, _ := json.Marshal(testData)
 
-	result := generateOfflineUI(tweetsJSON)
+	result := generateOfflineUIForPage(ui.IndexHTML, tweetsJSON)
 	html := string(result)
 
 	// The shared UI should contain the xgrabba branding and key features
@@ -157,5 +159,52 @@ func TestGenerateOfflineUIUsesSharedUI(t *testing.T) {
 	// Should have offline mode detection logic
 	if !strings.Contains(html, "OFFLINE_MODE") {
 		t.Error("Result should use shared UI which contains OFFLINE_MODE detection")
+	}
+}
+
+// TestGenerateAllOfflineUI verifies all three pages are generated correctly.
+func TestGenerateAllOfflineUI(t *testing.T) {
+	testData := map[string]interface{}{
+		"tweets": []map[string]interface{}{
+			{"tweet_id": "123", "text": "Test tweet"},
+		},
+		"playlists": []map[string]interface{}{
+			{"id": "pl1", "name": "Test Playlist"},
+		},
+	}
+	tweetsJSON, _ := json.Marshal(testData)
+
+	pages := generateAllOfflineUI(tweetsJSON)
+
+	// Should have all three pages
+	expectedPages := []string{"index.html", "videos.html", "playlists.html"}
+	for _, pageName := range expectedPages {
+		content, ok := pages[pageName]
+		if !ok {
+			t.Errorf("Missing page: %s", pageName)
+			continue
+		}
+
+		if len(content) == 0 {
+			t.Errorf("Page %s should not be empty", pageName)
+			continue
+		}
+
+		html := string(content)
+
+		// All pages should have OFFLINE_DATA injected
+		if !strings.Contains(html, "window.OFFLINE_DATA") {
+			t.Errorf("Page %s should contain window.OFFLINE_DATA", pageName)
+		}
+
+		// All pages should be valid HTML
+		if !strings.HasPrefix(html, "<!DOCTYPE html>") {
+			t.Errorf("Page %s should start with DOCTYPE", pageName)
+		}
+
+		// All pages should have OFFLINE_MODE detection
+		if !strings.Contains(html, "OFFLINE_MODE") {
+			t.Errorf("Page %s should contain OFFLINE_MODE detection", pageName)
+		}
 	}
 }

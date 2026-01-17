@@ -58,7 +58,7 @@ type EncryptedArchive struct {
 	manifest   map[string]ManifestEntry
 	key        []byte
 	cache      *chunkCache
-	offlineUI  []byte
+	offlineUI  map[string][]byte // page name -> generated HTML with OFFLINE_DATA
 }
 
 type chunkKey struct {
@@ -385,7 +385,7 @@ func decryptArchive(archiveDir, password string) (*DecryptedArchive, *EncryptedA
 				data:       map[string][]byte{"tweets-data.json": tweetsData},
 				manifest:   manifestV2.Entries,
 				cache:      newChunkCache(getChunkCacheSize()),
-				offlineUI:  generateOfflineUI(tweetsData),
+				offlineUI:  generateAllOfflineUI(tweetsData),
 			}
 			if len(manifestV2.Entries) > 0 {
 				key, err := deriveKeyFromEncryptedFile(archiveDir, manifestV2.Entries, password)
@@ -431,10 +431,10 @@ func decryptArchive(archiveDir, password string) (*DecryptedArchive, *EncryptedA
 
 // createDecryptedHandler creates an HTTP handler that serves decrypted content
 func createDecryptedHandler(archiveDir string, archive *DecryptedArchive) http.Handler {
-	// Generate offline UI with embedded data once at creation time
-	var offlineUI []byte
+	// Generate offline UI pages with embedded data once at creation time
+	var offlinePages map[string][]byte
 	if tweetsData, ok := archive.data["tweets-data.json"]; ok {
-		offlineUI = generateOfflineUI(tweetsData)
+		offlinePages = generateAllOfflineUI(tweetsData)
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -444,10 +444,10 @@ func createDecryptedHandler(archiveDir string, archive *DecryptedArchive) http.H
 		}
 		path = strings.TrimPrefix(path, "/")
 
-		// Serve the shared UI with injected data for index.html
-		if path == "index.html" && len(offlineUI) > 0 {
+		// Serve the offline UI pages with injected data (index.html, videos.html, playlists.html)
+		if offlineContent, ok := offlinePages[path]; ok && len(offlineContent) > 0 {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader(offlineUI))
+			http.ServeContent(w, r, path, time.Now(), bytes.NewReader(offlineContent))
 			return
 		}
 
@@ -484,9 +484,10 @@ func createEncryptedHandler(archiveDir string, archive *EncryptedArchive) http.H
 		}
 		path = strings.TrimPrefix(path, "/")
 
-		if path == "index.html" {
-			w.Header().Set("Content-Type", "text/html")
-			http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader(archive.offlineUI))
+		// Serve offline UI pages with injected data (index.html, videos.html, playlists.html)
+		if offlineContent, ok := archive.offlineUI[path]; ok && len(offlineContent) > 0 {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeContent(w, r, path, time.Now(), bytes.NewReader(offlineContent))
 			return
 		}
 
@@ -656,30 +657,32 @@ func maxInt64(a, b int64) int64 {
 	return b
 }
 
-// generateOfflineUI creates the offline viewer UI by injecting tweet data into the shared UI.
-// This reuses the same index.html from the main app, ensuring consistent UI/UX.
+// generateOfflineUIForPage creates the offline viewer UI for a specific page by injecting tweet data.
+// This reuses the same HTML templates from the main app, ensuring consistent UI/UX.
 // The shared UI has built-in OFFLINE_MODE detection via window.OFFLINE_DATA.
-func generateOfflineUI(tweetsData []byte) []byte {
-	// Parse the tweets data to create the OFFLINE_DATA structure
-	var rawData struct {
-		Tweets []json.RawMessage `json:"tweets"`
-	}
-	if err := json.Unmarshal(tweetsData, &rawData); err != nil {
-		// Fallback: use empty tweets array
-		rawData.Tweets = []json.RawMessage{}
-	}
-
+func generateOfflineUIForPage(pageHTML []byte, tweetsData []byte) []byte {
 	// Create the data injection script
-	// The shared UI looks for window.OFFLINE_DATA = { tweets: [...] }
+	// The shared UI looks for window.OFFLINE_DATA = { tweets: [...], playlists: [...] }
 	dataScript := fmt.Sprintf(`<script>
 window.OFFLINE_DATA = %s;
 </script>
 </head>`, string(tweetsData))
 
-	// Inject the data script right before </head> in the shared UI
-	htmlStr := string(ui.IndexHTML)
+	// Inject the data script right before </head> in the page
+	htmlStr := string(pageHTML)
 	result := strings.Replace(htmlStr, "</head>", dataScript, 1)
 
 	return []byte(result)
+}
+
+// generateAllOfflineUI creates offline versions of all UI pages with injected tweet data.
+// Returns a map of page name to generated HTML content.
+func generateAllOfflineUI(tweetsData []byte) map[string][]byte {
+	pages := map[string][]byte{
+		"index.html":     generateOfflineUIForPage(ui.IndexHTML, tweetsData),
+		"videos.html":    generateOfflineUIForPage(ui.VideosHTML, tweetsData),
+		"playlists.html": generateOfflineUIForPage(ui.PlaylistsHTML, tweetsData),
+	}
+	return pages
 }
 
