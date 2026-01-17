@@ -663,6 +663,42 @@ body {
     min-height: 0;
 }
 
+/* True fullscreen mode for video player */
+.video-player-container:fullscreen {
+    width: 100vw;
+    height: 100vh;
+}
+
+.video-player-container:fullscreen .video-player-wrapper {
+    flex: 1;
+}
+
+.video-player-container:fullscreen .video-player {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.video-player-container:fullscreen .video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.video-player-container:fullscreen:hover .video-controls {
+    opacity: 1;
+}
+
+.video-player-container:fullscreen .video-nav-arrow {
+    height: 120px;
+}
+
 .video-player-wrapper {
     flex: 1;
     display: flex;
@@ -1883,12 +1919,19 @@ function playNext() {
 }
 
 function toggleFullscreen() {
+    const playerContainer = document.querySelector('.video-player-container');
+
     if (document.fullscreenElement) {
         document.exitFullscreen();
-        modal.classList.remove('fullscreen');
     } else {
-        modal.requestFullscreen();
-        modal.classList.add('fullscreen');
+        // Request fullscreen on the video player container for true fullscreen
+        if (playerContainer.requestFullscreen) {
+            playerContainer.requestFullscreen();
+        } else if (playerContainer.webkitRequestFullscreen) {
+            playerContainer.webkitRequestFullscreen();
+        } else if (playerContainer.msRequestFullscreen) {
+            playerContainer.msRequestFullscreen();
+        }
     }
 }
 
@@ -2192,8 +2235,13 @@ document.addEventListener('keydown', (e) => {
 
 // Handle fullscreen changes
 document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) {
-        modal.classList.remove('fullscreen');
+    const fsBtn = document.getElementById('fullscreenBtn');
+    if (document.fullscreenElement) {
+        // Show exit fullscreen icon
+        fsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    } else {
+        // Show enter fullscreen icon
+        fsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
     }
 });
 
