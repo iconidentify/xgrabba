@@ -32,7 +32,7 @@ func NewFilesystemPlaylistRepository(basePath string) *FilesystemPlaylistReposit
 		storePath: filepath.Join(basePath, "playlists.json"),
 		playlists: make(map[domain.PlaylistID]*domain.Playlist),
 	}
-	repo.load()
+	_ = repo.load() // Ignore load errors - file may not exist yet
 	return repo
 }
 
