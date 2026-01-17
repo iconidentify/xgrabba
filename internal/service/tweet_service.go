@@ -1721,6 +1721,11 @@ func (s *TweetService) saveTweetMetadata(tweet *domain.Tweet) error {
 }
 
 func buildMarkdownSummary(tweet *domain.Tweet) string {
+	// Check if this is an Article
+	if tweet.IsArticle() {
+		return buildArticleMarkdownSummary(tweet)
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("# %s\n\n", tweet.AITitle))
@@ -1754,6 +1759,93 @@ func buildMarkdownSummary(tweet *domain.Tweet) string {
 		archivedAt = *tweet.ArchivedAt
 	}
 	sb.WriteString(fmt.Sprintf("\n---\n\n*Archived on %s by XGrabba*\n", archivedAt.Format("January 2, 2006")))
+
+	return sb.String()
+}
+
+// buildArticleMarkdownSummary generates a markdown summary specifically for Articles.
+func buildArticleMarkdownSummary(tweet *domain.Tweet) string {
+	var sb strings.Builder
+
+	// Use article title if available, otherwise fall back to AI title
+	title := tweet.ArticleTitle
+	if title == "" {
+		title = tweet.AITitle
+	}
+	if title == "" {
+		title = "Untitled Article"
+	}
+
+	sb.WriteString(fmt.Sprintf("# %s\n\n", title))
+	sb.WriteString(fmt.Sprintf("**Author:** @%s (%s)\n\n", tweet.Author.Username, tweet.Author.DisplayName))
+	sb.WriteString(fmt.Sprintf("**Posted:** %s\n\n", tweet.PostedAt.Format("January 2, 2006 at 3:04 PM")))
+
+	// Article-specific metadata
+	if tweet.WordCount > 0 {
+		sb.WriteString(fmt.Sprintf("**Word Count:** %d words\n\n", tweet.WordCount))
+	}
+	if tweet.ReadingMinutes > 0 {
+		sb.WriteString(fmt.Sprintf("**Reading Time:** ~%d min\n\n", tweet.ReadingMinutes))
+	}
+
+	sb.WriteString(fmt.Sprintf("**Original URL:** %s\n\n", tweet.URL))
+	sb.WriteString("**Type:** Article\n\n")
+	sb.WriteString("---\n\n")
+
+	// For Articles, the body is the full content
+	body := tweet.ArticleBody
+	if body == "" {
+		body = tweet.Text
+	}
+	sb.WriteString(fmt.Sprintf("%s\n\n", body))
+
+	// Show attached media (different from inline images which would be in the body)
+	if len(tweet.Media) > 0 {
+		sb.WriteString("---\n\n## Attached Media\n\n")
+		for _, m := range tweet.Media {
+			if m.LocalPath != "" {
+				relPath := filepath.Base(m.LocalPath)
+				if m.Type == domain.MediaTypeImage {
+					sb.WriteString(fmt.Sprintf("![Image](media/%s)\n\n", relPath))
+				} else {
+					sb.WriteString(fmt.Sprintf("- [Video: %s](media/%s)\n", relPath, relPath))
+				}
+			}
+		}
+	}
+
+	// Show inline article images if present
+	if len(tweet.ArticleImages) > 0 {
+		sb.WriteString("---\n\n## Article Images\n\n")
+		for i, img := range tweet.ArticleImages {
+			if img.LocalPath != "" {
+				relPath := filepath.Base(img.LocalPath)
+				caption := img.Caption
+				if caption == "" && img.Alt != "" {
+					caption = img.Alt
+				}
+				if caption != "" {
+					sb.WriteString(fmt.Sprintf("![%s](images/%s)\n*%s*\n\n", caption, relPath, caption))
+				} else {
+					sb.WriteString(fmt.Sprintf("![Image %d](images/%s)\n\n", i+1, relPath))
+				}
+			}
+		}
+	}
+
+	sb.WriteString("\n---\n\n## Metrics\n\n")
+	sb.WriteString(fmt.Sprintf("- Likes: %d\n", tweet.Metrics.Likes))
+	sb.WriteString(fmt.Sprintf("- Retweets: %d\n", tweet.Metrics.Retweets))
+	sb.WriteString(fmt.Sprintf("- Replies: %d\n", tweet.Metrics.Replies))
+	if tweet.Metrics.Views > 0 {
+		sb.WriteString(fmt.Sprintf("- Views: %d\n", tweet.Metrics.Views))
+	}
+
+	archivedAt := time.Now()
+	if tweet.ArchivedAt != nil {
+		archivedAt = *tweet.ArchivedAt
+	}
+	sb.WriteString(fmt.Sprintf("\n---\n\n*Article archived on %s by XGrabba*\n", archivedAt.Format("January 2, 2006")))
 
 	return sb.String()
 }

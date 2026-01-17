@@ -83,6 +83,11 @@ type TweetResponse struct {
 	ArchivePath   string    `json:"archive_path,omitempty"`
 	Error         string    `json:"error,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
+	// Article-specific fields (when content_type == "article")
+	ContentType    string `json:"content_type,omitempty"`
+	ArticleTitle   string `json:"article_title,omitempty"`
+	WordCount      int    `json:"word_count,omitempty"`
+	ReadingMinutes int    `json:"reading_minutes,omitempty"`
 }
 
 // MediaPreview represents a media item in list responses for thumbnails.
@@ -301,6 +306,11 @@ func (h *TweetHandler) buildTweetListResponse(tweets []*domain.Tweet, total, lim
 			ArchivePath:       t.ArchivePath,
 			Error:             t.Error,
 			CreatedAt:         t.CreatedAt,
+			// Article fields
+			ContentType:    string(t.ContentType),
+			ArticleTitle:   t.ArticleTitle,
+			WordCount:      t.WordCount,
+			ReadingMinutes: t.ReadingMinutes,
 		}
 		response.Tweets = append(response.Tweets, tr)
 	}

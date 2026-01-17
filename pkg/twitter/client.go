@@ -349,6 +349,10 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// derive it from the URL so the archive remains human-friendly.
 		applyAuthorFromURL(tweet, tweetURL)
 		tweet.Text = normalizeTweetText(tweet.Text)
+
+		// Detect and populate article fields if this is long-form content
+		c.detectAndPopulateArticleFields(tweet)
+
 		return tweet, nil
 	}
 
@@ -360,6 +364,8 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// If we still don't have an avatar URL, try a profile-page fallback.
 		// This is useful when API endpoints are blocked but the public profile HTML loads.
 		c.enrichAvatarFromProfilePage(ctx, tweet)
+		// Detect and populate article fields if this is long-form content
+		c.detectAndPopulateArticleFields(tweet)
 		tweet.Text = normalizeTweetText(tweet.Text)
 		return tweet, nil
 	}
@@ -557,8 +563,82 @@ func (c *Client) isTextTruncated(text string) bool {
 
 // syndicationResult wraps the tweet and metadata from syndication API.
 type syndicationResult struct {
-	Tweet      *domain.Tweet
+	Tweet       *domain.Tweet
 	IsNoteTweet bool // True if this is a long-form tweet (note_tweet field present)
+	IsArticle   bool // True if this appears to be a full article (very long content)
+}
+
+// articleTextThreshold is the character count above which we consider content to be an Article.
+// X Premium "note tweets" can be up to 25,000 chars; Articles can go to 100,000+.
+// We use a lower threshold since even shorter long-form content should be treated as article-like.
+const articleTextThreshold = 2000
+
+// detectAndPopulateArticleFields checks if a tweet should be classified as an article
+// and populates article-specific fields if so.
+func (c *Client) detectAndPopulateArticleFields(tweet *domain.Tweet) {
+	// Default to tweet content type
+	if tweet.ContentType == "" {
+		tweet.ContentType = domain.ContentTypeTweet
+	}
+
+	textLen := len(tweet.Text)
+
+	// Check if this is an article based on text length
+	if textLen >= articleTextThreshold {
+		tweet.ContentType = domain.ContentTypeArticle
+
+		// Calculate word count (rough approximation)
+		words := strings.Fields(tweet.Text)
+		tweet.WordCount = len(words)
+
+		// Calculate reading time (200 words per minute)
+		tweet.ReadingMinutes = tweet.CalculateReadingTime()
+
+		// Extract article title from first paragraph/line
+		// Articles typically have a title as the first line
+		tweet.ArticleTitle = extractArticleTitle(tweet.Text)
+
+		// Store the body text (for Articles, body is the full text)
+		tweet.ArticleBody = tweet.Text
+
+		c.logger.Info("detected article content",
+			"tweet_id", tweet.ID,
+			"text_len", textLen,
+			"word_count", tweet.WordCount,
+			"reading_minutes", tweet.ReadingMinutes,
+			"title", tweet.ArticleTitle,
+		)
+	}
+}
+
+// extractArticleTitle extracts a title from the article text.
+// It looks for the first line/paragraph and uses it as the title.
+func extractArticleTitle(text string) string {
+	// Split by double newlines (paragraphs) first
+	paragraphs := strings.Split(text, "\n\n")
+	if len(paragraphs) > 0 {
+		firstPara := strings.TrimSpace(paragraphs[0])
+		// If first paragraph is short (likely a title), use it
+		if len(firstPara) > 0 && len(firstPara) <= 200 {
+			// Clean up the title - remove trailing punctuation if it looks like a headline
+			return strings.TrimSpace(firstPara)
+		}
+	}
+
+	// Fall back to first line
+	lines := strings.Split(text, "\n")
+	if len(lines) > 0 {
+		firstLine := strings.TrimSpace(lines[0])
+		if len(firstLine) > 0 && len(firstLine) <= 200 {
+			return firstLine
+		}
+		// If first line is too long, truncate and add ellipsis
+		if len(firstLine) > 200 {
+			return firstLine[:197] + "..."
+		}
+	}
+
+	return ""
 }
 
 // fetchFromSyndication uses Twitter's public syndication API.
@@ -1069,7 +1149,36 @@ type graphQLTweetResult struct {
 	NoteTweet struct {
 		NoteTweetResults struct {
 			Result struct {
-				Text string `json:"text"`
+				Text         string `json:"text"`
+				ID           string `json:"id"`
+				EntitySet    struct {
+					UserMentions []struct {
+						IDStr      string `json:"id_str"`
+						ScreenName string `json:"screen_name"`
+					} `json:"user_mentions"`
+					URLs []struct {
+						DisplayURL  string `json:"display_url"`
+						ExpandedURL string `json:"expanded_url"`
+						URL         string `json:"url"`
+					} `json:"urls"`
+					Media []struct {
+						IDStr         string `json:"id_str"`
+						MediaURLHTTPS string `json:"media_url_https"`
+						Type          string `json:"type"`
+						ExtAltText    string `json:"ext_alt_text"`
+						OriginalInfo  struct {
+							Width  int `json:"width"`
+							Height int `json:"height"`
+						} `json:"original_info"`
+					} `json:"media"`
+				} `json:"entity_set"`
+				Richtext struct {
+					RichtextTags []struct {
+						FromIndex   int      `json:"from_index"`
+						ToIndex     int      `json:"to_index"`
+						RichtextTypes []string `json:"richtext_types"`
+					} `json:"richtext_tags"`
+				} `json:"richtext"`
 			} `json:"result"`
 		} `json:"note_tweet_results"`
 	} `json:"note_tweet"`

@@ -57,6 +57,15 @@ type Tweet struct {
 	AITopics      []string // AI-detected main topics
 	CreatedAt     time.Time
 	ArchivedAt    *time.Time
+
+	// Article-specific fields (when ContentType == "article")
+	ContentType    ContentType    // "tweet" or "article"
+	ArticleTitle   string         // Article headline/title (distinct from AI-generated title)
+	ArticleHTML    string         // Original HTML content from X
+	ArticleBody    string         // Plain text or markdown version of article body
+	ArticleImages  []ArticleImage // Inline images within the article body
+	WordCount      int            // Word count for articles
+	ReadingMinutes int            // Estimated reading time
 }
 
 // Author represents the tweet author with metadata captured at archival time.
@@ -104,6 +113,19 @@ type Media struct {
 	EssayWordCount int   `json:"essay_word_count,omitempty"` // Word count of the essay
 }
 
+// ArticleImage represents an inline image within an article body.
+type ArticleImage struct {
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	LocalPath  string `json:"local_path,omitempty"`
+	Alt        string `json:"alt,omitempty"`
+	Caption    string `json:"caption,omitempty"`
+	Position   int    `json:"position"`  // Order/position in article
+	Width      int    `json:"width,omitempty"`
+	Height     int    `json:"height,omitempty"`
+	Downloaded bool   `json:"downloaded"`
+}
+
 // MediaType represents the type of media.
 type MediaType string
 
@@ -111,6 +133,14 @@ const (
 	MediaTypeImage MediaType = "image"
 	MediaTypeVideo MediaType = "video"
 	MediaTypeGIF   MediaType = "gif"
+)
+
+// ContentType distinguishes between regular tweets and long-form articles.
+type ContentType string
+
+const (
+	ContentTypeTweet   ContentType = "tweet"
+	ContentTypeArticle ContentType = "article"
 )
 
 // TweetMetrics contains engagement metrics.
@@ -150,6 +180,15 @@ type StoredTweet struct {
 	AITags        []string `json:"ai_tags,omitempty"`
 	AIContentType string   `json:"ai_content_type,omitempty"`
 	AITopics      []string `json:"ai_topics,omitempty"`
+
+	// Article-specific fields (when content_type == "article")
+	ContentType    string         `json:"content_type,omitempty"`
+	ArticleTitle   string         `json:"article_title,omitempty"`
+	ArticleHTML    string         `json:"article_html,omitempty"`
+	ArticleBody    string         `json:"article_body,omitempty"`
+	ArticleImages  []ArticleImage `json:"article_images,omitempty"`
+	WordCount      int            `json:"word_count,omitempty"`
+	ReadingMinutes int            `json:"reading_minutes,omitempty"`
 }
 
 // ToStoredTweet converts a Tweet to StoredTweet for JSON serialization.
@@ -180,6 +219,14 @@ func (t *Tweet) ToStoredTweet() StoredTweet {
 		AITags:          t.AITags,
 		AIContentType:   t.AIContentType,
 		AITopics:        t.AITopics,
+		// Article fields
+		ContentType:    string(t.ContentType),
+		ArticleTitle:   t.ArticleTitle,
+		ArticleHTML:    t.ArticleHTML,
+		ArticleBody:    t.ArticleBody,
+		ArticleImages:  t.ArticleImages,
+		WordCount:      t.WordCount,
+		ReadingMinutes: t.ReadingMinutes,
 	}
 
 	if t.ReplyTo != nil {
@@ -215,4 +262,21 @@ func (t *Tweet) HasImages() bool {
 		}
 	}
 	return false
+}
+
+// IsArticle returns true if this is a long-form article rather than a regular tweet.
+func (t *Tweet) IsArticle() bool {
+	return t.ContentType == ContentTypeArticle
+}
+
+// CalculateReadingTime estimates reading time based on word count (200 words per minute).
+func (t *Tweet) CalculateReadingTime() int {
+	if t.WordCount <= 0 {
+		return 0
+	}
+	minutes := t.WordCount / 200
+	if minutes < 1 {
+		return 1
+	}
+	return minutes
 }
