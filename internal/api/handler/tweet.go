@@ -86,6 +86,7 @@ type TweetResponse struct {
 	// Article-specific fields (when content_type == "article")
 	ContentType    string `json:"content_type,omitempty"`
 	ArticleTitle   string `json:"article_title,omitempty"`
+	ArticleBody    string `json:"article_body,omitempty"`
 	WordCount      int    `json:"word_count,omitempty"`
 	ReadingMinutes int    `json:"reading_minutes,omitempty"`
 }
@@ -309,6 +310,7 @@ func (h *TweetHandler) buildTweetListResponse(tweets []*domain.Tweet, total, lim
 			// Article fields
 			ContentType:    string(t.ContentType),
 			ArticleTitle:   t.ArticleTitle,
+			ArticleBody:    t.ArticleBody,
 			WordCount:      t.WordCount,
 			ReadingMinutes: t.ReadingMinutes,
 		}
