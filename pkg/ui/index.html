@@ -4540,30 +4540,12 @@
         /* =============================================
            EXPORT BUTTON
            ============================================= */
-        .export-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: transparent;
-            border: 1px solid var(--border-subtle);
-            color: var(--text-secondary);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
-            position: relative;
-        }
-
-        .export-btn:hover {
-            background: var(--bg-hover);
-            border-color: var(--border-color);
-            color: var(--text-primary);
-        }
-
-        .export-btn svg.export-icon {
+        /* Note: .export-btn is used with .header-btn which provides base styling.
+           These rules only add export-specific behavior (animation states). */
+        .export-btn svg {
             width: 18px;
             height: 18px;
+            flex-shrink: 0;
         }
 
         .export-btn.exporting {
