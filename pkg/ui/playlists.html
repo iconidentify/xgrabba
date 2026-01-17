@@ -1016,7 +1016,7 @@ function renderPlaylistList() {
             </div>
             <div class="playlist-info">
                 <div class="playlist-name">${escapeHtml(p.name)}</div>
-                <div class="playlist-meta">${p.item_count || 0} items</div>
+                <div class="playlist-meta">${p.items?.length || p.item_count || 0} items</div>
             </div>
         </div>
     `).join('');
@@ -1091,7 +1091,8 @@ function getThumbnailUrl(tweet) {
     if (!tweet.media || tweet.media.length === 0) return null;
     const media = tweet.media[0];
     if (OFFLINE_MODE) {
-        return media.thumbnail_url || media.url;
+        // Exported data uses thumbnail_path and local_path (not thumbnail_url and url)
+        return media.thumbnail_path || media.thumbnail_url || media.local_path || media.url;
     }
     const filename = (media.thumbnail_url || media.url || '').split('/').pop();
     return filename ? `/api/v1/tweets/${tweet.tweet_id}/media/${filename}?key=${API_KEY}` : null;
