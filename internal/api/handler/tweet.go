@@ -675,6 +675,7 @@ type MediaFileResponse struct {
 	Type               string   `json:"type"`
 	Size               int64    `json:"size"`
 	URL                string   `json:"url"`
+	ThumbnailURL       string   `json:"thumbnail_url,omitempty"`
 	ContentType        string   `json:"content_type"`
 	Width              int      `json:"width,omitempty"`
 	Height             int      `json:"height,omitempty"`
@@ -686,11 +687,11 @@ type MediaFileResponse struct {
 	AIContentType      string   `json:"ai_content_type,omitempty"`
 	AITopics           []string `json:"ai_topics,omitempty"`
 	// Essay fields
-	Essay         string `json:"essay,omitempty"`
-	EssayTitle    string `json:"essay_title,omitempty"`
-	EssayStatus   string `json:"essay_status,omitempty"`
-	EssayError    string `json:"essay_error,omitempty"`
-	EssayWordCount int   `json:"essay_word_count,omitempty"`
+	Essay          string `json:"essay,omitempty"`
+	EssayTitle     string `json:"essay_title,omitempty"`
+	EssayStatus    string `json:"essay_status,omitempty"`
+	EssayError     string `json:"essay_error,omitempty"`
+	EssayWordCount int    `json:"essay_word_count,omitempty"`
 }
 
 // MediaListResponse contains the list of media files.
@@ -877,24 +878,34 @@ func (h *TweetHandler) GetFull(w http.ResponseWriter, r *http.Request) {
 			size = info.Size()
 		}
 
+		mediaURL := fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename)
 		mediaResp := MediaFileResponse{
-			Filename:      filename,
-			Type:          string(m.Type),
-			URL:           fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, filename),
-			ContentType:   getContentTypeFromMediaType(m.Type),
-			Size:          size,
-			Width:         m.Width,
-			Height:        m.Height,
-			Duration:      m.Duration,
-			AICaption:     m.AICaption,
-			AITags:        m.AITags,
-			AIContentType: m.AIContentType,
-			AITopics:      m.AITopics,
-			Essay:         m.Essay,
-			EssayTitle:    m.EssayTitle,
-			EssayStatus:   m.EssayStatus,
-			EssayError:    m.EssayError,
+			Filename:       filename,
+			Type:           string(m.Type),
+			URL:            mediaURL,
+			ContentType:    getContentTypeFromMediaType(m.Type),
+			Size:           size,
+			Width:          m.Width,
+			Height:         m.Height,
+			Duration:       m.Duration,
+			AICaption:      m.AICaption,
+			AITags:         m.AITags,
+			AIContentType:  m.AIContentType,
+			AITopics:       m.AITopics,
+			Essay:          m.Essay,
+			EssayTitle:     m.EssayTitle,
+			EssayStatus:    m.EssayStatus,
+			EssayError:     m.EssayError,
 			EssayWordCount: m.EssayWordCount,
+		}
+		// Set thumbnail URL: for videos use the preview image, for images use the image itself
+		if m.Type == domain.MediaTypeVideo || m.Type == domain.MediaTypeGIF {
+			if m.PreviewURL != "" && filepath.IsAbs(m.PreviewURL) {
+				thumbFilename := filepath.Base(m.PreviewURL)
+				mediaResp.ThumbnailURL = fmt.Sprintf("/api/v1/tweets/%s/media/%s", tweetID, thumbFilename)
+			}
+		} else {
+			mediaResp.ThumbnailURL = mediaURL // For images, use the image itself
 		}
 		// Include transcript for videos
 		if m.Transcript != "" {
