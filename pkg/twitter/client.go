@@ -351,12 +351,6 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		applyAuthorFromURL(tweet, tweetURL)
 		tweet.Text = normalizeTweetText(tweet.Text)
 
-		// Detect and populate article fields if this is long-form content
-		c.detectAndPopulateArticleFields(tweet)
-
-		// Check if tweet contains t.co links to articles
-		c.checkAndFetchLinkedArticle(ctx, tweet)
-
 		return tweet, nil
 	}
 
@@ -368,10 +362,6 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// If we still don't have an avatar URL, try a profile-page fallback.
 		// This is useful when API endpoints are blocked but the public profile HTML loads.
 		c.enrichAvatarFromProfilePage(ctx, tweet)
-		// Detect and populate article fields if this is long-form content
-		c.detectAndPopulateArticleFields(tweet)
-		// Check if tweet contains t.co links to articles
-		c.checkAndFetchLinkedArticle(ctx, tweet)
 		tweet.Text = normalizeTweetText(tweet.Text)
 		return tweet, nil
 	}
@@ -572,99 +562,6 @@ type syndicationResult struct {
 	Tweet       *domain.Tweet
 	IsNoteTweet bool // True if this is a long-form tweet (note_tweet field present)
 	IsArticle   bool // True if this appears to be a full article (very long content)
-}
-
-// articleTextThreshold is the character count above which we consider content to be an Article.
-// X Premium "note tweets" can be up to 25,000 chars; Articles can go to 100,000+.
-// We use a lower threshold since even shorter long-form content should be treated as article-like.
-const articleTextThreshold = 2000
-
-// detectAndPopulateArticleFields checks if a tweet should be classified as an article
-// and populates article-specific fields if so.
-// This is called after GraphQL extraction, so it won't override existing article data.
-func (c *Client) detectAndPopulateArticleFields(tweet *domain.Tweet) {
-	// If already identified as an article from GraphQL, don't override
-	if tweet.ContentType == domain.ContentTypeArticle {
-		// Ensure we have article body if not already set
-		if tweet.ArticleBody == "" && tweet.Text != "" {
-			tweet.ArticleBody = tweet.Text
-		}
-		// Ensure word count and reading time are calculated
-		if tweet.WordCount == 0 && tweet.ArticleBody != "" {
-			words := strings.Fields(tweet.ArticleBody)
-			tweet.WordCount = len(words)
-			tweet.ReadingMinutes = tweet.CalculateReadingTime()
-		}
-		return
-	}
-
-	// Default to tweet content type
-	if tweet.ContentType == "" {
-		tweet.ContentType = domain.ContentTypeTweet
-	}
-
-	textLen := len(tweet.Text)
-
-	// Check if this is an article based on text length (fallback detection)
-	if textLen >= articleTextThreshold {
-		tweet.ContentType = domain.ContentTypeArticle
-
-		// Calculate word count (rough approximation)
-		words := strings.Fields(tweet.Text)
-		tweet.WordCount = len(words)
-
-		// Calculate reading time (200 words per minute)
-		tweet.ReadingMinutes = tweet.CalculateReadingTime()
-
-		// Extract article title from first paragraph/line
-		// Articles typically have a title as the first line
-		if tweet.ArticleTitle == "" {
-			tweet.ArticleTitle = extractArticleTitle(tweet.Text)
-		}
-
-		// Store the body text (for Articles, body is the full text)
-		if tweet.ArticleBody == "" {
-			tweet.ArticleBody = tweet.Text
-		}
-
-		c.logger.Info("detected article content via text length",
-			"tweet_id", tweet.ID,
-			"text_len", textLen,
-			"word_count", tweet.WordCount,
-			"reading_minutes", tweet.ReadingMinutes,
-			"title", tweet.ArticleTitle,
-		)
-	}
-}
-
-// extractArticleTitle extracts a title from the article text.
-// It looks for the first line/paragraph and uses it as the title.
-func extractArticleTitle(text string) string {
-	// Split by double newlines (paragraphs) first
-	paragraphs := strings.Split(text, "\n\n")
-	if len(paragraphs) > 0 {
-		firstPara := strings.TrimSpace(paragraphs[0])
-		// If first paragraph is short (likely a title), use it
-		if len(firstPara) > 0 && len(firstPara) <= 200 {
-			// Clean up the title - remove trailing punctuation if it looks like a headline
-			return strings.TrimSpace(firstPara)
-		}
-	}
-
-	// Fall back to first line
-	lines := strings.Split(text, "\n")
-	if len(lines) > 0 {
-		firstLine := strings.TrimSpace(lines[0])
-		if len(firstLine) > 0 && len(firstLine) <= 200 {
-			return firstLine
-		}
-		// If first line is too long, truncate and add ellipsis
-		if len(firstLine) > 200 {
-			return firstLine[:197] + "..."
-		}
-	}
-
-	return ""
 }
 
 // fetchFromSyndication uses Twitter's public syndication API.
@@ -1008,240 +905,6 @@ func ExtractTweetID(url string) string {
 	return ""
 }
 
-// ExtractArticleID extracts the article ID from X.com article URLs.
-func ExtractArticleID(url string) string {
-	// Match patterns like:
-	// https://x.com/i/article/1234567890
-	// https://twitter.com/i/article/1234567890
-	re := regexp.MustCompile(`(?:twitter\.com|x\.com)/i/article/(\d+)`)
-	matches := re.FindStringSubmatch(url)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
-}
-
-// IsArticleURL checks if a URL is a direct article URL.
-func IsArticleURL(url string) bool {
-	return ExtractArticleID(url) != ""
-}
-
-// IsTcoURL checks if a URL is a t.co shortened URL.
-func IsTcoURL(url string) bool {
-	return strings.Contains(url, "t.co/")
-}
-
-// ExpandTcoURL expands a t.co shortened URL to its destination.
-// Returns the expanded URL and any error.
-func (c *Client) ExpandTcoURL(ctx context.Context, tcoURL string) (string, error) {
-	if !IsTcoURL(tcoURL) {
-		return tcoURL, nil
-	}
-
-	// Create a client that doesn't follow redirects
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Timeout: 10 * time.Second,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "HEAD", tcoURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("expand t.co URL: %w", err)
-	}
-	defer resp.Body.Close()
-
-	c.logger.Debug("t.co expansion response",
-		"url", tcoURL,
-		"status", resp.StatusCode,
-		"location", resp.Header.Get("Location"),
-	)
-
-	// Check for redirect
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		location := resp.Header.Get("Location")
-		if location != "" {
-			return location, nil
-		}
-	}
-
-	// If HEAD didn't give us a redirect, try GET and parse the HTML
-	// t.co often returns a 200 with JavaScript redirect
-	req, err = http.NewRequestWithContext(ctx, "GET", tcoURL, nil)
-	if err != nil {
-		return tcoURL, nil
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp2, err := client.Do(req)
-	if err != nil {
-		return tcoURL, nil
-	}
-	defer resp2.Body.Close()
-
-	c.logger.Debug("t.co expansion GET response",
-		"url", tcoURL,
-		"status", resp2.StatusCode,
-		"location", resp2.Header.Get("Location"),
-	)
-
-	// Check for HTTP redirect first
-	if resp2.StatusCode >= 300 && resp2.StatusCode < 400 {
-		location := resp2.Header.Get("Location")
-		if location != "" {
-			return location, nil
-		}
-	}
-
-	// If 200, parse the HTML for the redirect URL
-	if resp2.StatusCode == 200 {
-		body, err := io.ReadAll(io.LimitReader(resp2.Body, 64*1024)) // 64KB limit
-		if err == nil {
-			htmlContent := string(body)
-
-			// Look for meta refresh tag
-			// Pattern: <meta http-equiv="refresh" content="0;URL=https://..." />
-			metaRefreshRe := regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["']?[0-9]+;?\s*URL=["']?([^"'\s>]+)`)
-			if matches := metaRefreshRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-				c.logger.Debug("found meta refresh redirect", "url", matches[1])
-				return html.UnescapeString(matches[1]), nil
-			}
-
-			// Look for window.location or document.location redirects
-			// Pattern: window.location = "https://..." or window.location.href = "..."
-			jsRedirectRe := regexp.MustCompile(`(?i)(?:window|document)\.location(?:\.href)?\s*=\s*["']([^"']+)["']`)
-			if matches := jsRedirectRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-				c.logger.Debug("found JS redirect", "url", matches[1])
-				return html.UnescapeString(matches[1]), nil
-			}
-
-			// Look for og:url meta tag (often contains the canonical URL)
-			ogURLRe := regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["']?og:url["']?[^>]+content=["']([^"']+)["']`)
-			if matches := ogURLRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-				c.logger.Debug("found og:url", "url", matches[1])
-				return html.UnescapeString(matches[1]), nil
-			}
-
-			// Look for URL attribute in HTML (t.co specific pattern)
-			// Pattern: <noscript><META http-equiv="refresh" content="0;URL=...">
-			// or title tag with URL
-			urlAttrRe := regexp.MustCompile(`(?i)URL=["']?([^"'\s>]+)`)
-			if matches := urlAttrRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-				expandedURL := html.UnescapeString(matches[1])
-				// Make sure it's not the same t.co URL
-				if expandedURL != tcoURL && !strings.Contains(expandedURL, "t.co/") {
-					c.logger.Debug("found URL attribute", "url", expandedURL)
-					return expandedURL, nil
-				}
-			}
-		}
-	}
-
-	return tcoURL, nil
-}
-
-// ExtractTcoURLs extracts all t.co URLs from text.
-func ExtractTcoURLs(text string) []string {
-	re := regexp.MustCompile(`https?://t\.co/[a-zA-Z0-9]+`)
-	return re.FindAllString(text, -1)
-}
-
-// checkAndFetchLinkedArticle checks if the tweet contains t.co links that point to articles
-// and fetches article content if found.
-func (c *Client) checkAndFetchLinkedArticle(ctx context.Context, tweet *domain.Tweet) {
-	if tweet == nil {
-		return
-	}
-
-	// Skip if already identified as an article
-	if tweet.ContentType == domain.ContentTypeArticle {
-		return
-	}
-
-	// Extract t.co URLs from tweet text
-	tcoURLs := ExtractTcoURLs(tweet.Text)
-	if len(tcoURLs) == 0 {
-		return
-	}
-
-	// Try to expand each t.co URL and check for article links
-	for _, tcoURL := range tcoURLs {
-		expandedURL, err := c.ExpandTcoURL(ctx, tcoURL)
-		if err != nil {
-			c.logger.Debug("failed to expand t.co URL", "url", tcoURL, "error", err)
-			continue
-		}
-
-		// Check if the expanded URL is an article
-		if IsArticleURL(expandedURL) {
-			articleID := ExtractArticleID(expandedURL)
-			c.logger.Info("found article link in tweet",
-				"tweet_id", tweet.ID,
-				"article_url", expandedURL,
-				"article_id", articleID,
-			)
-
-			// Try to fetch article content
-			if err := c.fetchAndPopulateArticle(ctx, tweet, articleID, expandedURL); err != nil {
-				c.logger.Warn("failed to fetch linked article",
-					"tweet_id", tweet.ID,
-					"article_id", articleID,
-					"error", err,
-				)
-			}
-			return // Only process first article found
-		}
-	}
-}
-
-// fetchAndPopulateArticle fetches article content and populates the tweet with article data.
-// This is called when a tweet contains a link to an X article.
-func (c *Client) fetchAndPopulateArticle(ctx context.Context, tweet *domain.Tweet, articleID, articleURL string) error {
-	// Mark as article even if we can't fetch full content
-	tweet.ContentType = domain.ContentTypeArticle
-
-	// Try to fetch article via TweetDetail GraphQL endpoint
-	// Strategy: try both the linking tweet ID and the article ID
-	// The TweetDetail endpoint works best with the tweet that contains/links to the article
-	tweetID := string(tweet.ID)
-	articleContent, err := c.fetchArticleContentWithTweetID(ctx, tweetID, articleID)
-	if err != nil {
-		return err
-	}
-
-	// Populate article fields
-	if articleContent.Title != "" {
-		tweet.ArticleTitle = articleContent.Title
-	}
-	if articleContent.Body != "" {
-		tweet.ArticleBody = articleContent.Body
-		// Calculate word count and reading time
-		words := strings.Fields(tweet.ArticleBody)
-		tweet.WordCount = len(words)
-		tweet.ReadingMinutes = tweet.CalculateReadingTime()
-	}
-	if len(articleContent.Images) > 0 {
-		tweet.ArticleImages = articleContent.Images
-	}
-
-	c.logger.Info("successfully fetched article content",
-		"tweet_id", tweet.ID,
-		"article_id", articleID,
-		"title", tweet.ArticleTitle,
-		"word_count", tweet.WordCount,
-		"image_count", len(tweet.ArticleImages),
-	)
-
-	return nil
-}
-
 // articleContent holds fetched article data
 type articleContent struct {
 	Title  string
@@ -1249,157 +912,44 @@ type articleContent struct {
 	Images []domain.ArticleImage
 }
 
-// fetchArticleContentWithTweetID attempts to fetch article content using both the linking tweet ID
-// and the article ID. The TweetDetail endpoint works best with the tweet that contains/links to the article.
-func (c *Client) fetchArticleContentWithTweetID(ctx context.Context, tweetID, articleID string) (*articleContent, error) {
-	// Approach 1: Try TweetDetail with the linking tweet ID
-	// This is the most reliable approach - the tweet that links to an article contains
-	// the article data in its response when fetched via TweetDetail with withArticleRichContentState=true
-	if tweetID != "" && tweetID != articleID {
-		content, err := c.fetchArticleViaTweetDetail(ctx, tweetID)
-		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
-			c.logger.Info("fetched article via TweetDetail using linking tweet ID",
-				"tweet_id", tweetID,
-				"article_id", articleID,
-				"has_title", content.Title != "",
-				"body_len", len(content.Body),
-				"image_count", len(content.Images),
-			)
-			return content, nil
-		}
-		if err != nil {
-			c.logger.Debug("TweetDetail with linking tweet failed, trying article ID",
-				"tweet_id", tweetID,
-				"error", err,
-			)
-		}
+// enrichArticleContent fetches full article content via TweetDetail and populates the tweet.
+// This is called when a tweet is detected as an article to get the full content_state.
+func (c *Client) enrichArticleContent(ctx context.Context, tweet *domain.Tweet) {
+	if tweet == nil || tweet.ContentType != domain.ContentTypeArticle {
+		return
 	}
 
-	// Approach 2: Try TweetDetail with the article ID directly
-	// Articles in X are associated with their own tweet IDs
-	if articleID != "" {
-		content, err := c.fetchArticleViaTweetDetail(ctx, articleID)
-		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
-			c.logger.Info("fetched article via TweetDetail using article ID",
-				"article_id", articleID,
-				"has_title", content.Title != "",
-				"body_len", len(content.Body),
-				"image_count", len(content.Images),
-			)
-			return content, nil
-		}
-		if err != nil {
-			c.logger.Debug("TweetDetail with article ID failed, trying GraphQL",
-				"article_id", articleID,
-				"error", err,
-			)
-		}
-	}
-
-	// Approach 3: Try fetching the article as if it were a regular tweet
-	// This might work for some articles but won't include full content_state
-	if articleID != "" {
-		tweet, err := c.fetchFromGraphQL(ctx, articleID)
-		if err == nil && tweet != nil {
-			content := &articleContent{}
-			if tweet.ArticleTitle != "" {
-				content.Title = tweet.ArticleTitle
-			}
-			if tweet.Text != "" && len(tweet.Text) > 100 {
-				content.Body = tweet.Text
-			}
-			if content.Title != "" || content.Body != "" {
-				c.logger.Info("fetched article via GraphQL tweet endpoint",
-					"article_id", articleID,
-					"has_title", content.Title != "",
-					"body_len", len(content.Body),
-				)
-				return content, nil
-			}
-		}
-	}
-
-	// Approach 4: Try to scrape the article page
-	// X article pages load content via JavaScript, so this is unreliable
-	if articleID != "" {
-		content, err := c.scrapeArticlePage(ctx, articleID)
-		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
-			return content, nil
-		}
-	}
-
-	return nil, fmt.Errorf("unable to fetch article content via available methods")
-}
-
-// fetchArticleContent attempts to fetch article content using just the article ID.
-// For better results, use fetchArticleContentWithTweetID which also tries the linking tweet ID.
-func (c *Client) fetchArticleContent(ctx context.Context, articleID string) (*articleContent, error) {
-	return c.fetchArticleContentWithTweetID(ctx, "", articleID)
-}
-
-// scrapeArticlePage attempts to scrape article content from the X article page.
-// This is a fallback when API endpoints don't work.
-func (c *Client) scrapeArticlePage(ctx context.Context, articleID string) (*articleContent, error) {
-	articleURL := fmt.Sprintf("https://x.com/i/article/%s", articleID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", articleURL, nil)
+	tweetID := string(tweet.ID)
+	content, err := c.fetchArticleViaTweetDetail(ctx, tweetID)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch article page: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("article page returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2MB limit
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	htmlContent := string(body)
-	content := &articleContent{}
-
-	// Try to extract title from og:title meta tag
-	titleRe := regexp.MustCompile(`<meta[^>]+(?:property|name)=["']og:title["'][^>]+content=["']([^"']+)["']`)
-	if matches := titleRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-		content.Title = html.UnescapeString(matches[1])
-	}
-
-	// Try to extract description from og:description meta tag
-	descRe := regexp.MustCompile(`<meta[^>]+(?:property|name)=["']og:description["'][^>]+content=["']([^"']+)["']`)
-	if matches := descRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-		content.Body = html.UnescapeString(matches[1])
-	}
-
-	// Try to extract cover image from og:image meta tag
-	imageRe := regexp.MustCompile(`<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']`)
-	if matches := imageRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
-		content.Images = append(content.Images, domain.ArticleImage{
-			ID:       articleID + "_cover",
-			URL:      matches[1],
-			Position: 0,
-		})
-	}
-
-	if content.Title != "" || content.Body != "" {
-		c.logger.Info("scraped article metadata from page",
-			"article_id", articleID,
-			"title", content.Title,
-			"body_preview", truncateText(content.Body, 100),
+		c.logger.Debug("failed to fetch full article content via TweetDetail",
+			"tweet_id", tweetID,
+			"error", err,
 		)
-		return content, nil
+		return
 	}
 
-	return nil, fmt.Errorf("no article content found in page HTML")
+	// Update article fields with full content
+	if content.Title != "" {
+		tweet.ArticleTitle = content.Title
+	}
+	if content.Body != "" {
+		tweet.ArticleBody = content.Body
+		words := strings.Fields(tweet.ArticleBody)
+		tweet.WordCount = len(words)
+		tweet.ReadingMinutes = tweet.CalculateReadingTime()
+	}
+	if len(content.Images) > 0 {
+		tweet.ArticleImages = content.Images
+	}
+
+	c.logger.Info("enriched article with full content from TweetDetail",
+		"tweet_id", tweetID,
+		"title", tweet.ArticleTitle,
+		"body_length", len(tweet.ArticleBody),
+		"word_count", tweet.WordCount,
+		"image_count", len(tweet.ArticleImages),
+	)
 }
 
 func truncateText(s string, max int) string {
@@ -2268,7 +1818,17 @@ func (c *Client) fetchFromGraphQLWithRetry(ctx context.Context, tweetID string, 
 		"features_source", featuresSource,
 	)
 
-	return c.parseGraphQLResponse(tweetID, &gqlResp)
+	tweet, err := c.parseGraphQLResponse(tweetID, &gqlResp)
+	if err != nil {
+		return nil, err
+	}
+
+	// If this is an article, fetch full content via TweetDetail
+	if tweet.ContentType == domain.ContentTypeArticle {
+		c.enrichArticleContent(ctx, tweet)
+	}
+
+	return tweet, nil
 }
 
 func (c *Client) parseGraphQLResponse(tweetID string, resp *graphQLResponse) (*domain.Tweet, error) {
