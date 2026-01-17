@@ -608,6 +608,17 @@ func (s *TweetService) processPhase1Fetch(ctx context.Context, tweet *domain.Twe
 	tweet.QuotedTweet = fetchedTweet.QuotedTweet
 	tweet.MediaTotal = len(fetchedTweet.Media)
 
+	// Merge article fields if this is an article
+	if fetchedTweet.ContentType == domain.ContentTypeArticle {
+		tweet.ContentType = fetchedTweet.ContentType
+		tweet.ArticleTitle = fetchedTweet.ArticleTitle
+		tweet.ArticleBody = fetchedTweet.ArticleBody
+		tweet.ArticleHTML = fetchedTweet.ArticleHTML
+		tweet.ArticleImages = fetchedTweet.ArticleImages
+		tweet.WordCount = fetchedTweet.WordCount
+		tweet.ReadingMinutes = fetchedTweet.ReadingMinutes
+	}
+
 	logger.Info("tweet metadata fetched",
 		"author", tweet.Author.Username,
 		"media_count", len(tweet.Media),
@@ -1371,6 +1382,17 @@ func (s *TweetService) Resync(ctx context.Context, tweetID domain.TweetID) error
 	if len(tweet.Media) == 0 && len(fetchedTweet.Media) > 0 {
 		tweet.Media = fetchedTweet.Media
 		tweet.MediaTotal = len(fetchedTweet.Media)
+	}
+
+	// Merge article fields if this is an article
+	if fetchedTweet.ContentType == domain.ContentTypeArticle {
+		tweet.ContentType = fetchedTweet.ContentType
+		tweet.ArticleTitle = fetchedTweet.ArticleTitle
+		tweet.ArticleBody = fetchedTweet.ArticleBody
+		tweet.ArticleHTML = fetchedTweet.ArticleHTML
+		tweet.ArticleImages = fetchedTweet.ArticleImages
+		tweet.WordCount = fetchedTweet.WordCount
+		tweet.ReadingMinutes = fetchedTweet.ReadingMinutes
 	}
 
 	s.logger.Info("tweet data resynced",
