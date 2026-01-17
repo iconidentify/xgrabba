@@ -10,12 +10,59 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  # Build all binaries in parallel using matrix strategy
+  build-binaries:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-
+    strategy:
+      matrix:
+        include:
+          # Server binaries
+          - goos: linux
+            goarch: amd64
+            binary: xgrabba-linux-amd64
+            cmd: server
+          - goos: linux
+            goarch: arm64
+            binary: xgrabba-linux-arm64
+            cmd: server
+          - goos: darwin
+            goarch: amd64
+            binary: xgrabba-darwin-amd64
+            cmd: server
+          - goos: darwin
+            goarch: arm64
+            binary: xgrabba-darwin-arm64
+            cmd: server
+          - goos: windows
+            goarch: amd64
+            binary: xgrabba-windows-amd64.exe
+            cmd: server
+          # USB Manager binaries
+          - goos: linux
+            goarch: amd64
+            binary: xgrabba-usb-manager-linux-amd64
+            cmd: usb-manager
+          - goos: linux
+            goarch: arm64
+            binary: xgrabba-usb-manager-linux-arm64
+            cmd: usb-manager
+          # Viewer binaries
+          - goos: linux
+            goarch: amd64
+            binary: xgrabba-viewer-linux
+            cmd: viewer
+          - goos: darwin
+            goarch: amd64
+            binary: xgrabba-viewer-mac-amd64
+            cmd: viewer
+          - goos: darwin
+            goarch: arm64
+            binary: xgrabba-viewer-mac-arm64
+            cmd: viewer
+          - goos: windows
+            goarch: amd64
+            binary: xgrabba-viewer.exe
+            cmd: viewer
     steps:
       - uses: actions/checkout@v4
 
@@ -23,42 +70,62 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
-      - name: Build binaries
+      - name: Build binary
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+            -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" \
+            -o dist/${{ matrix.binary }} \
+            ./cmd/${{ matrix.cmd }}
 
-          # Main server binaries
-          # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-linux-amd64 ./cmd/server
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: dist/${{ matrix.binary }}
+          retention-days: 1
 
-          # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-linux-arm64 ./cmd/server
-
-          # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-darwin-amd64 ./cmd/server
-
-          # macOS ARM64
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-darwin-arm64 ./cmd/server
-
-          # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-windows-amd64.exe ./cmd/server
-
-          # USB Manager binary (Linux only - for Kubernetes)
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-usb-manager-linux-amd64 ./cmd/usb-manager
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-usb-manager-linux-arm64 ./cmd/usb-manager
-
-          # Viewer binaries (for offline USB archive viewing)
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-viewer-linux ./cmd/viewer
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-viewer-mac-amd64 ./cmd/viewer
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-viewer-mac-arm64 ./cmd/viewer
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" -o dist/xgrabba-viewer.exe ./cmd/viewer
+  # Package extension (runs in parallel with binaries)
+  package-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Package extension
         run: |
+          mkdir -p dist
           cd extension
           zip -r ../dist/xgrabba-extension.zip .
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgrabba-extension.zip
+          path: dist/xgrabba-extension.zip
+          retention-days: 1
+
+  # Build Docker images in parallel (with caching)
+  build-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            image_suffix: ""
+          - dockerfile: Dockerfile.usb-manager
+            image_suffix: "-usb-manager"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -71,62 +138,50 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.dockerfile }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.dockerfile }}
           build-args: |
             VERSION=${{ github.ref_name }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
-      - name: Extract metadata for USB Manager Docker
-        id: meta-usb
-        uses: docker/metadata-action@v5
+  # Create GitHub release with all artifacts
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build-binaries, package-extension]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-usb-manager
+          path: dist
+          merge-multiple: true
 
-      - name: Build and push USB Manager Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.usb-manager
-          push: true
-          tags: ${{ steps.meta-usb.outputs.tags }}
-          labels: ${{ steps.meta-usb.outputs.labels }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+      - name: List artifacts
+        run: ls -la dist/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/xgrabba-linux-amd64
-            dist/xgrabba-linux-arm64
-            dist/xgrabba-darwin-amd64
-            dist/xgrabba-darwin-arm64
-            dist/xgrabba-windows-amd64.exe
-            dist/xgrabba-usb-manager-linux-amd64
-            dist/xgrabba-usb-manager-linux-arm64
-            dist/xgrabba-viewer-linux
-            dist/xgrabba-viewer-mac-amd64
-            dist/xgrabba-viewer-mac-arm64
-            dist/xgrabba-viewer.exe
-            dist/xgrabba-extension.zip
+          files: dist/*
           generate_release_notes: true
 
+  # Helm chart release (can run in parallel with Docker)
   helm-release:
     runs-on: ubuntu-latest
-    needs: build-and-push
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -136,15 +191,10 @@ jobs:
       - name: Log in to Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Package Helm chart
+      - name: Package and push Helm chart
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          # appVersion includes 'v' prefix to match Docker image tag
           sed -i "s/^version:.*/version: $VERSION/" deployments/helm/xgrabba/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"v$VERSION\"/" deployments/helm/xgrabba/Chart.yaml
           helm package deployments/helm/xgrabba
-
-      - name: Push Helm chart to OCI registry
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
           helm push xgrabba-$VERSION.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
