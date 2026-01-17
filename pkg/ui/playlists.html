@@ -1483,6 +1483,13 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// In offline mode, fix navigation links to use .html extensions
+if (OFFLINE_MODE) {
+    document.querySelectorAll('.nav-link[href="/"]').forEach(el => el.href = 'index.html');
+    document.querySelectorAll('.nav-link[href="/videos"]').forEach(el => el.href = 'videos.html');
+    document.querySelectorAll('.nav-link[href="/playlists"]').forEach(el => el.href = 'playlists.html');
+}
+
 // Init
 loadPlaylists();
     </script>

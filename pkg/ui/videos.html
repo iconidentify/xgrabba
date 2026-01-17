@@ -1553,10 +1553,13 @@ if (!OFFLINE_MODE && API_KEY) {
     document.getElementById('eventsLink').href = '/admin/events?key=' + encodeURIComponent(API_KEY);
 }
 
-// In offline mode, hide navigation to other pages
+// In offline mode, fix navigation links to use .html extensions
 if (OFFLINE_MODE) {
-    const navLinks = document.querySelector('.nav-links');
-    if (navLinks) navLinks.style.display = 'none';
+    document.querySelectorAll('.nav-link[href="/ui"]').forEach(el => el.href = 'index.html');
+    document.querySelectorAll('.nav-link[href="/videos"]').forEach(el => el.href = 'videos.html');
+    document.querySelectorAll('.nav-link[href="/playlists"]').forEach(el => el.href = 'playlists.html');
+    // Hide admin-only links
+    document.querySelectorAll('.nav-link[href*="/admin"]').forEach(el => el.style.display = 'none');
 }
 
 // =============================================================================

@@ -11477,12 +11477,15 @@
                 if (el) el.style.display = 'none';
             });
 
-            // Hide settings/stats button and navigation links (no IDs, need to select differently)
+            // Hide settings/stats button and admin links (no IDs, need to select differently)
             document.querySelectorAll('.header-btn[onclick*="toggleStatsModal"]').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.header-btn[href*="/admin/events"]').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.header-btn[href*="/videos"]').forEach(el => el.style.display = 'none');
             // Also hide the divider before settings since export group is hidden
             document.querySelectorAll('.header-divider').forEach(el => el.style.display = 'none');
+
+            // Fix navigation links for offline mode (use .html file extensions)
+            document.querySelectorAll('.header-btn[href="/videos"]').forEach(el => el.href = 'videos.html');
+            document.querySelectorAll('.header-btn[href="/playlists"]').forEach(el => el.href = 'playlists.html');
 
             // Hide stats pills that show server metrics
             document.querySelectorAll('.stat-pill.archive-stat').forEach(el => {
