@@ -26,6 +26,7 @@ const bearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs
 // To find current IDs: curl -s "https://x.com" | extract main.js URL, then search for operationName
 const (
 	defaultTweetResultByRestIDQueryID = "Xl5pC_lBk_gcO2ItU39DQw"
+	defaultTweetDetailQueryID         = "nK2WM0mHJKd2-jb6qhmfWA" // TweetDetail - includes article content_state
 )
 
 // defaultGraphQLFeatures is used when we don't have browser-observed feature flags.
@@ -1207,8 +1208,10 @@ func (c *Client) fetchAndPopulateArticle(ctx context.Context, tweet *domain.Twee
 	tweet.ContentType = domain.ContentTypeArticle
 
 	// Try to fetch article via TweetDetail GraphQL endpoint
-	// Articles in X are associated with tweets, so the article ID might work as a tweet ID
-	articleContent, err := c.fetchArticleContent(ctx, articleID)
+	// Strategy: try both the linking tweet ID and the article ID
+	// The TweetDetail endpoint works best with the tweet that contains/links to the article
+	tweetID := string(tweet.ID)
+	articleContent, err := c.fetchArticleContentWithTweetID(ctx, tweetID, articleID)
 	if err != nil {
 		return err
 	}
@@ -1246,39 +1249,92 @@ type articleContent struct {
 	Images []domain.ArticleImage
 }
 
-// fetchArticleContent attempts to fetch article content.
-// It tries multiple approaches since X doesn't have a public article API.
-func (c *Client) fetchArticleContent(ctx context.Context, articleID string) (*articleContent, error) {
-	// Approach 1: Try fetching the article as if it were a tweet
-	// Some articles might be accessible via the standard tweet endpoints
-	tweet, err := c.fetchFromGraphQL(ctx, articleID)
-	if err == nil && tweet != nil {
-		content := &articleContent{}
-		// If we got the tweet with article data, extract it
-		if tweet.ArticleTitle != "" {
-			content.Title = tweet.ArticleTitle
-		}
-		if tweet.Text != "" && len(tweet.Text) > 100 {
-			content.Body = tweet.Text
-		}
-		if content.Title != "" || content.Body != "" {
-			c.logger.Info("fetched article via GraphQL tweet endpoint",
+// fetchArticleContentWithTweetID attempts to fetch article content using both the linking tweet ID
+// and the article ID. The TweetDetail endpoint works best with the tweet that contains/links to the article.
+func (c *Client) fetchArticleContentWithTweetID(ctx context.Context, tweetID, articleID string) (*articleContent, error) {
+	// Approach 1: Try TweetDetail with the linking tweet ID
+	// This is the most reliable approach - the tweet that links to an article contains
+	// the article data in its response when fetched via TweetDetail with withArticleRichContentState=true
+	if tweetID != "" && tweetID != articleID {
+		content, err := c.fetchArticleViaTweetDetail(ctx, tweetID)
+		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
+			c.logger.Info("fetched article via TweetDetail using linking tweet ID",
+				"tweet_id", tweetID,
 				"article_id", articleID,
 				"has_title", content.Title != "",
 				"body_len", len(content.Body),
+				"image_count", len(content.Images),
 			)
+			return content, nil
+		}
+		if err != nil {
+			c.logger.Debug("TweetDetail with linking tweet failed, trying article ID",
+				"tweet_id", tweetID,
+				"error", err,
+			)
+		}
+	}
+
+	// Approach 2: Try TweetDetail with the article ID directly
+	// Articles in X are associated with their own tweet IDs
+	if articleID != "" {
+		content, err := c.fetchArticleViaTweetDetail(ctx, articleID)
+		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
+			c.logger.Info("fetched article via TweetDetail using article ID",
+				"article_id", articleID,
+				"has_title", content.Title != "",
+				"body_len", len(content.Body),
+				"image_count", len(content.Images),
+			)
+			return content, nil
+		}
+		if err != nil {
+			c.logger.Debug("TweetDetail with article ID failed, trying GraphQL",
+				"article_id", articleID,
+				"error", err,
+			)
+		}
+	}
+
+	// Approach 3: Try fetching the article as if it were a regular tweet
+	// This might work for some articles but won't include full content_state
+	if articleID != "" {
+		tweet, err := c.fetchFromGraphQL(ctx, articleID)
+		if err == nil && tweet != nil {
+			content := &articleContent{}
+			if tweet.ArticleTitle != "" {
+				content.Title = tweet.ArticleTitle
+			}
+			if tweet.Text != "" && len(tweet.Text) > 100 {
+				content.Body = tweet.Text
+			}
+			if content.Title != "" || content.Body != "" {
+				c.logger.Info("fetched article via GraphQL tweet endpoint",
+					"article_id", articleID,
+					"has_title", content.Title != "",
+					"body_len", len(content.Body),
+				)
+				return content, nil
+			}
+		}
+	}
+
+	// Approach 4: Try to scrape the article page
+	// X article pages load content via JavaScript, so this is unreliable
+	if articleID != "" {
+		content, err := c.scrapeArticlePage(ctx, articleID)
+		if err == nil && content != nil && (content.Title != "" || content.Body != "") {
 			return content, nil
 		}
 	}
 
-	// Approach 2: Try to scrape the article page
-	// X article pages load content via JavaScript, so this might not work
-	content, err := c.scrapeArticlePage(ctx, articleID)
-	if err == nil && content != nil && (content.Title != "" || content.Body != "") {
-		return content, nil
-	}
-
 	return nil, fmt.Errorf("unable to fetch article content via available methods")
+}
+
+// fetchArticleContent attempts to fetch article content using just the article ID.
+// For better results, use fetchArticleContentWithTweetID which also tries the linking tweet ID.
+func (c *Client) fetchArticleContent(ctx context.Context, articleID string) (*articleContent, error) {
+	return c.fetchArticleContentWithTweetID(ctx, "", articleID)
 }
 
 // scrapeArticlePage attempts to scrape article content from the X article page.
@@ -1351,6 +1407,296 @@ func truncateText(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+// fetchArticleViaTweetDetail fetches full article content using the TweetDetail GraphQL endpoint.
+// This endpoint returns article content_state with full text blocks when withArticleRichContentState=true.
+func (c *Client) fetchArticleViaTweetDetail(ctx context.Context, tweetID string) (*articleContent, error) {
+	headers, source, err := c.getGraphQLAuthHeaders(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use TweetDetail query ID - this endpoint supports withArticleRichContentState
+	queryID := defaultTweetDetailQueryID
+	if qid := c.getBrowserQueryID("TweetDetail"); qid != "" {
+		queryID = qid
+	}
+
+	// Build variables with focalTweetId (TweetDetail uses this instead of tweetId)
+	variables := fmt.Sprintf(`{"focalTweetId":"%s","with_rux_injections":false,"rankingMode":"Relevance","includePromotedContent":true,"withCommunity":true,"withQuickPromoteEligibilityTweetFields":true,"withBirdwatchNotes":true,"withVoice":true}`, tweetID)
+
+	features, _ := c.getGraphQLFeaturesWithSource()
+
+	// Field toggles - withArticleRichContentState is the key for getting full article content
+	fieldToggles := `{"withArticleRichContentState":true,"withArticlePlainText":false,"withGrokAnalyze":false,"withDisallowedReplyControls":false}`
+
+	reqURL := fmt.Sprintf("https://x.com/i/api/graphql/%s/TweetDetail?variables=%s&features=%s&fieldToggles=%s",
+		queryID,
+		url.QueryEscape(variables),
+		url.QueryEscape(features),
+		url.QueryEscape(fieldToggles))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create TweetDetail request: %w", err)
+	}
+
+	// Copy headers to request
+	for k, v := range headers {
+		req.Header[k] = v
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("TweetDetail request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("TweetDetail error (status %d, auth: %s): %s", resp.StatusCode, source, truncateText(string(body), 200))
+	}
+
+	// TweetDetail returns a timeline structure, not a simple tweetResult
+	// We need to parse the timeline and find the focal tweet
+	var rawResp map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
+		return nil, fmt.Errorf("decode TweetDetail response: %w", err)
+	}
+
+	// Navigate: data.threaded_conversation_with_injections_v2.instructions[0].entries
+	// Then find the entry matching our tweetID
+	article, err := c.extractArticleFromTweetDetail(rawResp, tweetID)
+	if err != nil {
+		return nil, err
+	}
+
+	return article, nil
+}
+
+// extractArticleFromTweetDetail extracts article content from the TweetDetail timeline response.
+func (c *Client) extractArticleFromTweetDetail(resp map[string]interface{}, targetTweetID string) (*articleContent, error) {
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no data in response")
+	}
+
+	// TweetDetail returns data in threaded_conversation_with_injections_v2
+	conversation, ok := data["threaded_conversation_with_injections_v2"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no threaded_conversation_with_injections_v2 in response")
+	}
+
+	instructions, ok := conversation["instructions"].([]interface{})
+	if !ok || len(instructions) == 0 {
+		return nil, fmt.Errorf("no instructions in conversation")
+	}
+
+	// Find entries in first instruction
+	for _, instr := range instructions {
+		instrMap, ok := instr.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		entries, ok := instrMap["entries"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		// Search for our tweet in entries
+		for _, entry := range entries {
+			entryMap, ok := entry.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			content, ok := entryMap["content"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Check itemContent for the tweet
+			itemContent, ok := content["itemContent"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			tweetResults, ok := itemContent["tweet_results"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			result, ok := tweetResults["result"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Handle TweetWithVisibilityResults wrapper
+			if typename, _ := result["__typename"].(string); typename == "TweetWithVisibilityResults" {
+				if innerTweet, ok := result["tweet"].(map[string]interface{}); ok {
+					result = innerTweet
+				}
+			}
+
+			// Check if this is our target tweet
+			restID, _ := result["rest_id"].(string)
+			if restID != targetTweetID {
+				continue
+			}
+
+			// Found our tweet - look for article data
+			article, ok := result["article"].(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("tweet found but no article data")
+			}
+
+			return c.parseArticleData(article)
+		}
+	}
+
+	return nil, fmt.Errorf("tweet %s not found in TweetDetail response", targetTweetID)
+}
+
+// parseArticleData parses the article data from the GraphQL response.
+func (c *Client) parseArticleData(article map[string]interface{}) (*articleContent, error) {
+	articleResults, ok := article["article_results"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no article_results in article")
+	}
+
+	result, ok := articleResults["result"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no result in article_results")
+	}
+
+	content := &articleContent{}
+
+	// Extract title
+	if title, ok := result["title"].(string); ok {
+		content.Title = title
+	}
+
+	// Extract content_state blocks to build full article body
+	if contentState, ok := result["content_state"].(map[string]interface{}); ok {
+		blocks, ok := contentState["blocks"].([]interface{})
+		if ok && len(blocks) > 0 {
+			var bodyParts []string
+			for _, block := range blocks {
+				blockMap, ok := block.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				text, _ := blockMap["text"].(string)
+				blockType, _ := blockMap["type"].(string)
+
+				// Skip empty text unless it's a special block type
+				if text == "" && blockType != "atomic" {
+					continue
+				}
+
+				// Add appropriate formatting based on block type
+				switch blockType {
+				case "header-one":
+					bodyParts = append(bodyParts, "# "+text+"\n")
+				case "header-two":
+					bodyParts = append(bodyParts, "## "+text+"\n")
+				case "header-three":
+					bodyParts = append(bodyParts, "### "+text+"\n")
+				case "unstyled":
+					if text != "" {
+						bodyParts = append(bodyParts, text+"\n")
+					}
+				case "atomic":
+					// Atomic blocks are typically media placeholders
+					// Add a placeholder that can be replaced with actual image
+					bodyParts = append(bodyParts, "[Image]\n")
+				default:
+					if text != "" {
+						bodyParts = append(bodyParts, text+"\n")
+					}
+				}
+			}
+			content.Body = strings.TrimSpace(strings.Join(bodyParts, "\n"))
+		}
+	}
+
+	// Extract media entities as article images
+	if mediaEntities, ok := result["media_entities"].([]interface{}); ok {
+		for i, media := range mediaEntities {
+			mediaMap, ok := media.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			imgURL, _ := mediaMap["media_url_https"].(string)
+			if imgURL == "" {
+				continue
+			}
+
+			idStr, _ := mediaMap["id_str"].(string)
+			if idStr == "" {
+				idStr = fmt.Sprintf("article_img_%d", i)
+			}
+
+			var width, height int
+			if origInfo, ok := mediaMap["original_info"].(map[string]interface{}); ok {
+				if w, ok := origInfo["width"].(float64); ok {
+					width = int(w)
+				}
+				if h, ok := origInfo["height"].(float64); ok {
+					height = int(h)
+				}
+			}
+
+			content.Images = append(content.Images, domain.ArticleImage{
+				ID:       idStr,
+				URL:      imgURL,
+				Width:    width,
+				Height:   height,
+				Position: i,
+			})
+		}
+	}
+
+	// Also extract cover image if present
+	if coverMedia, ok := result["cover_media"].(map[string]interface{}); ok {
+		if mediaInfo, ok := coverMedia["media_info"].(map[string]interface{}); ok {
+			if imgURL, ok := mediaInfo["original_img_url"].(string); ok && imgURL != "" {
+				// Insert cover image at position 0
+				coverImg := domain.ArticleImage{
+					ID:       "cover",
+					URL:      imgURL,
+					Position: -1, // Will be sorted to front
+				}
+				if w, ok := mediaInfo["original_img_width"].(float64); ok {
+					coverImg.Width = int(w)
+				}
+				if h, ok := mediaInfo["original_img_height"].(float64); ok {
+					coverImg.Height = int(h)
+				}
+				content.Images = append([]domain.ArticleImage{coverImg}, content.Images...)
+				// Update positions
+				for i := range content.Images {
+					content.Images[i].Position = i
+				}
+			}
+		}
+	}
+
+	if content.Title == "" && content.Body == "" {
+		return nil, fmt.Errorf("no article content found")
+	}
+
+	c.logger.Info("extracted article from TweetDetail",
+		"title", content.Title,
+		"body_length", len(content.Body),
+		"image_count", len(content.Images),
+	)
+
+	return content, nil
 }
 
 // ExtractUsernameFromTweetURL extracts the author handle from a tweet URL.
@@ -1586,6 +1932,110 @@ type graphQLArticleResult struct {
 	LifecycleState struct {
 		ModifiedAtSecs int64 `json:"modified_at_secs"`
 	} `json:"lifecycle_state"`
+}
+
+// tweetDetailResponse represents the response from the TweetDetail GraphQL endpoint.
+// This endpoint returns full article content via content_state when withArticleRichContentState=true.
+type tweetDetailResponse struct {
+	Data struct {
+		TweetResult struct {
+			Result *tweetDetailResult `json:"result"`
+		} `json:"tweetResult"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	} `json:"errors"`
+}
+
+// tweetDetailResult contains the tweet data from TweetDetail endpoint.
+type tweetDetailResult struct {
+	TypeName string `json:"__typename"`
+	RestID   string `json:"rest_id"`
+	Tweet    *tweetDetailResult `json:"tweet,omitempty"` // For TweetWithVisibilityResults wrapper
+	Core     struct {
+		UserResults struct {
+			Result struct {
+				TypeName string `json:"__typename"`
+				ID       string `json:"rest_id"`
+				Legacy   struct {
+					Name            string `json:"name"`
+					ScreenName      string `json:"screen_name"`
+					ProfileImageURL string `json:"profile_image_url_https"`
+				} `json:"legacy"`
+			} `json:"result"`
+		} `json:"user_results"`
+	} `json:"core"`
+	Legacy struct {
+		CreatedAt string `json:"created_at"`
+		FullText  string `json:"full_text"`
+	} `json:"legacy"`
+	// Article contains article data with full content_state
+	Article *articleDetailData `json:"article,omitempty"`
+}
+
+// articleDetailData contains the article result with full content.
+type articleDetailData struct {
+	ArticleResults struct {
+		Result *articleDetailResult `json:"result"`
+	} `json:"article_results"`
+}
+
+// articleDetailResult contains the complete article including content_state.
+type articleDetailResult struct {
+	RestID       string `json:"rest_id"`
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	PreviewText  string `json:"preview_text"`
+	ContentState *articleContentState `json:"content_state,omitempty"`
+	MediaEntities []articleMediaEntity `json:"media_entities,omitempty"`
+	CoverMedia   *struct {
+		MediaInfo struct {
+			OriginalImgURL    string `json:"original_img_url"`
+			OriginalImgWidth  int    `json:"original_img_width"`
+			OriginalImgHeight int    `json:"original_img_height"`
+		} `json:"media_info"`
+	} `json:"cover_media,omitempty"`
+	Metadata struct {
+		FirstPublishedAtSecs int64 `json:"first_published_at_secs"`
+	} `json:"metadata"`
+}
+
+// articleContentState contains the Draft.js-style content blocks.
+type articleContentState struct {
+	Blocks    []articleContentBlock      `json:"blocks"`
+	EntityMap map[string]articleEntity   `json:"entityMap"`
+}
+
+// articleContentBlock is a single content block in the article.
+type articleContentBlock struct {
+	Key        string        `json:"key"`
+	Text       string        `json:"text"`
+	Type       string        `json:"type"` // "unstyled", "header-two", "atomic", etc.
+	Depth      int           `json:"depth"`
+	EntityRanges []struct {
+		Offset int    `json:"offset"`
+		Length int    `json:"length"`
+		Key    int    `json:"key"`
+	} `json:"entityRanges,omitempty"`
+}
+
+// articleEntity represents an entity (like image) in the entityMap.
+type articleEntity struct {
+	Type string                 `json:"type"` // "MEDIA", "LINK", etc.
+	Data map[string]interface{} `json:"data"`
+}
+
+// articleMediaEntity represents an inline image in the article.
+type articleMediaEntity struct {
+	ID            string `json:"id_str"`
+	MediaKey      string `json:"media_key"`
+	MediaURLHTTPS string `json:"media_url_https"`
+	Type          string `json:"type"` // "photo"
+	OriginalInfo  struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	} `json:"original_info"`
 }
 
 // authSource indicates where authentication came from for logging/debugging.

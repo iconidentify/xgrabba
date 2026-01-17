@@ -74,19 +74,21 @@ async function fetchQueryIdsFromMainJs() {
       /queryId:"([a-zA-Z0-9_-]+)",operationName:"UserByRestId"/,
       /queryId:"([a-zA-Z0-9_-]+)",operationName:"UsersByRestIds"/,
       /queryId:"([a-zA-Z0-9_-]+)",operationName:"Bookmarks"/,
+      /queryId:"([a-zA-Z0-9_-]+)",operationName:"TweetDetail"/,
       /operationName:"TweetResultByRestId"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
       /operationName:"UserByRestId"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
       /operationName:"UsersByRestIds"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
-      /operationName:"Bookmarks"[^}]*queryId:"([a-zA-Z0-9_-]+)"/
+      /operationName:"Bookmarks"[^}]*queryId:"([a-zA-Z0-9_-]+)"/,
+      /operationName:"TweetDetail"[^}]*queryId:"([a-zA-Z0-9_-]+)"/
     ];
 
-    const operations = ['TweetResultByRestId', 'UserByRestId', 'UsersByRestIds', 'Bookmarks'];
+    const operations = ['TweetResultByRestId', 'UserByRestId', 'UsersByRestIds', 'Bookmarks', 'TweetDetail'];
     let foundCount = 0;
 
     for (let i = 0; i < patterns.length; i++) {
       const match = jsContent.match(patterns[i]);
       if (match && match[1]) {
-        const opName = operations[i % 4];
+        const opName = operations[i % operations.length];
         const prev = GRAPHQL_CAPTURE.queryIds[opName];
         if (prev !== match[1]) {
           GRAPHQL_CAPTURE.queryIds[opName] = match[1];

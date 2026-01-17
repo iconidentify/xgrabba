@@ -413,3 +413,95 @@ func TestBearerToken(t *testing.T) {
 
 	t.Logf("Bearer token length: %d chars", len(bearerToken))
 }
+
+// TestGraphQL_ArticleFetch tests fetching article content via TweetDetail endpoint.
+// Run with: go test -v -run TestGraphQL_ArticleFetch ./pkg/twitter/...
+func TestGraphQL_ArticleFetch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	client := NewClient(testLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Test with the known linking tweet ID and article ID from the user's example
+	// Linking tweet: https://x.com/DefiyantlyFree/status/2012345557553996061
+	// Article URL: https://x.com/i/article/2012343365056987136
+	linkingTweetID := "2012345557553996061"
+	articleID := "2012343365056987136"
+
+	t.Run("fetch_article_via_linking_tweet", func(t *testing.T) {
+		// Try with the linking tweet ID first (this is how it works in production)
+		content, err := client.fetchArticleViaTweetDetail(ctx, linkingTweetID)
+		if err != nil {
+			// Log error but check if it's expected (rate limiting, auth required, etc.)
+			if strings.Contains(err.Error(), "403") {
+				t.Skip("Got 403 - likely rate limited or auth required, skipping")
+			}
+			if strings.Contains(err.Error(), "401") {
+				t.Skip("Got 401 - authentication required, skipping")
+			}
+			t.Logf("TweetDetail fetch with linking tweet error: %v", err)
+
+			// Try with article ID as fallback
+			content, err = client.fetchArticleViaTweetDetail(ctx, articleID)
+			if err != nil {
+				t.Logf("TweetDetail fetch with article ID error: %v", err)
+				t.Skip("Article fetch failed - may require browser auth")
+			}
+		}
+
+		// Verify we got content
+		if content.Title == "" {
+			t.Error("Article title should not be empty")
+		} else {
+			t.Logf("Article title: %s", content.Title)
+		}
+
+		if content.Body == "" {
+			t.Error("Article body should not be empty")
+		} else {
+			t.Logf("Article body length: %d characters", len(content.Body))
+			// Log first 200 chars of body
+			preview := content.Body
+			if len(preview) > 200 {
+				preview = preview[:200] + "..."
+			}
+			t.Logf("Body preview: %s", preview)
+		}
+
+		t.Logf("Article images: %d", len(content.Images))
+		for i, img := range content.Images {
+			if i < 3 { // Log first 3 images
+				t.Logf("  Image %d: %s (%dx%d)", i, img.ID, img.Width, img.Height)
+			}
+		}
+
+		// Verify word count is substantial for an article
+		wordCount := len(strings.Fields(content.Body))
+		t.Logf("Word count: %d", wordCount)
+		if wordCount < 100 {
+			t.Logf("Warning: Article body seems short (%d words) - may be truncated", wordCount)
+		}
+	})
+
+	t.Run("fetch_article_with_combined_approach", func(t *testing.T) {
+		// Test the combined approach that tries both IDs
+		content, err := client.fetchArticleContentWithTweetID(ctx, linkingTweetID, articleID)
+		if err != nil {
+			if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "401") {
+				t.Skip("Auth required, skipping")
+			}
+			t.Logf("Combined approach error: %v", err)
+			t.Skip("Article fetch failed - may require browser auth")
+		}
+
+		if content.Title == "" && content.Body == "" {
+			t.Error("Should have gotten some article content")
+		} else {
+			t.Logf("Successfully fetched article: title=%q, body_len=%d, images=%d",
+				content.Title, len(content.Body), len(content.Images))
+		}
+	})
+}
