@@ -604,3 +604,276 @@ func BenchmarkFileStreamEncrypt(b *testing.B) {
 		os.Remove(encPath)
 	}
 }
+
+func TestEncryptor_Encrypt_EmptyData(t *testing.T) {
+	enc, err := NewEncryptor("password")
+	if err != nil {
+		t.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	ciphertext, err := enc.Encrypt([]byte{})
+	if err != nil {
+		t.Fatalf("Encrypt empty data failed: %v", err)
+	}
+
+	decrypted, err := enc.Decrypt(ciphertext)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+
+	if len(decrypted) != 0 {
+		t.Error("decrypted empty data should be empty")
+	}
+}
+
+func TestEncryptor_Decrypt_InvalidVersion(t *testing.T) {
+	enc, _ := NewEncryptor("password")
+	ciphertext, _ := enc.Encrypt([]byte("test"))
+
+	// Corrupt version
+	binary.LittleEndian.PutUint32(ciphertext[4:8], 999)
+
+	_, err := enc.Decrypt(ciphertext)
+	if err != ErrInvalidVersion {
+		t.Errorf("expected ErrInvalidVersion, got %v", err)
+	}
+}
+
+func TestEncryptor_Decrypt_TooShort(t *testing.T) {
+	enc, _ := NewEncryptor("password")
+	_, err := enc.Decrypt([]byte("short"))
+	if err != ErrInvalidMagic {
+		t.Errorf("expected ErrInvalidMagic, got %v", err)
+	}
+}
+
+func TestEncryptor_Salt(t *testing.T) {
+	enc, err := NewEncryptor("password")
+	if err != nil {
+		t.Fatalf("NewEncryptor failed: %v", err)
+	}
+
+	salt := enc.Salt()
+	if len(salt) != SaltSize {
+		t.Errorf("salt length = %d, want %d", len(salt), SaltSize)
+	}
+}
+
+func TestNewEncryptorWithSalt(t *testing.T) {
+	salt, _ := GenerateSalt()
+	enc := NewEncryptorWithSalt("password", salt)
+
+	if enc == nil {
+		t.Fatal("NewEncryptorWithSalt returned nil")
+	}
+
+	if !bytes.Equal(enc.Salt(), salt) {
+		t.Error("salt should match provided salt")
+	}
+}
+
+func TestDecrypt_InvalidVersion(t *testing.T) {
+	plaintext := []byte("test")
+	ciphertext, _ := Encrypt(plaintext, "password")
+
+	// Corrupt version to unsupported value
+	binary.LittleEndian.PutUint32(ciphertext[4:8], 999)
+
+	_, err := Decrypt(ciphertext, "password")
+	if err != ErrInvalidVersion {
+		t.Errorf("expected ErrInvalidVersion, got %v", err)
+	}
+}
+
+func TestDecryptV2_TruncatedData(t *testing.T) {
+	password := "test"
+	plaintext := []byte("test data")
+	enc, _ := NewEncryptor(password)
+
+	var encrypted bytes.Buffer
+	enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+
+	// Truncate data
+	truncated := encrypted.Bytes()[:len(encrypted.Bytes())-10]
+
+	_, err := Decrypt(truncated, password)
+	if err == nil {
+		t.Error("expected error for truncated data")
+	}
+}
+
+func TestDecryptV2_InvalidChunkLength(t *testing.T) {
+	password := "test"
+	plaintext := []byte("test")
+	enc, _ := NewEncryptor(password)
+
+	var encrypted bytes.Buffer
+	enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+
+	encBytes := encrypted.Bytes()
+	// Corrupt chunk length to be larger than chunk size
+	pos := HeaderSizeV2
+	binary.LittleEndian.PutUint32(encBytes[pos:pos+4], DefaultChunkSize+1)
+
+	_, err := Decrypt(encBytes, password)
+	if err == nil {
+		t.Error("expected error for invalid chunk length")
+	}
+}
+
+func TestIsEncryptedFile_NotExists(t *testing.T) {
+	if IsEncryptedFile("/nonexistent/file/path") {
+		t.Error("IsEncryptedFile should return false for non-existent file")
+	}
+}
+
+func TestIsEncryptedFile_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	emptyPath := filepath.Join(tmpDir, "empty")
+	os.WriteFile(emptyPath, []byte{}, 0644)
+
+	if IsEncryptedFile(emptyPath) {
+		t.Error("IsEncryptedFile should return false for empty file")
+	}
+}
+
+func TestEncryptFile_NotExists(t *testing.T) {
+	err := EncryptFile("/nonexistent", "/tmp/out", "password")
+	if err == nil {
+		t.Error("expected error for non-existent source file")
+	}
+}
+
+func TestEncryptFileStream_NotExists(t *testing.T) {
+	enc, _ := NewEncryptor("password")
+	_, err := EncryptFileStream(context.Background(), "/nonexistent", "/tmp/out", enc)
+	if err == nil {
+		t.Error("expected error for non-existent source file")
+	}
+}
+
+func TestDecryptFileStream_NotExists(t *testing.T) {
+	_, err := DecryptFileStream(context.Background(), "/nonexistent", "/tmp/out", "password")
+	if err == nil {
+		t.Error("expected error for non-existent source file")
+	}
+}
+
+func TestDecryptFile_NotExists(t *testing.T) {
+	_, err := DecryptFile("/nonexistent", "password")
+	if err == nil {
+		t.Error("expected error for non-existent file")
+	}
+}
+
+func TestDecryptStream_ContextCanceled(t *testing.T) {
+	password := "test"
+	plaintext := make([]byte, DefaultChunkSize*2)
+	enc, _ := NewEncryptor(password)
+
+	var encrypted bytes.Buffer
+	enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var decrypted bytes.Buffer
+	_, err := DecryptStreamWithContext(ctx, bytes.NewReader(encrypted.Bytes()), &decrypted, password)
+	if err == nil {
+		t.Error("expected error for canceled context")
+	}
+}
+
+func TestParallelEncryptor_EmptyJobs(t *testing.T) {
+	pe, err := NewParallelEncryptor("password", 4, nil)
+	if err != nil {
+		t.Fatalf("NewParallelEncryptor failed: %v", err)
+	}
+
+	manifest, errs := pe.EncryptFiles([]EncryptionJob{})
+	if len(manifest) != 0 {
+		t.Error("manifest should be empty for no jobs")
+	}
+	if len(errs) != 0 {
+		t.Error("errors should be empty for no jobs")
+	}
+}
+
+func TestParallelEncryptor_InvalidWorkers(t *testing.T) {
+	pe, err := NewParallelEncryptor("password", 0, nil)
+	if err != nil {
+		t.Fatalf("NewParallelEncryptor failed: %v", err)
+	}
+
+	if pe.workers != 4 {
+		t.Errorf("workers = %d, want 4 (default)", pe.workers)
+	}
+}
+
+func TestParallelEncryptor_EncryptFiles_Error(t *testing.T) {
+	pe, _ := NewParallelEncryptor("password", 2, nil)
+
+	tmpDir := t.TempDir()
+	jobs := []EncryptionJob{
+		{
+			SourcePath: "/nonexistent/file",
+			DestPath:   filepath.Join(tmpDir, "out.enc"),
+			RelPath:    "test",
+			EncName:    "out.enc",
+		},
+	}
+
+	manifest, errs := pe.EncryptFiles(jobs)
+	if len(errs) == 0 {
+		t.Error("expected errors for non-existent files")
+	}
+	if len(manifest) != 0 {
+		t.Error("manifest should be empty when all jobs fail")
+	}
+}
+
+func TestReadV2HeaderAt_ShortData(t *testing.T) {
+	reader := bytes.NewReader([]byte("XGC"))
+	_, err := ReadV2HeaderAt(reader)
+	if err == nil {
+		t.Error("expected error for short data")
+	}
+}
+
+func TestDecryptChunkAt_EndMarker(t *testing.T) {
+	password := "test"
+	plaintext := []byte("small")
+	enc, _ := NewEncryptor(password)
+
+	var encrypted bytes.Buffer
+	enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+
+	reader := bytes.NewReader(encrypted.Bytes())
+	header, _ := ReadV2HeaderAt(reader)
+	key := DeriveKey(password, header.Salt)
+
+	// Try to read past end (chunk 1 should be end marker)
+	_, err := DecryptChunkAt(reader, key, header, 1, 0)
+	if err == nil {
+		t.Error("expected error for end marker chunk")
+	}
+}
+
+func TestDecryptChunkAt_InvalidLength(t *testing.T) {
+	password := "test"
+	plaintext := make([]byte, DefaultChunkSize)
+	enc, _ := NewEncryptor(password)
+
+	var encrypted bytes.Buffer
+	enc.EncryptStream(bytes.NewReader(plaintext), &encrypted)
+
+	reader := bytes.NewReader(encrypted.Bytes())
+	header, _ := ReadV2HeaderAt(reader)
+	key := DeriveKey(password, header.Salt)
+
+	// Request with wrong expected length
+	_, err := DecryptChunkAt(reader, key, header, 0, DefaultChunkSize+100)
+	if err == nil {
+		t.Error("expected error for length mismatch")
+	}
+}

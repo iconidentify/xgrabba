@@ -75,6 +75,28 @@ test-coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 
+# Coverage threshold enforcement (target: 70% test coverage)
+COVERAGE_THRESHOLD?=70
+
+# Check coverage meets minimum threshold
+test-coverage-check:
+	@echo "Running tests with coverage..."
+	@go test -coverprofile=coverage.out ./... 2>&1
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	echo "Total coverage: $${COVERAGE}%"; \
+	if [ $$(echo "$${COVERAGE} < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+		echo "Coverage $${COVERAGE}% is below threshold $(COVERAGE_THRESHOLD)%"; \
+		exit 1; \
+	else \
+		echo "Coverage $${COVERAGE}% meets threshold $(COVERAGE_THRESHOLD)%"; \
+	fi
+
+# Quick coverage report by package
+test-coverage-report:
+	@go test -coverprofile=coverage.out ./... 2>/dev/null
+	@echo "=== Coverage by Package ==="
+	@go tool cover -func=coverage.out | grep -E "(ok|FAIL|total)" | sort -k3 -t: -n
+
 lint:
 	golangci-lint run ./...
 
