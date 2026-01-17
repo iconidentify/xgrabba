@@ -190,8 +190,8 @@ func TestPlaylistHandler_Delete_Success(t *testing.T) {
 
 	handler.Delete(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
 	}
 }
 
