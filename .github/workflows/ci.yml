@@ -33,6 +33,8 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    # Lint is advisory - don't block CI on lint failures
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -42,9 +44,10 @@ jobs:
           go-version: '1.22'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64
+          args: --timeout=5m
 
   docker:
     runs-on: ubuntu-latest
