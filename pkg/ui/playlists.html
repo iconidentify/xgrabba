@@ -557,6 +557,133 @@ body {
     opacity: 1;
 }
 
+/* Metadata Expansion */
+.item-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.item-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-primary);
+    color: white;
+}
+
+.item-info-btn {
+    opacity: 0;
+    padding: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.item-info-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.playlist-video-item:hover .item-info-btn {
+    opacity: 1;
+}
+
+.item-info-btn.expanded {
+    opacity: 1;
+    color: var(--accent-primary);
+    background: var(--accent-subtle);
+}
+
+.item-info-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.item-metadata {
+    display: none;
+    padding: 12px 12px 12px 52px;
+    margin-top: -4px;
+    margin-bottom: 8px;
+    background: var(--bg-elevated);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    border-top: none;
+    animation: slideDown 0.2s ease;
+}
+
+.item-metadata.visible {
+    display: block;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.metadata-section {
+    margin-bottom: 12px;
+}
+
+.metadata-section:last-child {
+    margin-bottom: 0;
+}
+
+.metadata-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.metadata-content {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.metadata-transcript {
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    padding-right: 8px;
+}
+
+.playlist-video-item.expanded {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .item-info-btn {
+        opacity: 1;
+    }
+
+    .item-metadata {
+        padding-left: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .item-metadata {
+        animation: none;
+    }
+}
+
 /* Modal */
 .modal-overlay {
     position: fixed;
@@ -1165,6 +1292,13 @@ function renderPlaylistItems() {
         const duration = tweet.media?.[0]?.duration_seconds || tweet.media?.[0]?.duration || 0;
         const title = formatTitle(tweet.ai_title) || tweet.text?.substring(0, 50) || `Video ${index + 1}`;
 
+        // Check for metadata availability
+        const transcript = tweet.media?.[0]?.transcript;
+        const hasTranscript = transcript && transcript.length > 0;
+        const aiSummary = tweet.ai_summary || tweet.ai_description;
+        const hasDescription = aiSummary && aiSummary.length > 0;
+        const hasMetadata = hasTranscript || hasDescription;
+
         return `
             <div class="playlist-video-item ${currentVideoIndex === index ? 'playing' : ''}"
                  draggable="true"
@@ -1188,7 +1322,19 @@ function renderPlaylistItems() {
                     <div class="item-title">${escapeHtml(title)}</div>
                     <div class="item-meta">@${tweet.author?.username || tweet.author || 'unknown'}</div>
                 </div>
-                ${duration ? `<div class="item-duration">${formatDuration(duration)}</div>` : ''}
+                <div class="item-badges">
+                    ${hasTranscript ? '<span class="item-badge">CC</span>' : ''}
+                    ${duration ? `<div class="item-duration">${formatDuration(duration)}</div>` : ''}
+                </div>
+                ${hasMetadata ? `
+                    <button class="btn btn-icon item-info-btn" onclick="toggleMetadata(event, ${index})" title="View details">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                    </button>
+                ` : ''}
                 <button class="btn btn-icon item-remove" onclick="removeItem(event, '${tweet.tweet_id}')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1196,6 +1342,22 @@ function renderPlaylistItems() {
                     </svg>
                 </button>
             </div>
+            ${hasMetadata ? `
+                <div class="item-metadata" id="metadata-${index}">
+                    ${hasDescription ? `
+                        <div class="metadata-section">
+                            <div class="metadata-label">AI Summary</div>
+                            <div class="metadata-content">${escapeHtml(aiSummary)}</div>
+                        </div>
+                    ` : ''}
+                    ${hasTranscript ? `
+                        <div class="metadata-section">
+                            <div class="metadata-label">Transcript</div>
+                            <div class="metadata-content metadata-transcript">${escapeHtml(transcript)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
         `;
     }).join('');
 
@@ -1260,6 +1422,35 @@ async function saveOrder() {
         console.error('Failed to save order:', err);
         showToast('Failed to save order', 'error');
         renderPlaylistItems(); // Revert visual order
+    }
+}
+
+function toggleMetadata(event, index) {
+    event.stopPropagation();
+
+    const metadataPanel = document.getElementById(`metadata-${index}`);
+    const infoBtn = event.currentTarget;
+    const videoItem = infoBtn.closest('.playlist-video-item');
+
+    if (metadataPanel.classList.contains('visible')) {
+        metadataPanel.classList.remove('visible');
+        infoBtn.classList.remove('expanded');
+        videoItem.classList.remove('expanded');
+    } else {
+        // Close any other open panels first
+        document.querySelectorAll('.item-metadata.visible').forEach(panel => {
+            panel.classList.remove('visible');
+        });
+        document.querySelectorAll('.item-info-btn.expanded').forEach(btn => {
+            btn.classList.remove('expanded');
+        });
+        document.querySelectorAll('.playlist-video-item.expanded').forEach(item => {
+            item.classList.remove('expanded');
+        });
+
+        metadataPanel.classList.add('visible');
+        infoBtn.classList.add('expanded');
+        videoItem.classList.add('expanded');
     }
 }
 
