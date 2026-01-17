@@ -163,6 +163,92 @@ func TestExtractTweetID(t *testing.T) {
 	}
 }
 
+func TestExtractArticleID(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "x.com article URL",
+			url:      "https://x.com/i/article/1234567890123456789",
+			expected: "1234567890123456789",
+		},
+		{
+			name:     "twitter.com article URL",
+			url:      "https://twitter.com/i/article/9876543210",
+			expected: "9876543210",
+		},
+		{
+			name:     "real article ID format",
+			url:      "https://x.com/i/article/2012343365056987136",
+			expected: "2012343365056987136",
+		},
+		{
+			name:     "article URL with query params",
+			url:      "https://x.com/i/article/1234567890?s=20",
+			expected: "1234567890",
+		},
+		{
+			name:     "not an article URL - tweet",
+			url:      "https://x.com/user/status/1234567890",
+			expected: "",
+		},
+		{
+			name:     "not an article URL - profile",
+			url:      "https://x.com/elonmusk",
+			expected: "",
+		},
+		{
+			name:     "empty URL",
+			url:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ExtractArticleID(tt.url)
+			if result != tt.expected {
+				t.Errorf("ExtractArticleID(%q) = %q, want %q", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsArticleURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "article URL returns true",
+			url:      "https://x.com/i/article/1234567890",
+			expected: true,
+		},
+		{
+			name:     "tweet URL returns false",
+			url:      "https://x.com/user/status/1234567890",
+			expected: false,
+		},
+		{
+			name:     "empty URL returns false",
+			url:      "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsArticleURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("IsArticleURL(%q) = %v, want %v", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
 // =============================================================================
 // Integration Tests - Real X API
 // =============================================================================
