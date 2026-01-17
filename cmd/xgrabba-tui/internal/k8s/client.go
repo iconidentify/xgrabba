@@ -621,7 +621,7 @@ func (c *Client) GetEvents(ctx context.Context, limit int) ([]Event, error) {
 
 // GetHelmRelease returns Crossplane Helm release status.
 func (c *Client) GetHelmRelease(ctx context.Context) (*HelmRelease, error) {
-	out, err := c.kubectl(ctx, "get", "release", c.releaseName, "-o", "json")
+	out, err := c.kubectl(ctx, "get", "release.helm.crossplane.io", c.releaseName, "-o", "json")
 	if err != nil {
 		return nil, fmt.Errorf("release not found (not using Crossplane?): %w", err)
 	}
@@ -849,10 +849,10 @@ func (c *Client) GetLatestChartVersion(ctx context.Context, repoURL string) (str
 // TriggerUpgrade triggers a Helm upgrade via Crossplane.
 func (c *Client) TriggerUpgrade(ctx context.Context) error {
 	// Remove pinned chart version to use latest
-	_, _ = c.kubectl(ctx, "patch", "release", c.releaseName, "--type=json", "-p=[{\"op\": \"remove\", \"path\": \"/spec/forProvider/chart/version\"}]")
+	_, _ = c.kubectl(ctx, "patch", "release.helm.crossplane.io", c.releaseName, "--type=json", "-p=[{\"op\": \"remove\", \"path\": \"/spec/forProvider/chart/version\"}]")
 
 	// Remove hardcoded image tag
-	_, _ = c.kubectl(ctx, "patch", "release", c.releaseName, "--type=json", "-p=[{\"op\": \"remove\", \"path\": \"/spec/forProvider/values/image/tag\"}]")
+	_, _ = c.kubectl(ctx, "patch", "release.helm.crossplane.io", c.releaseName, "--type=json", "-p=[{\"op\": \"remove\", \"path\": \"/spec/forProvider/values/image/tag\"}]")
 
 	return nil
 }
