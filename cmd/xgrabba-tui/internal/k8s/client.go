@@ -623,12 +623,19 @@ func (c *Client) GetEvents(ctx context.Context, limit int) ([]Event, error) {
 func (c *Client) GetHelmRelease(ctx context.Context) (*HelmRelease, error) {
 	out, err := c.kubectl(ctx, "get", "release.helm.crossplane.io", c.releaseName, "-o", "json")
 	if err != nil {
-		// Check if it's a "not found" error
-		errStr := string(out)
-		if strings.Contains(errStr, "NotFound") || strings.Contains(errStr, "not found") {
-			return nil, fmt.Errorf("release '%s' not found in namespace '%s' (not using Crossplane?): %w", c.releaseName, c.namespace, err)
+		// Extract the actual error message from kubectl output
+		errStr := strings.TrimSpace(string(out))
+		if errStr == "" {
+			errStr = err.Error()
 		}
-		return nil, fmt.Errorf("failed to get release '%s': %w", c.releaseName, err)
+		
+		// Check if it's a "not found" error
+		if strings.Contains(errStr, "NotFound") || strings.Contains(errStr, "not found") || strings.Contains(errStr, "does not exist") {
+			return nil, fmt.Errorf("release '%s' not found in namespace '%s' (not using Crossplane?): %s", c.releaseName, c.namespace, errStr)
+		}
+		
+		// Return the actual kubectl error message
+		return nil, fmt.Errorf("failed to get release '%s' in namespace '%s': %s", c.releaseName, c.namespace, errStr)
 	}
 
 	var result struct {
