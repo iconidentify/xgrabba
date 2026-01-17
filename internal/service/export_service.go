@@ -1081,31 +1081,34 @@ func (s *ExportService) GetExportStatus() *ActiveExport {
 // CancelExport cancels an in-progress export.
 func (s *ExportService) CancelExport() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.activeExport == nil {
+		s.mu.Unlock()
 		return fmt.Errorf("no export in progress")
 	}
 
 	if s.activeExport.Phase != "preparing" && s.activeExport.Phase != "exporting" && s.activeExport.Phase != "finalizing" {
-		return fmt.Errorf("export not in progress (phase: %s)", s.activeExport.Phase)
+		phase := s.activeExport.Phase
+		s.mu.Unlock()
+		return fmt.Errorf("export not in progress (phase: %s)", phase)
 	}
 
 	// Immediately set phase to cancelled so UI updates right away
 	s.activeExport.Phase = "cancelled"
 	s.activeExport.CurrentFile = "Cancelling export..."
 	s.activeExport.Error = "Export cancelled by user"
+
+	// Get cancelFunc while holding lock
+	cancelFunc := s.activeExport.cancelFunc
 	s.mu.Unlock()
 
-	// Persist cancelled state
+	// Persist cancelled state (outside lock)
 	_ = s.saveExportState()
 
 	// Cancel the context to stop the export goroutine
-	s.mu.Lock()
-	if s.activeExport.cancelFunc != nil {
-		s.activeExport.cancelFunc()
+	if cancelFunc != nil {
+		cancelFunc()
 	}
-	s.mu.Unlock()
 
 	return nil
 }
