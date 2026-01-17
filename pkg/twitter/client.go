@@ -505,6 +505,29 @@ func (c *Client) enrichFromGraphQL(ctx context.Context, tweetID string, base *do
 		base.Media = gqlTweet.Media
 		base.MediaTotal = len(gqlTweet.Media)
 	}
+
+	// Merge article fields if this is an article
+	if gqlTweet.ContentType == domain.ContentTypeArticle {
+		base.ContentType = gqlTweet.ContentType
+		if gqlTweet.ArticleTitle != "" {
+			base.ArticleTitle = gqlTweet.ArticleTitle
+		}
+		if gqlTweet.ArticleBody != "" {
+			base.ArticleBody = gqlTweet.ArticleBody
+		}
+		if gqlTweet.ArticleHTML != "" {
+			base.ArticleHTML = gqlTweet.ArticleHTML
+		}
+		if len(gqlTweet.ArticleImages) > 0 {
+			base.ArticleImages = gqlTweet.ArticleImages
+		}
+		if gqlTweet.WordCount > 0 {
+			base.WordCount = gqlTweet.WordCount
+		}
+		if gqlTweet.ReadingMinutes > 0 {
+			base.ReadingMinutes = gqlTweet.ReadingMinutes
+		}
+	}
 }
 
 // applyAuthorFromURL fills in missing author fields using the tweet URL path.
