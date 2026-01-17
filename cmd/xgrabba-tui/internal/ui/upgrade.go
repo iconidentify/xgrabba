@@ -323,7 +323,13 @@ func (a *App) performUpgrade(view *tview.TextView) {
 
 		release, err := a.k8sClient.GetHelmRelease(ctx)
 		if err != nil {
-			logProgress(fmt.Sprintf("[yellow]Waiting for release... (%v)[white]", err))
+			// Show more detailed error on first few attempts
+			if i < 3 {
+				logProgress(fmt.Sprintf("[yellow]Waiting for release... (%v)[white]", err))
+			} else if i%5 == 0 {
+				// Show error every 5th attempt to avoid spam
+				logProgress(fmt.Sprintf("[dim]Still waiting... (%v)[white]", err))
+			}
 			time.Sleep(2 * time.Second)
 			continue
 		}
