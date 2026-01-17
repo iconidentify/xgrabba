@@ -72,8 +72,8 @@ func TestPlaylistHandler_Create_Success(t *testing.T) {
 
 	handler.Create(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	if w.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusCreated)
 	}
 
 	var resp PlaylistResponse
@@ -214,8 +214,8 @@ func TestPlaylistHandler_AddItem_Success(t *testing.T) {
 
 	handler.AddItem(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
 	}
 }
 
@@ -238,8 +238,8 @@ func TestPlaylistHandler_RemoveItem_Success(t *testing.T) {
 
 	handler.RemoveItem(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
 	}
 }
 
