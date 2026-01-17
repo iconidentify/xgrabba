@@ -153,12 +153,6 @@ var chunkPool = sync.Pool{
 	},
 }
 
-// encryptedChunk represents an encrypted chunk ready for writing.
-type encryptedChunk struct {
-	lengthBuf  []byte // 4-byte length header
-	ciphertext []byte // encrypted data including GCM tag
-}
-
 // Encryptor provides fast bulk encryption with a pre-derived key.
 // Use this for encrypting multiple files with the same password.
 type Encryptor struct {

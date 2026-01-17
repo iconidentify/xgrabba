@@ -436,9 +436,3 @@ func (a *App) setCrossplaneStatus(status *k8s.CrossplaneStatus) {
 	defer a.crossplaneMu.Unlock()
 	a.crossplaneStatus = status
 }
-
-func (a *App) getCrossplaneStatus() *k8s.CrossplaneStatus {
-	a.crossplaneMu.RLock()
-	defer a.crossplaneMu.RUnlock()
-	return a.crossplaneStatus
-}

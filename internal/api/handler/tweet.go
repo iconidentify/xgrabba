@@ -1136,7 +1136,7 @@ func (h *TweetHandler) GenerateEssay(w http.ResponseWriter, r *http.Request) {
 	// Parse request body for style
 	var reqBody GenerateEssayRequest
 	if r.Body != nil {
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 	}
 
 	// Validate style if provided

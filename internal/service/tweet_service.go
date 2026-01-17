@@ -2294,7 +2294,7 @@ func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID
 	s.tweetsMu.Unlock()
 
 	// Save intermediate state
-	s.saveTweetMetadata(tweet)
+	_ = s.saveTweetMetadata(tweet)
 
 	s.logger.Info("starting essay generation",
 		"tweet_id", tweetID,
@@ -2322,7 +2322,7 @@ func (s *TweetService) GenerateEssay(ctx context.Context, tweetID domain.TweetID
 		media.EssayStatus = "failed"
 		media.EssayError = err.Error()
 		s.tweetsMu.Unlock()
-		s.saveTweetMetadata(tweet)
+		_ = s.saveTweetMetadata(tweet)
 		return nil, fmt.Errorf("essay generation failed: %w", err)
 	}
 

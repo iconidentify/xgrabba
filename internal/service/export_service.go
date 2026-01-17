@@ -539,7 +539,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 			s.mu.Lock()
 			s.activeExport.Phase = "cancelled"
 			s.mu.Unlock()
-			s.saveExportState() // Persist cancelled state
+			_ = s.saveExportState() // Persist cancelled state
 			// Clean up partial export
 			s.logger.Info("export cancelled, cleaning up partial files", "path", opts.DestPath)
 			s.cleanupExport(opts.DestPath)
@@ -737,7 +737,7 @@ func (s *ExportService) runExportAsync(ctx context.Context, opts ExportOptions) 
 	s.mu.Unlock()
 
 	// Persist completed state
-	s.saveExportState()
+	_ = s.saveExportState()
 
 	s.mu.Lock()
 	bytesWritten := s.activeExport.BytesWritten
@@ -824,173 +824,6 @@ func (s *ExportService) cleanupExport(destPath string) {
 	}
 
 	s.logger.Info("export cleanup completed", "path", destPath)
-}
-
-// encryptExport encrypts all export files in place using parallel processing.
-// It encrypts tweets-data.json → data.enc, and all files in data/ directory.
-// Creates manifest.enc with mapping of original to encrypted file names.
-// Uses AES-256-GCM with Argon2id key derivation for maximum security.
-func (s *ExportService) encryptExport(destPath, password string) error {
-	s.logger.Info("encrypting export", "path", destPath)
-
-	// Create encrypted output directory
-	encDir := filepath.Join(destPath, "encrypted")
-	if err := os.MkdirAll(encDir, 0755); err != nil {
-		return fmt.Errorf("create encrypted directory: %w", err)
-	}
-
-	// Derive encryption key ONCE (this is the slow part - ~1 second)
-	s.mu.Lock()
-	if s.activeExport != nil {
-		s.activeExport.CurrentFile = "Deriving encryption key (AES-256 + Argon2id)..."
-	}
-	s.mu.Unlock()
-
-	// Use parallel encryptor with progress callback
-	numWorkers := runtime.NumCPU()
-	if numWorkers < 2 {
-		numWorkers = 2
-	}
-	if numWorkers > 8 {
-		numWorkers = 8 // Cap to avoid memory issues
-	}
-
-	progressFn := func(completed, total int, currentFile string) {
-		s.mu.Lock()
-		if s.activeExport != nil {
-			pct := (completed * 100) / total
-			s.activeExport.CurrentFile = fmt.Sprintf("Encrypting: %s (%d/%d - %d%%)", filepath.Base(currentFile), completed, total, pct)
-		}
-		s.mu.Unlock()
-	}
-
-	parallelEnc, err := crypto.NewParallelEncryptor(password, numWorkers, progressFn)
-	if err != nil {
-		return fmt.Errorf("create encryptor: %w", err)
-	}
-
-	s.logger.Info("encryption key derived", "workers", numWorkers)
-
-	// 1. Encrypt tweets-data.json → data.enc
-	tweetsDataPath := filepath.Join(destPath, "tweets-data.json")
-	if _, err := os.Stat(tweetsDataPath); err == nil {
-		s.mu.Lock()
-		if s.activeExport != nil {
-			s.activeExport.CurrentFile = "Encrypting tweets-data.json..."
-		}
-		s.mu.Unlock()
-
-		data, err := os.ReadFile(tweetsDataPath)
-		if err != nil {
-			return fmt.Errorf("read tweets-data.json: %w", err)
-		}
-
-		encrypted, err := parallelEnc.Encryptor().Encrypt(data)
-		if err != nil {
-			return fmt.Errorf("encrypt tweets-data.json: %w", err)
-		}
-
-		encPath := filepath.Join(destPath, "data.enc")
-		if err := writeFileSync(encPath, encrypted, 0644); err != nil {
-			return fmt.Errorf("write data.enc: %w", err)
-		}
-
-		// Remove original
-		os.Remove(tweetsDataPath)
-		s.logger.Info("encrypted tweets-data.json", "size", len(data), "encrypted_size", len(encrypted))
-	}
-
-	// 2. Collect all files to encrypt from data/ directory
-	dataDir := filepath.Join(destPath, "data")
-	var jobs []crypto.EncryptionJob
-
-	if _, err := os.Stat(dataDir); err == nil {
-		s.mu.Lock()
-		if s.activeExport != nil {
-			s.activeExport.CurrentFile = "Scanning media files..."
-		}
-		s.mu.Unlock()
-
-		if err := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				return nil
-			}
-
-			// Generate obfuscated name based on hash of path
-			hash := sha256.Sum256([]byte(path))
-			encName := hex.EncodeToString(hash[:8]) + ".enc"
-
-			// Get relative path from destPath for manifest
-			relPath, _ := filepath.Rel(destPath, path)
-
-			jobs = append(jobs, crypto.EncryptionJob{
-				SourcePath: path,
-				DestPath:   filepath.Join(encDir, encName),
-				RelPath:    relPath,
-				EncName:    encName,
-			})
-			return nil
-		}); err != nil {
-			return fmt.Errorf("scan media files: %w", err)
-		}
-
-		s.logger.Info("encrypting media files", "count", len(jobs), "workers", numWorkers)
-
-		// 3. Encrypt all files in parallel
-		manifest, errs := parallelEnc.EncryptFiles(jobs)
-
-		for _, err := range errs {
-			s.logger.Warn("encryption error", "error", err)
-		}
-
-		// Remove original data directory
-		os.RemoveAll(dataDir)
-
-		// 4. Write encrypted manifest
-		s.mu.Lock()
-		if s.activeExport != nil {
-			s.activeExport.CurrentFile = "Finalizing encryption..."
-		}
-		s.mu.Unlock()
-
-		manifestData, err := json.Marshal(manifest)
-		if err != nil {
-			return fmt.Errorf("marshal manifest: %w", err)
-		}
-
-		encManifest, err := parallelEnc.Encryptor().Encrypt(manifestData)
-		if err != nil {
-			return fmt.Errorf("encrypt manifest: %w", err)
-		}
-
-		manifestPath := filepath.Join(destPath, "manifest.enc")
-		if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
-			return fmt.Errorf("write manifest.enc: %w", err)
-		}
-
-		s.logger.Info("encryption complete", "files_encrypted", len(manifest)+1)
-	} else {
-		// No data directory, just write empty manifest
-		manifestData, _ := json.Marshal(map[string]string{})
-		encManifest, err := parallelEnc.Encryptor().Encrypt(manifestData)
-		if err != nil {
-			return fmt.Errorf("encrypt manifest: %w", err)
-		}
-		manifestPath := filepath.Join(destPath, "manifest.enc")
-		if err := writeFileSync(manifestPath, encManifest, 0644); err != nil {
-			return fmt.Errorf("write manifest.enc: %w", err)
-		}
-	}
-
-	// 5. Replace index.html with encrypted archive notice
-	if err := s.writeEncryptedIndexHTML(destPath); err != nil {
-		s.logger.Warn("failed to write encrypted index.html", "error", err)
-	}
-
-	return nil
 }
 
 // writeEncryptedIndexHTML writes an index.html that explains the archive is encrypted.
@@ -1255,7 +1088,7 @@ func (s *ExportService) CancelExport() error {
 	s.mu.Unlock()
 
 	// Persist cancelled state
-	s.saveExportState()
+	_ = s.saveExportState()
 
 	// Cancel the context to stop the export goroutine
 	s.mu.Lock()

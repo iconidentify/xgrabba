@@ -33,8 +33,6 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    # Lint is advisory - don't block CI on lint failures
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

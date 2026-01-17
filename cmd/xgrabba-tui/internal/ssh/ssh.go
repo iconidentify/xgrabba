@@ -35,7 +35,6 @@ type Host struct {
 // Connection represents an active SSH connection.
 type Connection struct {
 	Host *Host
-	cmd  *exec.Cmd
 }
 
 // Connect establishes an interactive SSH connection.

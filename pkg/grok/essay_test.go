@@ -209,7 +209,7 @@ func TestGenerateEssay_LongTranscript(t *testing.T) {
 	var receivedContent string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		// Extract the user message content
 		if messages, ok := req["messages"].([]interface{}); ok {

@@ -51,7 +51,7 @@ func (a *App) createSSHPanel() {
 		}
 
 		port := 22
-		fmt.Sscanf(portStr, "%d", &port)
+		_, _ = fmt.Sscanf(portStr, "%d", &port)
 
 		host := ssh.Host{
 			Name:    name,
