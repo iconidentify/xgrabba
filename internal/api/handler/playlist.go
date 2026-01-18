@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -450,13 +451,9 @@ func (h *PlaylistHandler) Preview(w http.ResponseWriter, r *http.Request) {
 			Text:    tweet.Text,
 			Author:  tweet.Author.Username,
 		}
-		// Include first media thumbnail if available
-		if len(tweet.Media) > 0 {
-			if tweet.Media[0].PreviewURL != "" {
-				item.ThumbnailURL = tweet.Media[0].PreviewURL
-			} else if tweet.Media[0].URL != "" {
-				item.ThumbnailURL = tweet.Media[0].URL
-			}
+		// Include first media thumbnail if available - use local filename for API path
+		if len(tweet.Media) > 0 && tweet.Media[0].LocalPath != "" {
+			item.ThumbnailURL = filepath.Base(tweet.Media[0].LocalPath)
 		}
 		items = append(items, item)
 	}

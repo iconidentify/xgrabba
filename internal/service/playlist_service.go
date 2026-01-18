@@ -75,7 +75,7 @@ func (s *PlaylistService) CreateSmart(ctx context.Context, name, description, qu
 	}
 
 	if limit <= 0 {
-		limit = 100 // Default limit
+		limit = 1000 // Default limit - allow large playlists
 	}
 
 	now := time.Now()
@@ -301,7 +301,7 @@ func (s *PlaylistService) populateSmartPlaylistItems(ctx context.Context, playli
 
 	limit := playlist.SmartConfig.Limit
 	if limit <= 0 {
-		limit = 100
+		limit = 1000 // Default limit - allow large playlists
 	}
 
 	tweets, _, err := s.tweetSvc.Search(ctx, playlist.SmartConfig.Query, limit, 0)

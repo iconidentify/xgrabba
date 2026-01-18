@@ -826,6 +826,38 @@ body {
     padding-left: 36px;
 }
 
+/* Query Rows */
+.query-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.query-row .query-input-wrapper {
+    flex: 1;
+}
+
+.query-row-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.query-row-remove:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
 /* Preview Panel */
 .query-preview {
     margin-top: 16px;
@@ -1303,13 +1335,21 @@ textarea.form-input {
                         <textarea class="form-input" id="smartDescInput" placeholder="Add a description..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Search Query</label>
-                        <div class="query-input-wrapper">
-                            <span class="query-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            </span>
-                            <input type="text" class="form-input" id="smartQueryInput" placeholder="e.g., cats, @username, workout">
+                        <label class="form-label">Search Terms</label>
+                        <div id="queryTermsContainer">
+                            <div class="query-row" data-index="0">
+                                <div class="query-input-wrapper">
+                                    <span class="query-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    </span>
+                                    <input type="text" class="form-input query-term-input" placeholder="e.g., cats, @username, workout">
+                                </div>
+                            </div>
                         </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="addQueryTermBtn" onclick="addQueryTerm()" style="margin-top: 8px;">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add term
+                        </button>
                     </div>
                     <div class="query-preview" id="queryPreview">
                         <div class="query-preview-header" id="previewHeader">Preview</div>
@@ -1934,7 +1974,7 @@ function showCreateModal() {
     // Reset smart tab
     document.getElementById('smartNameInput').value = '';
     document.getElementById('smartDescInput').value = '';
-    document.getElementById('smartQueryInput').value = '';
+    resetQueryTerms();
     resetPreview();
 
     switchPlaylistTab('manual');
@@ -1957,8 +1997,25 @@ function showEditModal() {
         currentTab = 'smart';
         document.getElementById('smartNameInput').value = selectedPlaylist.name;
         document.getElementById('smartDescInput').value = selectedPlaylist.description || '';
-        document.getElementById('smartQueryInput').value = selectedPlaylist.smart_config?.query || '';
-        document.getElementById('smartQueryInput').disabled = true; // Can't change query when editing
+        // Populate query terms (split by spaces for multi-term)
+        const queryTerms = (selectedPlaylist.smart_config?.query || '').split(/\s+/).filter(t => t);
+        const container = document.getElementById('queryTermsContainer');
+        container.innerHTML = '';
+        queryTerms.forEach((term, index) => {
+            const row = document.createElement('div');
+            row.className = 'query-row';
+            row.dataset.index = index;
+            row.innerHTML = `
+                <div class="query-input-wrapper">
+                    <span class="query-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </span>
+                    <input type="text" class="form-input query-term-input" value="${escapeHtml(term)}" disabled>
+                </div>
+            `;
+            container.appendChild(row);
+        });
+        document.getElementById('addQueryTermBtn').style.display = 'none'; // Can't add terms when editing
         document.getElementById('playlistModalContent').classList.add('modal-smart');
         switchPlaylistTab('smart');
     } else {
@@ -1979,7 +2036,7 @@ function showEditModal() {
 
 function closeModal() {
     document.getElementById('playlistModal').classList.remove('visible');
-    document.getElementById('smartQueryInput').disabled = false; // Re-enable for next create
+    document.getElementById('addQueryTermBtn').style.display = ''; // Re-enable for next create
     editingPlaylist = null;
     if (previewDebounceTimer) {
         clearTimeout(previewDebounceTimer);
@@ -2031,9 +2088,9 @@ async function savePlaylist() {
 
     // For new smart playlists, validate query
     if (isSmart && !editingPlaylist) {
-        const query = document.getElementById('smartQueryInput').value.trim();
+        const query = getSmartQuery();
         if (!query) {
-            showToast('Please enter a search query', 'error');
+            showToast('Please enter at least one search term', 'error');
             return;
         }
     }
@@ -2069,10 +2126,10 @@ async function savePlaylist() {
             }
         } else if (isSmart) {
             // Create new smart playlist
-            const query = document.getElementById('smartQueryInput').value.trim();
+            const query = getSmartQuery();
             const newPlaylist = await apiRequest('/playlists/smart', {
                 method: 'POST',
-                body: JSON.stringify({ name, description, query, limit: 100 })
+                body: JSON.stringify({ name, description, query, limit: 1000 })
             });
             showToast('Smart playlist created');
             playlists.push(newPlaylist);
@@ -2102,6 +2159,75 @@ function resetPreview() {
     `;
 }
 
+function resetQueryTerms() {
+    const container = document.getElementById('queryTermsContainer');
+    container.innerHTML = `
+        <div class="query-row" data-index="0">
+            <div class="query-input-wrapper">
+                <span class="query-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input type="text" class="form-input query-term-input" placeholder="e.g., cats, @username, workout">
+            </div>
+        </div>
+    `;
+    setupQueryInputListeners();
+}
+
+function addQueryTerm() {
+    const container = document.getElementById('queryTermsContainer');
+    const rows = container.querySelectorAll('.query-row');
+    const newIndex = rows.length;
+
+    const newRow = document.createElement('div');
+    newRow.className = 'query-row';
+    newRow.dataset.index = newIndex;
+    newRow.innerHTML = `
+        <div class="query-input-wrapper">
+            <span class="query-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" class="form-input query-term-input" placeholder="e.g., another term">
+        </div>
+        <button type="button" class="query-row-remove" onclick="removeQueryTerm(this)" title="Remove term">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+    `;
+
+    container.appendChild(newRow);
+
+    // Add listener to new input
+    const newInput = newRow.querySelector('.query-term-input');
+    newInput.addEventListener('input', debounceQueryPreview);
+    newInput.focus();
+}
+
+function removeQueryTerm(button) {
+    const row = button.closest('.query-row');
+    row.remove();
+    debounceQueryPreview(); // Update preview after removal
+}
+
+function getSmartQuery() {
+    const inputs = document.querySelectorAll('.query-term-input');
+    const terms = [];
+    inputs.forEach(input => {
+        const term = input.value.trim();
+        if (term) terms.push(term);
+    });
+    return terms.join(' ');
+}
+
+function setupQueryInputListeners() {
+    document.querySelectorAll('.query-term-input').forEach(input => {
+        input.removeEventListener('input', debounceQueryPreview);
+        input.addEventListener('input', debounceQueryPreview);
+    });
+}
+
 function debounceQueryPreview() {
     if (previewDebounceTimer) {
         clearTimeout(previewDebounceTimer);
@@ -2112,7 +2238,7 @@ function debounceQueryPreview() {
 }
 
 async function updateQueryPreview() {
-    const query = document.getElementById('smartQueryInput').value.trim();
+    const query = getSmartQuery();
     const previewHeader = document.getElementById('previewHeader');
     const previewItems = document.getElementById('previewItems');
 
@@ -2151,8 +2277,9 @@ async function updateQueryPreview() {
 
         let html = items.map(item => {
             const title = formatTitle(item.ai_title) || item.text?.substring(0, 50) || 'Untitled';
+            // thumbnail_url is now just the filename from the backend
             const thumbUrl = item.thumbnail_url
-                ? `/api/v1/tweets/${item.tweet_id}/media/${item.thumbnail_url.split('/').pop()}?key=${API_KEY}`
+                ? `/api/v1/tweets/${item.tweet_id}/media/${item.thumbnail_url}?key=${API_KEY}`
                 : '';
             return `
                 <div class="preview-item">
@@ -2264,8 +2391,8 @@ if (OFFLINE_MODE) {
 // Init
 loadPlaylists();
 
-// Setup event listener for smart playlist query input
-document.getElementById('smartQueryInput').addEventListener('input', debounceQueryPreview);
+// Setup event listeners for smart playlist query inputs
+setupQueryInputListeners();
     </script>
 </body>
 </html>
