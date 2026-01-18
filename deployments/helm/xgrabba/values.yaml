@@ -142,14 +142,16 @@ persistence:
   existingClaim: ""
 
 # Liveness and readiness probes
+# Increased tolerance to prevent pod restart during heavy export operations
+# See: https://github.com/iconidentify/xgrabba/issues/29
 livenessProbe:
   httpGet:
     path: /health
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 6
+  timeoutSeconds: 15
+  failureThreshold: 12
 
 readinessProbe:
   httpGet:
@@ -157,8 +159,8 @@ readinessProbe:
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 6
+  timeoutSeconds: 15
+  failureThreshold: 12
 
 # Samba file sharing for browsing archives from Mac/Windows
 samba:
