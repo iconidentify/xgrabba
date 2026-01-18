@@ -349,6 +349,11 @@ func (c *Client) FetchTweet(ctx context.Context, tweetURL string) (*domain.Tweet
 		// Best-effort: if author handle is missing (NSFW/visibility edge cases),
 		// derive it from the URL so the archive remains human-friendly.
 		applyAuthorFromURL(tweet, tweetURL)
+
+		// If we still don't have an avatar URL after syndication and GraphQL enrichment,
+		// try the profile page fallback. This is best-effort and won't fail the fetch.
+		c.enrichAvatarFromProfilePage(ctx, tweet)
+
 		tweet.Text = normalizeTweetText(tweet.Text)
 
 		return tweet, nil
@@ -376,20 +381,34 @@ func (c *Client) enrichAvatarFromProfilePage(ctx context.Context, tweet *domain.
 		return
 	}
 	if tweet.Author.AvatarURL != "" {
+		c.logger.Debug("avatar already present, skipping profile page enrichment",
+			"username", tweet.Author.Username,
+			"avatar_url", tweet.Author.AvatarURL)
 		return
 	}
 	username := strings.TrimSpace(tweet.Author.Username)
 	if username == "" {
+		c.logger.Debug("no username available for avatar enrichment")
 		return
 	}
+
+	c.logger.Debug("attempting avatar enrichment from profile page", "username", username)
+
 	// Keep this bounded; it's a fallback only.
 	pctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
 	avatar, err := c.fetchProfileAvatarFromHTML(pctx, username)
-	if err != nil || avatar == "" {
+	if err != nil {
+		c.logger.Debug("avatar enrichment failed", "username", username, "error", err)
 		return
 	}
+	if avatar == "" {
+		c.logger.Debug("no avatar found in profile HTML", "username", username)
+		return
+	}
+
+	c.logger.Info("avatar enriched from profile page", "username", username, "avatar_url", avatar)
 	tweet.Author.AvatarURL = avatar
 }
 
@@ -434,14 +453,26 @@ func (c *Client) fetchProfileAvatarFromHTML(ctx context.Context, username string
 	}
 	html := string(htmlBytes)
 
-	// Prefer og:image / twitter:image. These frequently point to pbs.twimg.com/profile_images/*.
-	reMeta := regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']`)
-	if m := reMeta.FindStringSubmatch(html); len(m) > 1 {
+	// Try og:image / twitter:image meta tags (attribute order may vary)
+	// Pattern 1: property/name before content
+	reMeta1 := regexp.MustCompile(`(?i)<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']`)
+	if m := reMeta1.FindStringSubmatch(html); len(m) > 1 {
+		return normalizeProfileImageURL(m[1]), nil
+	}
+	// Pattern 2: content before property/name
+	reMeta2 := regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']`)
+	if m := reMeta2.FindStringSubmatch(html); len(m) > 1 {
 		return normalizeProfileImageURL(m[1]), nil
 	}
 
-	// Fallback: any pbs.twimg.com/profile_images URL in the HTML.
-	reImg := regexp.MustCompile(`(?i)https://pbs\.twimg\.com/profile_images/[^"'\\s]+`)
+	// Look for profile_image_url in JSON-LD or embedded data
+	reJSON := regexp.MustCompile(`(?i)"profile_image_url(?:_https)?":\s*"(https://pbs\.twimg\.com/profile_images/[^"]+)"`)
+	if m := reJSON.FindStringSubmatch(html); len(m) > 1 {
+		return normalizeProfileImageURL(m[1]), nil
+	}
+
+	// Fallback: any pbs.twimg.com/profile_images URL in the HTML
+	reImg := regexp.MustCompile(`https://pbs\.twimg\.com/profile_images/[^"'\s\\]+`)
 	if m := reImg.FindString(html); m != "" {
 		return normalizeProfileImageURL(m), nil
 	}
