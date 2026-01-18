@@ -12506,7 +12506,25 @@
             const overlay = document.getElementById('exportModalOverlay');
             overlay.classList.add('active');
 
-            // Reset state
+            // Check if there's already an export in progress FIRST
+            // This prevents flashing the USB view when an export is active
+            try {
+                const statusResp = await fetch('/api/v1/export/status', {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                if (statusResp.ok) {
+                    const status = await statusResp.json();
+                    if (status.active) {
+                        exportInProgress = true;
+                        showExportView('progress');
+                        updateExportProgress(status);
+                        startExportPolling();
+                        return; // Don't load USB view if export is active
+                    }
+                }
+            } catch {}
+
+            // No active export - show USB selection view
             selectedUSBDrive = null;
             showExportView('usb');
 
@@ -12531,22 +12549,6 @@
 
             // Load USB drives
             await loadUSBDrives();
-
-            // Check if there's already an export in progress
-            try {
-                const statusResp = await fetch('/api/v1/export/status', {
-                    headers: { 'X-API-Key': API_KEY }
-                });
-                if (statusResp.ok) {
-                    const status = await statusResp.json();
-                    if (status.active) {
-                        exportInProgress = true;
-                        showExportView('progress');
-                        updateExportProgress(status);
-                        startExportPolling();
-                    }
-                }
-            } catch {}
         }
 
         function closeExportModal() {
