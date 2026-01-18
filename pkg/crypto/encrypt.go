@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sync"
 
 	"golang.org/x/crypto/argon2"
@@ -349,6 +350,10 @@ func (e *Encryptor) EncryptStreamWithContext(ctx context.Context, reader io.Read
 
 		totalWritten += int64(n)
 		chunkNum++
+
+		// Yield to scheduler after each chunk to allow health checks to run
+		// This prevents encryption from starving other goroutines during large exports
+		runtime.Gosched()
 
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			break

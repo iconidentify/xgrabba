@@ -1949,6 +1949,7 @@ func (s *ExportService) exportMedia(ctx context.Context, media *domain.Media, sr
 // copyFile copies a file and returns its size.
 // It syncs the destination file to ensure data is flushed to disk (critical for USB drives)
 // and verifies the destination file size matches the source.
+// Uses chunked copying with periodic yields to prevent blocking health checks.
 func copyFile(src, dst string) (int64, error) {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -1967,7 +1968,9 @@ func copyFile(src, dst string) (int64, error) {
 		return 0, err
 	}
 
-	written, err := io.Copy(dstFile, srcFile)
+	// Use chunked copy with yields to allow health checks to run
+	// 1MB chunks with yield after each chunk
+	written, err := copyWithYield(dstFile, srcFile)
 	if err != nil {
 		dstFile.Close()
 		return 0, err
@@ -1998,6 +2001,44 @@ func copyFile(src, dst string) (int64, error) {
 	}
 
 	return srcSize, nil
+}
+
+// copyWithYield copies data in chunks, yielding to the scheduler periodically.
+// This prevents long-running copies from blocking health check handlers.
+const copyChunkSize = 1024 * 1024 // 1MB chunks
+
+func copyWithYield(dst io.Writer, src io.Reader) (int64, error) {
+	buf := make([]byte, copyChunkSize)
+	var written int64
+
+	for {
+		nr, rerr := src.Read(buf)
+		if nr > 0 {
+			nw, werr := dst.Write(buf[:nr])
+			if nw < 0 || nr < nw {
+				nw = 0
+				if werr == nil {
+					werr = fmt.Errorf("invalid write result")
+				}
+			}
+			written += int64(nw)
+			if werr != nil {
+				return written, werr
+			}
+			if nr != nw {
+				return written, io.ErrShortWrite
+			}
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				return written, nil
+			}
+			return written, rerr
+		}
+
+		// Yield to scheduler after each chunk to allow health checks to run
+		runtime.Gosched()
+	}
 }
 
 // encryptionContext holds state for streaming encryption during export.
