@@ -65,6 +65,7 @@ type WhisperConfig struct {
 // DownloadConfig holds video download configuration.
 type DownloadConfig struct {
 	Timeout       time.Duration `yaml:"timeout" envconfig:"DOWNLOAD_TIMEOUT" default:"10m"`
+	ReadTimeout   time.Duration `yaml:"read_timeout" envconfig:"DOWNLOAD_READ_TIMEOUT" default:"60s"`
 	RetryDelay    time.Duration `yaml:"retry_delay" envconfig:"DOWNLOAD_RETRY_DELAY" default:"5s"`
 	MaxRetryDelay time.Duration `yaml:"max_retry_delay" envconfig:"DOWNLOAD_MAX_RETRY_DELAY" default:"60s"`
 	UserAgent     string        `yaml:"user_agent" envconfig:"DOWNLOAD_USER_AGENT" default:"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"`
