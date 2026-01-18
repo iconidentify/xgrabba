@@ -568,15 +568,33 @@ class TweetInjector {
       return;
     }
 
+    // Extract author info from the DOM (helps when server-side fetch is blocked)
+    const authorInfo = extractor.getAuthorInfo(tweetElement);
+
     this.setState(tweetId, button, 'saving');
 
     try {
+      const payload = {
+        tweetUrl: tweetUrl,
+        tweetId: tweetId
+      };
+
+      // Include author hints if available
+      if (authorInfo) {
+        if (authorInfo.avatarUrl) {
+          payload.authorAvatarUrl = authorInfo.avatarUrl;
+        }
+        if (authorInfo.displayName) {
+          payload.authorDisplayName = authorInfo.displayName;
+        }
+        if (authorInfo.username) {
+          payload.authorUsername = authorInfo.username;
+        }
+      }
+
       const response = await chrome.runtime.sendMessage({
         type: 'ARCHIVE_VIDEO',
-        payload: {
-          tweetUrl: tweetUrl,
-          tweetId: tweetId
-        }
+        payload: payload
       });
 
       if (response.success) {

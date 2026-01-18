@@ -232,6 +232,79 @@ class TweetExtractor {
 
     return true;
   }
+
+  // Extract author info from a tweet element
+  // Returns: { username, displayName, avatarUrl }
+  getAuthorInfo(tweetElement) {
+    if (!tweetElement) return null;
+
+    try {
+      const result = {
+        username: null,
+        displayName: null,
+        avatarUrl: null
+      };
+
+      // Strategy 1: Find avatar image (most reliable for avatar URL)
+      // Avatar images are typically the first img in the tweet with profile_images in src
+      const avatarImg = tweetElement.querySelector('img[src*="profile_images"]');
+      if (avatarImg) {
+        let avatarUrl = avatarImg.src;
+        // Upgrade to higher resolution: replace _normal with _400x400 or remove size suffix
+        avatarUrl = avatarUrl.replace(/_normal\.(jpg|jpeg|png|gif|webp)/i, '_400x400.$1');
+        avatarUrl = avatarUrl.replace(/_bigger\.(jpg|jpeg|png|gif|webp)/i, '_400x400.$1');
+        result.avatarUrl = avatarUrl;
+      }
+
+      // Strategy 2: Find username from profile link
+      // Look for the link that contains the author's handle (starts with @)
+      const usernameLink = tweetElement.querySelector('a[href^="/"][role="link"]');
+      if (usernameLink) {
+        const href = usernameLink.getAttribute('href');
+        if (href && href.match(/^\/[a-zA-Z0-9_]+$/)) {
+          result.username = href.substring(1); // Remove leading /
+        }
+      }
+
+      // Strategy 3: Find display name
+      // The display name is usually near the username, in a span with specific styling
+      const userCell = tweetElement.querySelector('[data-testid="User-Name"]');
+      if (userCell) {
+        // First span with text content is usually the display name
+        const spans = userCell.querySelectorAll('span');
+        for (const span of spans) {
+          const text = span.textContent?.trim();
+          // Skip if it looks like a username (@...)
+          if (text && text.length > 0 && !text.startsWith('@')) {
+            // Skip spans with only timestamps or other metadata
+            if (!span.querySelector('time') && !span.querySelector('svg')) {
+              result.displayName = text;
+              break;
+            }
+          }
+        }
+
+        // Also try to get username from @handle in the cell
+        for (const span of spans) {
+          const text = span.textContent?.trim();
+          if (text && text.startsWith('@')) {
+            result.username = text.substring(1); // Remove @
+            break;
+          }
+        }
+      }
+
+      // Validate we got at least something useful
+      if (result.avatarUrl || result.username || result.displayName) {
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('[XGrabba] Error extracting author info:', error);
+      return null;
+    }
+  }
 }
 
 // Export for use by injector

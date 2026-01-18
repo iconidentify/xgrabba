@@ -439,6 +439,10 @@ func (s *TweetService) BackfillAIMetadata(ctx context.Context) {
 // ArchiveRequest represents a tweet archive request.
 type ArchiveRequest struct {
 	TweetURL string
+	// Optional author data from extension (helps when server-side fetch is blocked)
+	AuthorAvatarURL   string
+	AuthorDisplayName string
+	AuthorUsername    string
 }
 
 // ArchiveResponse is returned after submitting an archive request.
@@ -510,13 +514,27 @@ func (s *TweetService) Archive(ctx context.Context, req ArchiveRequest) (*Archiv
 		}
 	}
 
-	// Create initial tweet record
+	// Create initial tweet record with extension-provided hints
 	tweet := &domain.Tweet{
 		ID:        domain.TweetID(tweetID),
 		URL:       req.TweetURL,
 		Status:    domain.ArchiveStatusPending,
 		CreatedAt: time.Now(),
 	}
+
+	// Store extension-provided author hints for fallback
+	if req.AuthorAvatarURL != "" || req.AuthorDisplayName != "" || req.AuthorUsername != "" {
+		tweet.Author = domain.Author{
+			AvatarURL:   req.AuthorAvatarURL,
+			DisplayName: req.AuthorDisplayName,
+			Username:    req.AuthorUsername,
+		}
+		s.logger.Debug("extension provided author hints",
+			"tweet_id", tweetID,
+			"has_avatar", req.AuthorAvatarURL != "",
+			"username", req.AuthorUsername)
+	}
+
 	s.tweets[tweet.ID] = tweet
 	s.tweetsMu.Unlock()
 
@@ -598,9 +616,21 @@ func (s *TweetService) processPhase1Fetch(ctx context.Context, tweet *domain.Twe
 		return fmt.Errorf("fetch tweet: %w", err)
 	}
 
-	// Merge fetched data into our tweet record
+	// Merge fetched data into our tweet record, preserving extension hints
+	extensionAvatarURL := tweet.Author.AvatarURL // Save extension-provided avatar hint
+	extensionDisplayName := tweet.Author.DisplayName
 	tweet.Author = fetchedTweet.Author
 	tweet.Text = fetchedTweet.Text
+
+	// If fetched data lacks avatar, use extension-provided one as fallback
+	if tweet.Author.AvatarURL == "" && extensionAvatarURL != "" {
+		tweet.Author.AvatarURL = extensionAvatarURL
+		logger.Info("using extension-provided avatar URL", "url", extensionAvatarURL)
+	}
+	// Same for display name
+	if tweet.Author.DisplayName == "" && extensionDisplayName != "" {
+		tweet.Author.DisplayName = extensionDisplayName
+	}
 	tweet.PostedAt = fetchedTweet.PostedAt
 	tweet.Media = fetchedTweet.Media
 	tweet.Metrics = fetchedTweet.Metrics

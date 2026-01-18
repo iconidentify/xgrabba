@@ -295,16 +295,30 @@ async function archiveVideo(payload) {
       };
     }
 
-    // New simplified API - just send the tweet URL, backend handles everything
+    // Build request body with tweet URL and optional author hints
+    const requestBody = {
+      tweet_url: payload.tweetUrl
+    };
+
+    // Include extension-captured author data if available
+    // This helps when server-side author lookup is blocked
+    if (payload.authorAvatarUrl) {
+      requestBody.author_avatar_url = payload.authorAvatarUrl;
+    }
+    if (payload.authorDisplayName) {
+      requestBody.author_display_name = payload.authorDisplayName;
+    }
+    if (payload.authorUsername) {
+      requestBody.author_username = payload.authorUsername;
+    }
+
     const response = await fetch(`${backendUrl}/api/v1/tweets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey
       },
-      body: JSON.stringify({
-        tweet_url: payload.tweetUrl
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const data = await response.json();

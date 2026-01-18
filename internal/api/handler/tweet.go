@@ -33,9 +33,13 @@ func NewTweetHandler(tweetSvc *service.TweetService, logger *slog.Logger) *Tweet
 }
 
 // ArchiveRequest is the JSON request body for tweet archival.
-// The extension only needs to send the tweet URL - backend handles everything.
+// The extension can optionally send author data extracted from the DOM.
 type ArchiveRequest struct {
 	TweetURL string `json:"tweet_url"`
+	// Optional author data from extension (helps when server-side fetch is blocked)
+	AuthorAvatarURL   string `json:"author_avatar_url,omitempty"`
+	AuthorDisplayName string `json:"author_display_name,omitempty"`
+	AuthorUsername    string `json:"author_username,omitempty"`
 }
 
 // ArchiveResponse is the JSON response after submission.
@@ -130,10 +134,14 @@ func (h *TweetHandler) Archive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("archive request received", "url", req.TweetURL)
+	h.logger.Info("archive request received", "url", req.TweetURL,
+		"has_avatar_hint", req.AuthorAvatarURL != "")
 
 	result, err := h.tweetSvc.Archive(r.Context(), service.ArchiveRequest{
-		TweetURL: req.TweetURL,
+		TweetURL:          req.TweetURL,
+		AuthorAvatarURL:   req.AuthorAvatarURL,
+		AuthorDisplayName: req.AuthorDisplayName,
+		AuthorUsername:    req.AuthorUsername,
 	})
 
 	if err != nil {
