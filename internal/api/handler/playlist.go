@@ -436,7 +436,7 @@ func (h *PlaylistHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tweets, total, err := h.svc.Preview(r.Context(), query, limit)
+	tweets, _, err := h.svc.Preview(r.Context(), query, limit)
 	if err != nil {
 		h.logger.Error("failed to preview playlist", "query", query, "error", err)
 		http.Error(w, "Failed to search", http.StatusInternalServerError)
@@ -444,7 +444,17 @@ func (h *PlaylistHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]PreviewItem, 0, len(tweets))
+	mediaCount := 0
 	for _, tweet := range tweets {
+		// Skip tweets without media
+		if len(tweet.Media) == 0 {
+			continue
+		}
+		mediaCount++
+		// Only include up to limit items in the response
+		if len(items) >= limit {
+			continue
+		}
 		item := PreviewItem{
 			TweetID: string(tweet.ID),
 			AITitle: tweet.AITitle,
@@ -452,12 +462,12 @@ func (h *PlaylistHandler) Preview(w http.ResponseWriter, r *http.Request) {
 			Author:  tweet.Author.Username,
 		}
 		// Include first media thumbnail if available - use local filename for API path
-		if len(tweet.Media) > 0 && tweet.Media[0].LocalPath != "" {
+		if tweet.Media[0].LocalPath != "" {
 			item.ThumbnailURL = filepath.Base(tweet.Media[0].LocalPath)
 		}
 		items = append(items, item)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(PreviewResponse{Items: items, Total: total})
+	json.NewEncoder(w).Encode(PreviewResponse{Items: items, Total: mediaCount})
 }

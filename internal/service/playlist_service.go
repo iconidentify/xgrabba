@@ -309,10 +309,12 @@ func (s *PlaylistService) populateSmartPlaylistItems(ctx context.Context, playli
 		return err
 	}
 
-	// Extract tweet IDs
+	// Extract tweet IDs - only include tweets with media (video or image)
 	playlist.Items = make([]string, 0, len(tweets))
 	for _, tweet := range tweets {
-		playlist.Items = append(playlist.Items, string(tweet.ID))
+		if len(tweet.Media) > 0 {
+			playlist.Items = append(playlist.Items, string(tweet.ID))
+		}
 	}
 
 	return nil

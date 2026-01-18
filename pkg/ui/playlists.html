@@ -318,10 +318,99 @@ body {
 }
 
 .player-container {
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
     position: relative;
+}
+
+/* Media Viewer Layout */
+.media-viewer {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+}
+
+.media-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 65%;
+}
+
+.image-viewer {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-viewer img {
+    max-width: 100%;
+    max-height: 500px;
+    object-fit: contain;
+}
+
+/* Tweet Panel */
+.tweet-panel {
+    flex: 0 0 320px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.tweet-author {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.author-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.author-username {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.tweet-text {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.tweet-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: auto;
+}
+
+@media (max-width: 900px) {
+    .media-viewer {
+        flex-direction: column;
+    }
+
+    .media-content {
+        max-width: 100%;
+    }
+
+    .tweet-panel {
+        flex: none;
+        max-height: 200px;
+    }
 }
 
 .player-close-btn {
@@ -1266,8 +1355,23 @@ textarea.form-input {
                         <button class="player-close-btn" onclick="closePlayer()" title="Close player">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
-                        <div class="video-player">
-                            <video id="videoPlayer" controls></video>
+                        <div class="media-viewer">
+                            <div class="media-content">
+                                <div class="video-player" id="videoContainer">
+                                    <video id="videoPlayer" controls></video>
+                                </div>
+                                <div class="image-viewer" id="imageContainer" style="display: none;">
+                                    <img id="imagePlayer" alt="">
+                                </div>
+                            </div>
+                            <div class="tweet-panel" id="tweetPanel">
+                                <div class="tweet-author" id="tweetAuthor">
+                                    <span class="author-name" id="authorDisplayName"></span>
+                                    <span class="author-username" id="authorUsername"></span>
+                                </div>
+                                <div class="tweet-text" id="tweetText"></div>
+                                <div class="tweet-meta" id="tweetMeta"></div>
+                            </div>
                         </div>
                         <div class="player-controls">
                             <div class="player-info">
@@ -1855,17 +1959,68 @@ function playVideo(index) {
     const tweet = playlistTweets[shuffledOrder ? shuffledOrder[index] : index];
 
     if (!tweet.media || tweet.media.length === 0) {
-        showToast('No video available', 'error');
+        showToast('No media available', 'error');
         return;
     }
 
-    const media = tweet.media.find(m => m.type === 'video' || m.type === 'gif') || tweet.media[0];
-    const videoUrl = getMediaUrl(tweet, media.url || media.local_path);
+    const videoContainer = document.getElementById('videoContainer');
+    const imageContainer = document.getElementById('imageContainer');
+    const imagePlayer = document.getElementById('imagePlayer');
+
+    // Find video/gif media first, otherwise use first image
+    const videoMedia = tweet.media.find(m => m.type === 'video' || m.type === 'gif');
+    const imageMedia = tweet.media.find(m => m.type === 'photo' || m.type === 'image');
 
     playerSection.style.display = 'block';
-    videoPlayer.src = videoUrl;
-    videoPlayer.play();
-    isPlaying = true;
+
+    if (videoMedia) {
+        // Show video, hide image
+        const videoUrl = getMediaUrl(tweet, videoMedia.url || videoMedia.local_path);
+        videoContainer.style.display = 'block';
+        imageContainer.style.display = 'none';
+        videoPlayer.src = videoUrl;
+        videoPlayer.play();
+        isPlaying = true;
+    } else if (imageMedia) {
+        // Show image, hide video
+        const imageUrl = getMediaUrl(tweet, imageMedia.url || imageMedia.local_path);
+        videoContainer.style.display = 'none';
+        imageContainer.style.display = 'flex';
+        imagePlayer.src = imageUrl;
+        videoPlayer.pause();
+        videoPlayer.src = '';
+        isPlaying = false;
+    }
+
+    // Populate tweet panel
+    const authorDisplayName = document.getElementById('authorDisplayName');
+    const authorUsername = document.getElementById('authorUsername');
+    const tweetText = document.getElementById('tweetText');
+    const tweetMeta = document.getElementById('tweetMeta');
+
+    if (tweet.author) {
+        authorDisplayName.textContent = tweet.author.name || tweet.author.display_name || '';
+        authorUsername.textContent = tweet.author.username ? `@${tweet.author.username}` : '';
+    } else {
+        authorDisplayName.textContent = '';
+        authorUsername.textContent = '';
+    }
+
+    tweetText.textContent = tweet.text || '';
+
+    // Format date if available
+    if (tweet.created_at) {
+        const date = new Date(tweet.created_at);
+        tweetMeta.textContent = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    } else {
+        tweetMeta.textContent = '';
+    }
 
     document.getElementById('nowPlayingTitle').textContent = formatTitle(tweet.ai_title) || tweet.text?.substring(0, 50) || 'Untitled';
     document.getElementById('currentIndex').textContent = index + 1;
@@ -1908,6 +2063,11 @@ function previousVideo() {
 }
 
 function togglePlayPause() {
+    // If showing an image (no video src), advance to next item
+    if (!videoPlayer.src || videoPlayer.src === '') {
+        nextVideo();
+        return;
+    }
     if (videoPlayer.paused) {
         videoPlayer.play();
         isPlaying = true;
@@ -1932,6 +2092,10 @@ function updatePlayPauseButton() {
 function closePlayer() {
     videoPlayer.pause();
     videoPlayer.src = '';
+    const imageContainer = document.getElementById('imageContainer');
+    const imagePlayer = document.getElementById('imagePlayer');
+    imageContainer.style.display = 'none';
+    imagePlayer.src = '';
     isPlaying = false;
     currentVideoIndex = -1;
     playerSection.style.display = 'none';
