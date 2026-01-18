@@ -8169,9 +8169,20 @@
 
             // Build badge text
             let text = config.text;
-            if (status === 'downloading' && state.media_total > 0) {
-                const pct = Math.round((state.media_downloaded / state.media_total) * 100);
-                text = `Downloading ${pct}%`;
+            if (status === 'downloading') {
+                // Only show percentage if we have reliable progress info:
+                // - media_total must be > 0 (we know how many items to download)
+                // - media_downloaded must be > 0 OR we've started (to avoid stuck 0%)
+                if (state.media_total > 0 && state.media_downloaded > 0) {
+                    const pct = Math.round((state.media_downloaded / state.media_total) * 100);
+                    text = `Downloading ${pct}%`;
+                } else if (state.media_total > 1) {
+                    // Multiple items but haven't started - show count format
+                    text = `Downloading 0/${state.media_total}`;
+                } else {
+                    // Single item or unknown total - show indeterminate
+                    text = 'Downloading...';
+                }
             }
 
             const badge = document.createElement('span');
