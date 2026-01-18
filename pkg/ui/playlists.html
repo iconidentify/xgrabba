@@ -564,17 +564,6 @@ body {
     gap: 6px;
 }
 
-.item-badge {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    background: var(--accent-primary);
-    color: white;
-}
-
 .item-info-btn {
     opacity: 0;
     padding: 6px;
@@ -661,6 +650,42 @@ body {
     overflow-y: auto;
     white-space: pre-wrap;
     padding-right: 8px;
+}
+
+.metadata-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.metadata-header .metadata-label {
+    margin-bottom: 0;
+}
+
+.copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.copy-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.copy-btn.copied {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
 }
 
 .playlist-video-item.expanded {
@@ -902,17 +927,21 @@ textarea.form-input {
                 <span>xgrabba</span>
             </a>
             <nav class="nav-links">
-                <a href="/" class="nav-link">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                <a href="/ui" class="nav-link" id="archiveLink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span>Archive</span>
                 </a>
-                <a href="/videos" class="nav-link">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <a href="/videos" class="nav-link" id="videosLink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><path d="M10 8l6 4-6 4V8z"/></svg>
                     <span>Videos</span>
                 </a>
                 <a href="/playlists" class="nav-link active">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     <span>Playlists</span>
+                </a>
+                <a href="/admin/events" class="nav-link" id="eventsLink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Events</span>
                 </a>
             </nav>
         </div>
@@ -1323,7 +1352,6 @@ function renderPlaylistItems() {
                     <div class="item-meta">@${tweet.author?.username || tweet.author || 'unknown'}</div>
                 </div>
                 <div class="item-badges">
-                    ${hasTranscript ? '<span class="item-badge">CC</span>' : ''}
                     ${duration ? `<div class="item-duration">${formatDuration(duration)}</div>` : ''}
                 </div>
                 ${hasMetadata ? `
@@ -1352,7 +1380,16 @@ function renderPlaylistItems() {
                     ` : ''}
                     ${hasTranscript ? `
                         <div class="metadata-section">
-                            <div class="metadata-label">Transcript</div>
+                            <div class="metadata-header">
+                                <div class="metadata-label">Transcript</div>
+                                <button class="btn btn-sm copy-btn" onclick="copyTranscript(event, this, \`${escapeHtml(transcript).replace(/`/g, '\\`')}\`)">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                    Copy
+                                </button>
+                            </div>
                             <div class="metadata-content metadata-transcript">${escapeHtml(transcript)}</div>
                         </div>
                     ` : ''}
@@ -1452,6 +1489,21 @@ function toggleMetadata(event, index) {
         infoBtn.classList.add('expanded');
         videoItem.classList.add('expanded');
     }
+}
+
+function copyTranscript(event, btn, text) {
+    event.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('copied');
+        }, 1500);
+    }).catch(() => {
+        showToast('Failed to copy transcript', 'error');
+    });
 }
 
 async function removeItem(event, tweetId) {
