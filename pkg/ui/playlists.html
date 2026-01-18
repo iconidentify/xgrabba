@@ -1782,9 +1782,11 @@ document.addEventListener('keydown', (e) => {
 
 // In offline mode, fix navigation links to use .html extensions
 if (OFFLINE_MODE) {
-    document.querySelectorAll('.nav-link[href="/"]').forEach(el => el.href = 'index.html');
+    document.querySelectorAll('.nav-link[href="/ui"]').forEach(el => el.href = 'index.html');
     document.querySelectorAll('.nav-link[href="/videos"]').forEach(el => el.href = 'videos.html');
     document.querySelectorAll('.nav-link[href="/playlists"]').forEach(el => el.href = 'playlists.html');
+    // Hide Events link in offline mode (admin feature)
+    document.querySelectorAll('.nav-link[href="/admin/events"]').forEach(el => el.style.display = 'none');
 }
 
 // Init
