@@ -55,6 +55,10 @@ type EventService struct {
 	// SQLite persistence (optional)
 	db *sql.DB
 
+	// Write channel for serialized SQLite writes (prevents SQLITE_BUSY)
+	writeChan chan domain.Event
+	writeWg   sync.WaitGroup
+
 	// SSE subscribers for real-time streaming
 	subMu       sync.RWMutex
 	subscribers map[uint64]chan domain.Event
@@ -85,12 +89,26 @@ func NewEventService(cfg EventServiceConfig, logger *slog.Logger) (*EventService
 	return svc, nil
 }
 
-// initSQLite initializes the SQLite database.
+// initSQLite initializes the SQLite database with proper configuration
+// to prevent SQLITE_BUSY errors during concurrent access.
 func (s *EventService) initSQLite() error {
-	db, err := sql.Open("sqlite", s.cfg.SQLitePath)
+	// Open with busy timeout and WAL mode via connection string pragmas
+	// busy_timeout=5000 means wait up to 5 seconds for locks
+	// journal_mode=WAL enables Write-Ahead Logging for better concurrency
+	// synchronous=NORMAL is safe with WAL and provides good performance
+	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)",
+		s.cfg.SQLitePath)
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
+
+	// Configure connection pool for SQLite
+	// SQLite only allows one writer at a time, so limit connections
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(time.Hour)
 
 	// Create events table
 	_, err = db.Exec(`
@@ -114,11 +132,23 @@ func (s *EventService) initSQLite() error {
 	}
 
 	s.db = db
+
+	// Start the serialized writer goroutine
+	s.writeChan = make(chan domain.Event, 100)
+	s.writeWg.Add(1)
+	go s.eventWriter()
+
 	return nil
 }
 
 // Close closes the event service and any open resources.
 func (s *EventService) Close() error {
+	// Close the write channel to signal the writer goroutine to stop
+	if s.writeChan != nil {
+		close(s.writeChan)
+		s.writeWg.Wait() // Wait for pending writes to complete
+	}
+
 	if s.db != nil {
 		return s.db.Close()
 	}
@@ -147,9 +177,15 @@ func (s *EventService) Emit(event domain.Event) {
 	}
 	s.mu.Unlock()
 
-	// Persist to SQLite if enabled
-	if s.db != nil {
-		go s.persistEvent(event)
+	// Queue for SQLite persistence (serialized writes to prevent SQLITE_BUSY)
+	if s.writeChan != nil {
+		select {
+		case s.writeChan <- event:
+			// Successfully queued
+		default:
+			// Channel full, log warning but don't block
+			s.logger.Warn("event write channel full, dropping event", "event_id", event.ID)
+		}
 	}
 
 	// Notify SSE subscribers
@@ -216,8 +252,18 @@ func (s *EventService) EmitSuccess(category domain.EventCategory, source, messag
 	})
 }
 
-// persistEvent saves an event to SQLite.
-func (s *EventService) persistEvent(event domain.Event) {
+// eventWriter is a goroutine that serializes SQLite writes.
+// This prevents SQLITE_BUSY errors by ensuring only one write happens at a time.
+func (s *EventService) eventWriter() {
+	defer s.writeWg.Done()
+
+	for event := range s.writeChan {
+		s.persistEventWithRetry(event)
+	}
+}
+
+// persistEventWithRetry saves an event to SQLite with exponential backoff retry.
+func (s *EventService) persistEventWithRetry(event domain.Event) {
 	if s.db == nil {
 		return
 	}
@@ -227,13 +273,27 @@ func (s *EventService) persistEvent(event domain.Event) {
 		metadataStr = string(event.Metadata)
 	}
 
-	_, err := s.db.Exec(`
-		INSERT INTO events (id, timestamp, severity, category, message, source, metadata)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, event.ID, event.Timestamp, event.Severity, event.Category, event.Message, event.Source, metadataStr)
+	const maxRetries = 3
+	backoff := 10 * time.Millisecond
 
-	if err != nil {
-		s.logger.Warn("failed to persist event", "event_id", event.ID, "error", err)
+	for i := 0; i < maxRetries; i++ {
+		_, err := s.db.Exec(`
+			INSERT INTO events (id, timestamp, severity, category, message, source, metadata)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, event.ID, event.Timestamp, event.Severity, event.Category, event.Message, event.Source, metadataStr)
+
+		if err == nil {
+			return // Success
+		}
+
+		// Check if this is a retryable error (SQLITE_BUSY)
+		if i < maxRetries-1 {
+			s.logger.Debug("retrying event persist", "event_id", event.ID, "attempt", i+1, "error", err)
+			time.Sleep(backoff)
+			backoff *= 2 // Exponential backoff
+		} else {
+			s.logger.Warn("failed to persist event after retries", "event_id", event.ID, "retries", maxRetries, "error", err)
+		}
 	}
 }
 
