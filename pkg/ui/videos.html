@@ -1742,7 +1742,7 @@ async function fetchVideos() {
                     type: media.type,
                     url: mediaUrl,
                     thumbnailUrl: thumbUrl,
-                    duration: media.duration || 0,
+                    duration: media.duration_seconds || media.duration || 0,
                     transcript: media.transcript || '',
                     transcriptLanguage: media.transcript_language || '',
                     essay: media.essay || '',

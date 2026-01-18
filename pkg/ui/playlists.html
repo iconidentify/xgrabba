@@ -1317,12 +1317,14 @@ function formatTitle(title) {
 function renderPlaylistItems() {
     playlistItems.innerHTML = playlistTweets.map((tweet, index) => {
         const thumb = getThumbnailUrl(tweet);
+        // Find the video media item (may not be first if tweet has mixed media)
+        const videoMedia = tweet.media?.find(m => m.type === 'video' || m.type === 'gif') || tweet.media?.[0];
         // Support both /full (duration_seconds) and list (duration) formats
-        const duration = tweet.media?.[0]?.duration_seconds || tweet.media?.[0]?.duration || 0;
+        const duration = videoMedia?.duration_seconds || videoMedia?.duration || 0;
         const title = formatTitle(tweet.ai_title) || tweet.text?.substring(0, 50) || `Video ${index + 1}`;
 
-        // Check for metadata availability
-        const transcript = tweet.media?.[0]?.transcript;
+        // Check for metadata availability - look at video media specifically
+        const transcript = videoMedia?.transcript;
         const hasTranscript = transcript && transcript.length > 0;
         const aiSummary = tweet.ai_summary || tweet.ai_description;
         const hasDescription = aiSummary && aiSummary.length > 0;
