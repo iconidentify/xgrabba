@@ -6033,8 +6033,42 @@
         }
 
         .detail-status-completed { color: var(--success); }
-        .detail-status-processing, .detail-status-downloading { color: var(--accent-primary); }
+        .detail-status-processing, .detail-status-downloading, .detail-status-analyzing, .detail-status-fetching { color: var(--accent-primary); }
         .detail-status-failed { color: var(--danger); }
+
+        .detail-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .detail-status-badge.in-progress {
+            background: rgba(29, 155, 240, 0.15);
+            color: var(--accent-primary);
+        }
+
+        .detail-status-badge.completed {
+            background: rgba(0, 186, 124, 0.15);
+            color: var(--success);
+        }
+
+        .detail-status-badge.failed {
+            background: rgba(244, 33, 46, 0.15);
+            color: var(--danger);
+        }
+
+        .detail-status-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
 
         /* Small button variant */
         .btn-sm {
@@ -8124,6 +8158,62 @@
         const activeTweets = new Map(); // tweetId -> { status, media_downloaded, media_total, ai_in_progress }
         const TERMINAL_STATUSES = ['completed', 'failed'];
 
+        // Detail modal status polling
+        let detailStatusPollTimer = null;
+        let detailPollTweetId = null;
+
+        function startDetailStatusPolling(tweetId, initialStatus) {
+            if (OFFLINE_MODE) return;
+            if (TERMINAL_STATUSES.includes(initialStatus)) return;
+
+            detailPollTweetId = tweetId;
+            stopDetailStatusPolling(); // Clear any existing
+
+            const pollDetailStatus = async () => {
+                if (!detailPollTweetId) return;
+
+                try {
+                    const resp = await fetch(`/api/v1/tweets/${detailPollTweetId}/status`, {
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+
+                    // Update the status row in the detail modal
+                    const statusRow = document.getElementById('detailStatusRow');
+                    if (statusRow) {
+                        const valueSpan = statusRow.querySelector('.detail-value');
+                        if (valueSpan) {
+                            valueSpan.innerHTML = formatDetailStatus(data.status);
+                        }
+                    }
+
+                    // Stop polling if terminal state reached
+                    if (TERMINAL_STATUSES.includes(data.status)) {
+                        stopDetailStatusPolling();
+                        // Optionally refresh the whole detail view to get updated content
+                        if (data.status === 'completed' && currentTweetDetail?.tweet_id === detailPollTweetId) {
+                            openTweetDetail(detailPollTweetId);
+                        }
+                    }
+                } catch (e) {
+                    // Silent fail
+                }
+            };
+
+            // Poll immediately then every 2 seconds
+            pollDetailStatus();
+            detailStatusPollTimer = setInterval(pollDetailStatus, 2000);
+        }
+
+        function stopDetailStatusPolling() {
+            if (detailStatusPollTimer) {
+                clearInterval(detailStatusPollTimer);
+                detailStatusPollTimer = null;
+            }
+            detailPollTweetId = null;
+        }
+
         // Phase badge configuration
         const phaseBadges = {
             pending:     { text: 'Pending...', class: 'fetching', spinner: true },
@@ -8443,6 +8533,32 @@
                 day: 'numeric',
                 year: 'numeric'
             });
+        }
+
+        // Format status for detail modal with badges and spinners
+        function formatDetailStatus(status) {
+            const s = status || 'completed';
+            const inProgressStates = ['pending', 'fetching', 'fetched', 'downloading', 'downloaded', 'processing', 'analyzing'];
+            const isInProgress = inProgressStates.includes(s);
+            const isFailed = s === 'failed';
+
+            const labels = {
+                pending: 'Pending...',
+                fetching: 'Fetching...',
+                fetched: 'Fetched',
+                downloading: 'Downloading...',
+                downloaded: 'Downloaded',
+                processing: 'Processing...',
+                analyzing: 'Analyzing...',
+                completed: 'Completed',
+                failed: 'Failed'
+            };
+
+            const label = labels[s] || s.charAt(0).toUpperCase() + s.slice(1);
+            const badgeClass = isFailed ? 'failed' : (isInProgress ? 'in-progress' : 'completed');
+            const spinner = isInProgress ? '<span class="detail-status-spinner"></span>' : '';
+
+            return `<span class="detail-status-badge ${badgeClass}">${spinner}${label}</span>`;
         }
 
         function escapeHtml(text) {
@@ -9236,7 +9352,7 @@
                             <div class="detail-archive-info">
                                 <div class="detail-row"><span class="detail-label">Posted</span><span class="detail-value">${formatFullDate(tweet.posted_at)}</span></div>
                                 <div class="detail-row"><span class="detail-label">Archived</span><span class="detail-value">${formatFullDate(tweet.archived_at || tweet.created_at)}</span></div>
-                                <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value detail-status-${tweet.status || 'completed'}">${tweet.status || 'Completed'}</span></div>
+                                <div class="detail-row" id="detailStatusRow"><span class="detail-label">Status</span><span class="detail-value">${formatDetailStatus(tweet.status)}</span></div>
                                 ${tweet.archive_path ? `<div class="detail-row"><span class="detail-label">Path</span><span class="detail-value detail-path">${escapeHtml(tweet.archive_path)}</span></div>` : ''}
                             </div>
                         </div>
@@ -9245,6 +9361,9 @@
 
                 // Check AI analysis status and update button
                 updateRegenerateButtonState(tweet.tweet_id);
+
+                // Start polling for in-progress tweets to update status in detail view
+                startDetailStatusPolling(tweet.tweet_id, tweet.status);
 
                 // Seamless video handoff - restore playback position if coming from main view
                 if (videoHandoff.wasPlaying && videoHandoff.tweetId === tweet.tweet_id) {
@@ -9277,6 +9396,9 @@
         }
 
         function closeDetailPanel() {
+            // Stop detail status polling
+            stopDetailStatusPolling();
+
             const overlay = document.getElementById('detailPanelOverlay');
 
             // Capture video state for seamless handoff back to main view
