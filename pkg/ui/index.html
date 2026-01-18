@@ -12200,7 +12200,25 @@
             renderUSBDrives();
 
             const startBtn = document.getElementById('exportStartBtn');
-            startBtn.disabled = !selectedUSBDrive || !selectedUSBDrive.is_mounted;
+            // Enable button if drive is selected (auto-mount handles unmounted drives)
+            startBtn.disabled = !selectedUSBDrive;
+
+            // Update button text based on mount status
+            if (selectedUSBDrive && !selectedUSBDrive.is_mounted) {
+                startBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                    </svg>
+                    Mount & Export
+                `;
+            } else {
+                startBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 0 0 4.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                    </svg>
+                    Export to USB
+                `;
+            }
         }
 
         async function mountUSBDrive(device) {
@@ -12574,9 +12592,39 @@
         }
 
         async function startUSBExport() {
-            if (!selectedUSBDrive || !selectedUSBDrive.is_mounted) {
-                alert('Please select a mounted USB drive first.');
+            if (!selectedUSBDrive) {
+                alert('Please select a USB drive first.');
                 return;
+            }
+
+            // If drive not mounted, auto-mount it first
+            if (!selectedUSBDrive.is_mounted) {
+                showNotification('Mounting drive...', 'info');
+                try {
+                    const deviceName = selectedUSBDrive.device.replace('/dev/', '');
+                    const resp = await fetch(`/api/v1/usb/drives/${deviceName}/mount`, {
+                        method: 'POST',
+                        headers: { 'X-API-Key': API_KEY }
+                    });
+                    if (!resp.ok) {
+                        const data = await resp.json();
+                        throw new Error(data.message || 'Failed to mount drive');
+                    }
+                    // Refresh drive list and re-select
+                    await loadUSBDrives();
+                    selectUSBDrive(selectedUSBDrive.device);
+
+                    // Verify it's now mounted
+                    if (!selectedUSBDrive || !selectedUSBDrive.is_mounted) {
+                        showNotification('Drive mount failed. Please try again.', 'error');
+                        return;
+                    }
+                    showNotification('Drive mounted successfully', 'success');
+                } catch (err) {
+                    showNotification('Failed to mount drive: ' + err.message, 'error');
+                    await loadUSBDrives();
+                    return;
+                }
             }
 
             // Validate encryption settings
