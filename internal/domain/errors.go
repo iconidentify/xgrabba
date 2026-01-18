@@ -57,6 +57,15 @@ var (
 
 	// ErrTweetNotInPlaylist is returned when trying to remove a tweet that's not in the playlist.
 	ErrTweetNotInPlaylist = errors.New("tweet not in playlist")
+
+	// ErrSmartPlaylistNoManualItems is returned when trying to manually add/remove items from a smart playlist.
+	ErrSmartPlaylistNoManualItems = errors.New("cannot manually modify items in a smart playlist")
+
+	// ErrSmartPlaylistNoReorder is returned when trying to reorder items in a smart playlist.
+	ErrSmartPlaylistNoReorder = errors.New("cannot reorder a smart playlist")
+
+	// ErrEmptySmartQuery is returned when a smart playlist is created with an empty query.
+	ErrEmptySmartQuery = errors.New("smart playlist query cannot be empty")
 )
 
 // VideoError wraps an error with video context.

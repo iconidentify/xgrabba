@@ -12,18 +12,21 @@ import (
 
 // PlaylistService handles playlist business logic.
 type PlaylistService struct {
-	repo   *repository.FilesystemPlaylistRepository
-	logger *slog.Logger
+	repo     *repository.FilesystemPlaylistRepository
+	tweetSvc *TweetService
+	logger   *slog.Logger
 }
 
 // NewPlaylistService creates a new playlist service.
 func NewPlaylistService(
 	repo *repository.FilesystemPlaylistRepository,
+	tweetSvc *TweetService,
 	logger *slog.Logger,
 ) *PlaylistService {
 	return &PlaylistService{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		tweetSvc: tweetSvc,
+		logger:   logger,
 	}
 }
 
@@ -33,7 +36,7 @@ func generatePlaylistID() domain.PlaylistID {
 	return domain.PlaylistID(time.Now().Format("20060102150405"))
 }
 
-// Create creates a new playlist.
+// Create creates a new manual playlist.
 func (s *PlaylistService) Create(ctx context.Context, name, description string) (*domain.Playlist, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -45,6 +48,7 @@ func (s *PlaylistService) Create(ctx context.Context, name, description string) 
 		ID:          generatePlaylistID(),
 		Name:        name,
 		Description: strings.TrimSpace(description),
+		Type:        domain.PlaylistTypeManual,
 		Items:       []string{},
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -54,13 +58,69 @@ func (s *PlaylistService) Create(ctx context.Context, name, description string) 
 		return nil, err
 	}
 
-	s.logger.Info("created playlist", "id", playlist.ID, "name", playlist.Name)
+	s.logger.Info("created playlist", "id", playlist.ID, "name", playlist.Name, "type", playlist.Type)
+	return playlist, nil
+}
+
+// CreateSmart creates a new smart playlist with a search query.
+func (s *PlaylistService) CreateSmart(ctx context.Context, name, description, query string, limit int) (*domain.Playlist, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, domain.ErrEmptyPlaylistName
+	}
+
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, domain.ErrEmptySmartQuery
+	}
+
+	if limit <= 0 {
+		limit = 100 // Default limit
+	}
+
+	now := time.Now()
+	playlist := &domain.Playlist{
+		ID:          generatePlaylistID(),
+		Name:        name,
+		Description: strings.TrimSpace(description),
+		Type:        domain.PlaylistTypeSmart,
+		SmartConfig: &domain.SmartPlaylistConfig{
+			Query: query,
+			Limit: limit,
+		},
+		Items:     []string{}, // Will be populated dynamically
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.repo.Create(ctx, playlist); err != nil {
+		return nil, err
+	}
+
+	// Populate items immediately for the response
+	if err := s.populateSmartPlaylistItems(ctx, playlist); err != nil {
+		s.logger.Warn("failed to populate smart playlist items", "id", playlist.ID, "error", err)
+	}
+
+	s.logger.Info("created smart playlist", "id", playlist.ID, "name", playlist.Name, "query", query)
 	return playlist, nil
 }
 
 // Get retrieves a playlist by ID.
 func (s *PlaylistService) Get(ctx context.Context, id domain.PlaylistID) (*domain.Playlist, error) {
-	return s.repo.Get(ctx, id)
+	playlist, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// For smart playlists, populate items dynamically
+	if playlist.IsSmart() {
+		if err := s.populateSmartPlaylistItems(ctx, playlist); err != nil {
+			s.logger.Warn("failed to populate smart playlist items", "id", id, "error", err)
+		}
+	}
+
+	return playlist, nil
 }
 
 // List returns all playlists.
@@ -109,6 +169,11 @@ func (s *PlaylistService) AddItem(ctx context.Context, playlistID domain.Playlis
 		return err
 	}
 
+	// Smart playlists cannot have items manually added
+	if playlist.IsSmart() {
+		return domain.ErrSmartPlaylistNoManualItems
+	}
+
 	if !playlist.AddItem(tweetID) {
 		// Item already in playlist, not an error but log it
 		s.logger.Debug("tweet already in playlist", "playlist_id", playlistID, "tweet_id", tweetID)
@@ -130,6 +195,11 @@ func (s *PlaylistService) RemoveItem(ctx context.Context, playlistID domain.Play
 		return err
 	}
 
+	// Smart playlists cannot have items manually removed
+	if playlist.IsSmart() {
+		return domain.ErrSmartPlaylistNoManualItems
+	}
+
 	if !playlist.RemoveItem(tweetID) {
 		return domain.ErrTweetNotInPlaylist
 	}
@@ -147,6 +217,11 @@ func (s *PlaylistService) Reorder(ctx context.Context, playlistID domain.Playlis
 	playlist, err := s.repo.Get(ctx, playlistID)
 	if err != nil {
 		return err
+	}
+
+	// Smart playlists cannot be reordered
+	if playlist.IsSmart() {
+		return domain.ErrSmartPlaylistNoReorder
 	}
 
 	// Validate that newOrder contains the same items
@@ -187,5 +262,58 @@ func (s *PlaylistService) AddToMultiple(ctx context.Context, playlistIDs []domai
 			return err
 		}
 	}
+	return nil
+}
+
+// Preview returns matching items for a search query without creating a playlist.
+// This is used for the modal preview when creating a smart playlist.
+func (s *PlaylistService) Preview(ctx context.Context, query string, limit int) ([]*domain.Tweet, int, error) {
+	if s.tweetSvc == nil {
+		return nil, 0, nil
+	}
+
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []*domain.Tweet{}, 0, nil
+	}
+
+	if limit <= 0 {
+		limit = 20 // Default preview limit
+	}
+
+	tweets, total, err := s.tweetSvc.Search(ctx, query, limit, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return tweets, total, nil
+}
+
+// populateSmartPlaylistItems executes the search query and fills the Items field.
+func (s *PlaylistService) populateSmartPlaylistItems(ctx context.Context, playlist *domain.Playlist) error {
+	if !playlist.IsSmart() || playlist.SmartConfig == nil {
+		return nil
+	}
+
+	if s.tweetSvc == nil {
+		return nil
+	}
+
+	limit := playlist.SmartConfig.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+
+	tweets, _, err := s.tweetSvc.Search(ctx, playlist.SmartConfig.Query, limit, 0)
+	if err != nil {
+		return err
+	}
+
+	// Extract tweet IDs
+	playlist.Items = make([]string, 0, len(tweets))
+	for _, tweet := range tweets {
+		playlist.Items = append(playlist.Items, string(tweet.ID))
+	}
+
 	return nil
 }

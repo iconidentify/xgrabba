@@ -728,9 +728,13 @@ body {
 .modal {
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    max-width: 400px;
+    max-width: 500px;
     width: 100%;
     box-shadow: var(--shadow-lg);
+}
+
+.modal.modal-smart {
+    max-width: 600px;
 }
 
 .modal-header {
@@ -758,6 +762,221 @@ body {
 .modal-close:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+}
+
+/* Modal Tabs */
+.modal-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.modal-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-tab.active {
+    background: var(--accent-subtle);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Query Input with Icon */
+.query-input-wrapper {
+    position: relative;
+}
+
+.query-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.query-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.query-input-wrapper .form-input {
+    padding-left: 36px;
+}
+
+/* Preview Panel */
+.query-preview {
+    margin-top: 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.query-preview-header {
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.query-preview-header.has-results {
+    color: var(--success);
+}
+
+.query-preview-header.no-results {
+    color: var(--danger);
+}
+
+.query-preview-items {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.query-preview-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.preview-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.preview-item:last-child {
+    border-bottom: none;
+}
+
+.preview-thumb {
+    width: 48px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.preview-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.preview-title {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.preview-author {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.preview-more {
+    padding: 10px 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+}
+
+.preview-loading {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.preview-loading .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Smart Playlist Badge */
+.playlist-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+}
+
+.playlist-badge.smart {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+}
+
+/* Smart Playlist Detail View */
+.smart-query-display {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.smart-query-display svg {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.smart-query-display span {
+    color: var(--text-primary);
+    font-family: monospace;
 }
 
 .modal-body {
@@ -1050,21 +1269,54 @@ textarea.form-input {
 
     <!-- Create/Edit Modal -->
     <div class="modal-overlay" id="playlistModal">
-        <div class="modal">
+        <div class="modal" id="playlistModalContent">
             <div class="modal-header">
                 <h3 class="modal-title" id="modalTitle">New Playlist</h3>
                 <button class="modal-close" onclick="closeModal()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
+            <div class="modal-tabs" id="modalTabs">
+                <button class="modal-tab active" data-tab="manual" onclick="switchPlaylistTab('manual')">Manual</button>
+                <button class="modal-tab" data-tab="smart" onclick="switchPlaylistTab('smart')">Smart</button>
+            </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Name</label>
-                    <input type="text" class="form-input" id="playlistNameInput" placeholder="My Playlist">
+                <!-- Manual Tab -->
+                <div class="tab-content active" id="manualTab">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="playlistNameInput" placeholder="My Playlist">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (optional)</label>
+                        <textarea class="form-input" id="playlistDescInput" placeholder="Add a description..."></textarea>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Description (optional)</label>
-                    <textarea class="form-input" id="playlistDescInput" placeholder="Add a description..."></textarea>
+                <!-- Smart Tab -->
+                <div class="tab-content" id="smartTab">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="smartNameInput" placeholder="My Smart Playlist">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (optional)</label>
+                        <textarea class="form-input" id="smartDescInput" placeholder="Add a description..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Search Query</label>
+                        <div class="query-input-wrapper">
+                            <span class="query-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </span>
+                            <input type="text" class="form-input" id="smartQueryInput" placeholder="e.g., cats, @username, workout">
+                        </div>
+                    </div>
+                    <div class="query-preview" id="queryPreview">
+                        <div class="query-preview-header" id="previewHeader">Preview</div>
+                        <div class="query-preview-items" id="previewItems">
+                            <div class="query-preview-empty">Enter a search query to see matching videos</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1133,6 +1385,8 @@ let currentVideoIndex = -1;
 let isPlaying = false;
 let shuffledOrder = null;
 let editingPlaylist = null;
+let currentTab = 'manual';
+let previewDebounceTimer = null;
 
 // Elements
 const playlistList = document.getElementById('playlistList');
@@ -1194,24 +1448,24 @@ function renderPlaylistList() {
     }
     emptyState.style.display = 'none';
 
-    const items = playlists.map(p => `
+    const items = playlists.map(p => {
+        const isSmart = p.type === 'smart';
+        const icon = isSmart
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+        const badge = isSmart ? '<span class="playlist-badge smart">Smart</span>' : '';
+        return `
         <div class="playlist-item ${selectedPlaylist?.id === p.id ? 'active' : ''}" onclick="selectPlaylist('${p.id}')">
-            <div class="playlist-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="8" y1="6" x2="21" y2="6"/>
-                    <line x1="8" y1="12" x2="21" y2="12"/>
-                    <line x1="8" y1="18" x2="21" y2="18"/>
-                    <line x1="3" y1="6" x2="3.01" y2="6"/>
-                    <line x1="3" y1="12" x2="3.01" y2="12"/>
-                    <line x1="3" y1="18" x2="3.01" y2="18"/>
-                </svg>
+            <div class="playlist-icon" ${isSmart ? 'style="color: #a855f7;"' : ''}>
+                ${icon}
             </div>
             <div class="playlist-info">
-                <div class="playlist-name">${escapeHtml(p.name)}</div>
+                <div class="playlist-name">${escapeHtml(p.name)} ${badge}</div>
                 <div class="playlist-meta">${p.items?.length || p.item_count || 0} items</div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     playlistList.innerHTML = items + emptyState.outerHTML;
 }
@@ -1228,7 +1482,20 @@ async function selectPlaylist(id) {
         playlistView.style.display = 'flex';
 
         document.getElementById('playlistTitle').textContent = selectedPlaylist.name;
-        document.getElementById('playlistDescription').textContent = selectedPlaylist.description || '';
+
+        // Show description and smart query if applicable
+        const descEl = document.getElementById('playlistDescription');
+        const isSmart = selectedPlaylist.type === 'smart';
+
+        if (isSmart && selectedPlaylist.smart_config?.query) {
+            descEl.innerHTML = (selectedPlaylist.description || '') +
+                `<div class="smart-query-display">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Query: <span>${escapeHtml(selectedPlaylist.smart_config.query)}</span>
+                </div>`;
+        } else {
+            descEl.textContent = selectedPlaylist.description || '';
+        }
 
         await loadPlaylistItems();
         renderPlaylistList();
@@ -1319,6 +1586,7 @@ function formatTitle(title) {
 }
 
 function renderPlaylistItems() {
+    const isSmart = selectedPlaylist?.type === 'smart';
     playlistItems.innerHTML = playlistTweets.map((tweet, index) => {
         const thumb = getThumbnailUrl(tweet);
         // Find the video media item (may not be first if tweet has mixed media)
@@ -1334,11 +1602,8 @@ function renderPlaylistItems() {
         const hasDescription = aiSummary && aiSummary.length > 0;
         const hasMetadata = hasTranscript || hasDescription;
 
-        return `
-            <div class="playlist-video-item ${currentVideoIndex === index ? 'playing' : ''}"
-                 draggable="true"
-                 data-index="${index}"
-                 onclick="playVideo(${index})">
+        // Hide drag handle for smart playlists (can't reorder)
+        const dragHandle = isSmart ? '' : `
                 <div class="drag-handle" title="Drag to reorder">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="8" y1="6" x2="8" y2="6.01"/>
@@ -1348,7 +1613,23 @@ function renderPlaylistItems() {
                         <line x1="8" y1="18" x2="8" y2="18.01"/>
                         <line x1="16" y1="18" x2="16" y2="18.01"/>
                     </svg>
-                </div>
+                </div>`;
+
+        // Hide remove button for smart playlists (can't manually remove)
+        const removeBtn = isSmart ? '' : `
+                <button class="btn btn-icon item-remove" onclick="removeItem(event, '${tweet.tweet_id}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>`;
+
+        return `
+            <div class="playlist-video-item ${currentVideoIndex === index ? 'playing' : ''}"
+                 draggable="${!isSmart}"
+                 data-index="${index}"
+                 onclick="playVideo(${index})">
+                ${dragHandle}
                 <div class="item-number">${index + 1}</div>
                 <div class="item-thumbnail">
                     ${thumb ? `<img src="${thumb}" alt="">` : ''}
@@ -1369,12 +1650,7 @@ function renderPlaylistItems() {
                         </svg>
                     </button>
                 ` : ''}
-                <button class="btn btn-icon item-remove" onclick="removeItem(event, '${tweet.tweet_id}')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
+                ${removeBtn}
             </div>
             ${hasMetadata ? `
                 <div class="item-metadata" id="metadata-${index}">
@@ -1645,10 +1921,23 @@ videoPlayer.addEventListener('pause', () => {
 // Modals
 function showCreateModal() {
     editingPlaylist = null;
+    currentTab = 'manual';
     document.getElementById('modalTitle').textContent = 'New Playlist';
     document.getElementById('modalSaveBtn').textContent = 'Create';
+    document.getElementById('modalTabs').style.display = 'flex';
+    document.getElementById('playlistModalContent').classList.remove('modal-smart');
+
+    // Reset manual tab
     document.getElementById('playlistNameInput').value = '';
     document.getElementById('playlistDescInput').value = '';
+
+    // Reset smart tab
+    document.getElementById('smartNameInput').value = '';
+    document.getElementById('smartDescInput').value = '';
+    document.getElementById('smartQueryInput').value = '';
+    resetPreview();
+
+    switchPlaylistTab('manual');
     document.getElementById('playlistModal').classList.add('visible');
     document.getElementById('playlistNameInput').focus();
 }
@@ -1656,17 +1945,69 @@ function showCreateModal() {
 function showEditModal() {
     if (!selectedPlaylist) return;
     editingPlaylist = selectedPlaylist;
+
+    // For smart playlists, we only allow editing name/description, not the query
+    const isSmart = selectedPlaylist.type === 'smart';
     document.getElementById('modalTitle').textContent = 'Edit Playlist';
     document.getElementById('modalSaveBtn').textContent = 'Save';
-    document.getElementById('playlistNameInput').value = selectedPlaylist.name;
-    document.getElementById('playlistDescInput').value = selectedPlaylist.description || '';
+    document.getElementById('modalTabs').style.display = 'none'; // Hide tabs when editing
+
+    // Show appropriate tab
+    if (isSmart) {
+        currentTab = 'smart';
+        document.getElementById('smartNameInput').value = selectedPlaylist.name;
+        document.getElementById('smartDescInput').value = selectedPlaylist.description || '';
+        document.getElementById('smartQueryInput').value = selectedPlaylist.smart_config?.query || '';
+        document.getElementById('smartQueryInput').disabled = true; // Can't change query when editing
+        document.getElementById('playlistModalContent').classList.add('modal-smart');
+        switchPlaylistTab('smart');
+    } else {
+        currentTab = 'manual';
+        document.getElementById('playlistNameInput').value = selectedPlaylist.name;
+        document.getElementById('playlistDescInput').value = selectedPlaylist.description || '';
+        document.getElementById('playlistModalContent').classList.remove('modal-smart');
+        switchPlaylistTab('manual');
+    }
+
     document.getElementById('playlistModal').classList.add('visible');
-    document.getElementById('playlistNameInput').focus();
+    if (isSmart) {
+        document.getElementById('smartNameInput').focus();
+    } else {
+        document.getElementById('playlistNameInput').focus();
+    }
 }
 
 function closeModal() {
     document.getElementById('playlistModal').classList.remove('visible');
+    document.getElementById('smartQueryInput').disabled = false; // Re-enable for next create
     editingPlaylist = null;
+    if (previewDebounceTimer) {
+        clearTimeout(previewDebounceTimer);
+        previewDebounceTimer = null;
+    }
+}
+
+function switchPlaylistTab(tab) {
+    currentTab = tab;
+
+    // Update tab buttons
+    document.querySelectorAll('.modal-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Update tab content
+    document.getElementById('manualTab').classList.toggle('active', tab === 'manual');
+    document.getElementById('smartTab').classList.toggle('active', tab === 'smart');
+
+    // Update modal size
+    document.getElementById('playlistModalContent').classList.toggle('modal-smart', tab === 'smart');
+
+    // Focus appropriate input
+    if (tab === 'manual') {
+        document.getElementById('playlistNameInput').focus();
+    } else {
+        document.getElementById('smartNameInput').focus();
+    }
 }
 
 async function savePlaylist() {
@@ -1675,12 +2016,26 @@ async function savePlaylist() {
         return;
     }
 
-    const name = document.getElementById('playlistNameInput').value.trim();
-    const description = document.getElementById('playlistDescInput').value.trim();
+    const isSmart = currentTab === 'smart';
+    const name = isSmart
+        ? document.getElementById('smartNameInput').value.trim()
+        : document.getElementById('playlistNameInput').value.trim();
+    const description = isSmart
+        ? document.getElementById('smartDescInput').value.trim()
+        : document.getElementById('playlistDescInput').value.trim();
 
     if (!name) {
         showToast('Please enter a name', 'error');
         return;
+    }
+
+    // For new smart playlists, validate query
+    if (isSmart && !editingPlaylist) {
+        const query = document.getElementById('smartQueryInput').value.trim();
+        if (!query) {
+            showToast('Please enter a search query', 'error');
+            return;
+        }
     }
 
     try {
@@ -1700,7 +2055,27 @@ async function savePlaylist() {
                 playlistInArray.description = description;
             }
             document.getElementById('playlistTitle').textContent = name;
-            document.getElementById('playlistDescription').textContent = description;
+
+            // Update description display with query for smart playlists
+            const descEl = document.getElementById('playlistDescription');
+            if (selectedPlaylist.type === 'smart' && selectedPlaylist.smart_config?.query) {
+                descEl.innerHTML = (description || '') +
+                    `<div class="smart-query-display">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Query: <span>${escapeHtml(selectedPlaylist.smart_config.query)}</span>
+                    </div>`;
+            } else {
+                descEl.textContent = description;
+            }
+        } else if (isSmart) {
+            // Create new smart playlist
+            const query = document.getElementById('smartQueryInput').value.trim();
+            const newPlaylist = await apiRequest('/playlists/smart', {
+                method: 'POST',
+                body: JSON.stringify({ name, description, query, limit: 100 })
+            });
+            showToast('Smart playlist created');
+            playlists.push(newPlaylist);
         } else {
             const newPlaylist = await apiRequest('/playlists', {
                 method: 'POST',
@@ -1715,6 +2090,97 @@ async function savePlaylist() {
     } catch (err) {
         console.error('Failed to save playlist:', err);
         showToast(err.message || 'Failed to save playlist', 'error');
+    }
+}
+
+// Preview functions for smart playlists
+function resetPreview() {
+    document.getElementById('previewHeader').textContent = 'Preview';
+    document.getElementById('previewHeader').className = 'query-preview-header';
+    document.getElementById('previewItems').innerHTML = `
+        <div class="query-preview-empty">Enter a search query to see matching videos</div>
+    `;
+}
+
+function debounceQueryPreview() {
+    if (previewDebounceTimer) {
+        clearTimeout(previewDebounceTimer);
+    }
+    previewDebounceTimer = setTimeout(() => {
+        updateQueryPreview();
+    }, 300);
+}
+
+async function updateQueryPreview() {
+    const query = document.getElementById('smartQueryInput').value.trim();
+    const previewHeader = document.getElementById('previewHeader');
+    const previewItems = document.getElementById('previewItems');
+
+    if (!query) {
+        resetPreview();
+        return;
+    }
+
+    // Show loading state
+    previewHeader.textContent = 'Searching...';
+    previewHeader.className = 'query-preview-header';
+    previewItems.innerHTML = `
+        <div class="preview-loading">
+            <div class="spinner"></div>
+        </div>
+    `;
+
+    try {
+        const response = await apiRequest(`/playlists/preview?q=${encodeURIComponent(query)}&limit=5`);
+        const { items, total } = response;
+
+        if (total === 0) {
+            previewHeader.textContent = 'No videos match';
+            previewHeader.className = 'query-preview-header no-results';
+            previewItems.innerHTML = `
+                <div class="query-preview-empty">
+                    No videos found matching "${escapeHtml(query)}"<br>
+                    <span style="font-size: 11px; color: var(--text-muted);">Try a different search term</span>
+                </div>
+            `;
+            return;
+        }
+
+        previewHeader.textContent = `${total} video${total !== 1 ? 's' : ''} match`;
+        previewHeader.className = 'query-preview-header has-results';
+
+        let html = items.map(item => {
+            const title = formatTitle(item.ai_title) || item.text?.substring(0, 50) || 'Untitled';
+            const thumbUrl = item.thumbnail_url
+                ? `/api/v1/tweets/${item.tweet_id}/media/${item.thumbnail_url.split('/').pop()}?key=${API_KEY}`
+                : '';
+            return `
+                <div class="preview-item">
+                    <div class="preview-thumb">
+                        ${thumbUrl ? `<img src="${thumbUrl}" alt="">` : ''}
+                    </div>
+                    <div class="preview-info">
+                        <div class="preview-title">${escapeHtml(title)}</div>
+                        <div class="preview-author">@${item.author || 'unknown'}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (total > 5) {
+            html += `<div class="preview-more">and ${total - 5} more video${total - 5 !== 1 ? 's' : ''}...</div>`;
+        }
+
+        previewItems.innerHTML = html;
+    } catch (err) {
+        console.error('Preview search failed:', err);
+        previewHeader.textContent = 'Search failed';
+        previewHeader.className = 'query-preview-header no-results';
+        previewItems.innerHTML = `
+            <div class="query-preview-empty">
+                Failed to search. Please try again.
+            </div>
+        `;
     }
 }
 
@@ -1797,6 +2263,9 @@ if (OFFLINE_MODE) {
 
 // Init
 loadPlaylists();
+
+// Setup event listener for smart playlist query input
+document.getElementById('smartQueryInput').addEventListener('input', debounceQueryPreview);
     </script>
 </body>
 </html>

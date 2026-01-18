@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,23 +33,39 @@ type CreatePlaylistRequest struct {
 	Description string `json:"description,omitempty"`
 }
 
+// CreateSmartPlaylistRequest is the JSON request body for smart playlist creation.
+type CreateSmartPlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Query       string `json:"query"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
 // PlaylistResponse represents a playlist in API responses.
 type PlaylistResponse struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Items       []string `json:"items"`
-	ItemCount   int      `json:"item_count"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	ID          string                     `json:"id"`
+	Name        string                     `json:"name"`
+	Description string                     `json:"description,omitempty"`
+	Type        string                     `json:"type"`
+	SmartConfig *domain.SmartPlaylistConfig `json:"smart_config,omitempty"`
+	Items       []string                   `json:"items"`
+	ItemCount   int                        `json:"item_count"`
+	CreatedAt   string                     `json:"created_at"`
+	UpdatedAt   string                     `json:"updated_at"`
 }
 
 // toResponse converts a domain playlist to API response.
 func toPlaylistResponse(p *domain.Playlist) PlaylistResponse {
+	playlistType := string(p.Type)
+	if playlistType == "" {
+		playlistType = string(domain.PlaylistTypeManual) // Default for legacy playlists
+	}
 	return PlaylistResponse{
 		ID:          p.ID.String(),
 		Name:        p.Name,
 		Description: p.Description,
+		Type:        playlistType,
+		SmartConfig: p.SmartConfig,
 		Items:       p.Items,
 		ItemCount:   len(p.Items),
 		CreatedAt:   p.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -220,6 +237,10 @@ func (h *PlaylistHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		if errors.Is(err, domain.ErrSmartPlaylistNoManualItems) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		h.logger.Error("failed to add item to playlist", "id", id, "tweet_id", req.TweetID, "error", err)
 		http.Error(w, "Failed to add item to playlist", http.StatusInternalServerError)
 		return
@@ -250,6 +271,10 @@ func (h *PlaylistHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, domain.ErrTweetNotInPlaylist) {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, domain.ErrSmartPlaylistNoManualItems) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		h.logger.Error("failed to remove item from playlist", "id", id, "tweet_id", tweetID, "error", err)
@@ -287,6 +312,10 @@ func (h *PlaylistHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, domain.ErrTweetNotInPlaylist) {
 			http.Error(w, "Invalid item order: items don't match playlist contents", http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, domain.ErrSmartPlaylistNoReorder) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		h.logger.Error("failed to reorder playlist", "id", id, "error", err)
@@ -331,10 +360,107 @@ func (h *PlaylistHandler) AddToMultiple(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		if errors.Is(err, domain.ErrSmartPlaylistNoManualItems) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		h.logger.Error("failed to add to multiple playlists", "tweet_id", req.TweetID, "error", err)
 		http.Error(w, "Failed to add to playlists", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// CreateSmart creates a new smart playlist.
+func (h *PlaylistHandler) CreateSmart(w http.ResponseWriter, r *http.Request) {
+	var req CreateSmartPlaylistRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	playlist, err := h.svc.CreateSmart(r.Context(), req.Name, req.Description, req.Query, req.Limit)
+	if err != nil {
+		if errors.Is(err, domain.ErrEmptyPlaylistName) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, domain.ErrEmptySmartQuery) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, domain.ErrDuplicatePlaylist) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		h.logger.Error("failed to create smart playlist", "error", err)
+		http.Error(w, "Failed to create smart playlist", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(toPlaylistResponse(playlist))
+}
+
+// PreviewResponse represents the preview results for a smart playlist query.
+type PreviewResponse struct {
+	Items []PreviewItem `json:"items"`
+	Total int           `json:"total"`
+}
+
+// PreviewItem represents a single item in the preview results.
+type PreviewItem struct {
+	TweetID      string `json:"tweet_id"`
+	AITitle      string `json:"ai_title,omitempty"`
+	Text         string `json:"text,omitempty"`
+	Author       string `json:"author,omitempty"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+}
+
+// Preview returns matching items for a search query without creating a playlist.
+func (h *PlaylistHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PreviewResponse{Items: []PreviewItem{}, Total: 0})
+		return
+	}
+
+	limit := 20
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	tweets, total, err := h.svc.Preview(r.Context(), query, limit)
+	if err != nil {
+		h.logger.Error("failed to preview playlist", "query", query, "error", err)
+		http.Error(w, "Failed to search", http.StatusInternalServerError)
+		return
+	}
+
+	items := make([]PreviewItem, 0, len(tweets))
+	for _, tweet := range tweets {
+		item := PreviewItem{
+			TweetID: string(tweet.ID),
+			AITitle: tweet.AITitle,
+			Text:    tweet.Text,
+			Author:  tweet.Author.Username,
+		}
+		// Include first media thumbnail if available
+		if len(tweet.Media) > 0 {
+			if tweet.Media[0].PreviewURL != "" {
+				item.ThumbnailURL = tweet.Media[0].PreviewURL
+			} else if tweet.Media[0].URL != "" {
+				item.ThumbnailURL = tweet.Media[0].URL
+			}
+		}
+		items = append(items, item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(PreviewResponse{Items: items, Total: total})
 }

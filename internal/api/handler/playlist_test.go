@@ -19,7 +19,7 @@ import (
 func TestNewPlaylistHandler(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	if handler == nil {
@@ -33,7 +33,7 @@ func TestNewPlaylistHandler(t *testing.T) {
 func TestPlaylistHandler_List(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/playlists", nil)
@@ -58,7 +58,7 @@ func TestPlaylistHandler_List(t *testing.T) {
 func TestPlaylistHandler_Create_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	reqBody := CreatePlaylistRequest{
@@ -89,7 +89,7 @@ func TestPlaylistHandler_Create_Success(t *testing.T) {
 func TestPlaylistHandler_Create_InvalidJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/playlists", bytes.NewBufferString("invalid json"))
@@ -105,7 +105,7 @@ func TestPlaylistHandler_Create_InvalidJSON(t *testing.T) {
 func TestPlaylistHandler_Create_EmptyName(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	reqBody := CreatePlaylistRequest{
@@ -126,7 +126,7 @@ func TestPlaylistHandler_Create_EmptyName(t *testing.T) {
 func TestPlaylistHandler_Get_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	// Create a playlist first
@@ -157,7 +157,7 @@ func TestPlaylistHandler_Get_Success(t *testing.T) {
 func TestPlaylistHandler_Get_NotFound(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/playlists/nonexistent", nil)
@@ -176,7 +176,7 @@ func TestPlaylistHandler_Get_NotFound(t *testing.T) {
 func TestPlaylistHandler_Delete_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	// Create a playlist first
@@ -198,7 +198,7 @@ func TestPlaylistHandler_Delete_Success(t *testing.T) {
 func TestPlaylistHandler_AddItem_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	// Create a playlist first
@@ -222,7 +222,7 @@ func TestPlaylistHandler_AddItem_Success(t *testing.T) {
 func TestPlaylistHandler_RemoveItem_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	repo := repository.NewFilesystemPlaylistRepository(t.TempDir())
-	svc := service.NewPlaylistService(repo, logger)
+	svc := service.NewPlaylistService(repo, nil, logger)
 	handler := NewPlaylistHandler(svc, logger)
 
 	// Create a playlist and add item

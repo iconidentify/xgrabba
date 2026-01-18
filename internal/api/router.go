@@ -149,6 +149,8 @@ func NewRouter(
 		if playlistHandler != nil {
 			r.Get("/playlists", playlistHandler.List)
 			r.Post("/playlists", playlistHandler.Create)
+			r.Post("/playlists/smart", playlistHandler.CreateSmart) // Create smart playlist
+			r.Get("/playlists/preview", playlistHandler.Preview)    // Preview smart playlist query
 			r.Post("/playlists/add-multiple", playlistHandler.AddToMultiple) // Add tweet to multiple playlists
 			r.Get("/playlists/{id}", playlistHandler.Get)
 			r.Put("/playlists/{id}", playlistHandler.Update)

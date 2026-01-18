@@ -19,7 +19,7 @@ func setupPlaylistService(t *testing.T) *PlaylistService {
 	t.Helper()
 	tmpDir := t.TempDir()
 	repo := repository.NewFilesystemPlaylistRepository(tmpDir)
-	return NewPlaylistService(repo, testLogger())
+	return NewPlaylistService(repo, nil, testLogger())
 }
 
 func TestNewPlaylistService(t *testing.T) {

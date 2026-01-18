@@ -75,7 +75,6 @@ func main() {
 	videoRepo := repository.NewFilesystemVideoRepository(cfg.Storage)
 	jobRepo := repository.NewInMemoryJobRepository()
 	playlistRepo := repository.NewFilesystemPlaylistRepository(cfg.Storage.BasePath)
-	playlistSvc := service.NewPlaylistService(playlistRepo, logger)
 	grokClient := grok.NewClient(cfg.Grok)
 	dl := downloader.NewHTTPDownloader(cfg.Download)
 
@@ -131,6 +130,9 @@ func main() {
 		logger,
 		eventSvc,
 	)
+
+	// Initialize playlist service (needs tweetSvc for smart playlist search)
+	playlistSvc := service.NewPlaylistService(playlistRepo, tweetSvc, logger)
 
 	// Initialize export service with storage path for state persistence
 	exportSvc := service.NewExportService(tweetSvc, playlistSvc, logger, eventSvc, cfg.Storage.BasePath)
